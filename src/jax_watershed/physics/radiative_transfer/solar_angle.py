@@ -24,8 +24,8 @@ def calculate_solar_elevation(
        (2) the ANGLE() subroutine of CANOAK.
 
     Args:
-        latitude (float): The latitude.
-        longitude (float): The longitude.
+        latitude (float): The latitude [degree].
+        longitude (float): The longitude [degree].
         year (int): The year.
         day (int): The day of the year.
         hour (float): The fractional hour.
@@ -33,7 +33,7 @@ def calculate_solar_elevation(
         is_day_saving (bool, optional): Whether the current day is in the day time saving period. Defaults to 0.0.
 
     Returns:
-        float: The solar elevation.
+        float: The solar elevation [degree].
     """
 
     lat_rad  = latitude*RADD  # latitude, radians
@@ -45,7 +45,7 @@ def calculate_solar_elevation(
 
     # Calculate declination angle
     declin = -23.45*PI/180*jnp.cos(2*PI*(day+10)/365)
-    print(declin)
+    # print(declin)
     
     # Calculate hours of day length
     cos_hour = -jnp.tan(lat_rad) * jnp.tan(declin)

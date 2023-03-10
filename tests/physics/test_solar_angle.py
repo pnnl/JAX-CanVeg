@@ -1,7 +1,7 @@
 import unittest
 
-import sys
-sys.path.append('/Users/jian449/Library/CloudStorage/OneDrive-PNNL/Codes/jax-watershed/src')
+# import sys
+# sys.path.append('/Users/jian449/Library/CloudStorage/OneDrive-PNNL/Codes/jax-watershed/src')
 
 from jax import jit
 import jax.numpy as jnp
@@ -16,7 +16,7 @@ from jax_watershed.physics.radiative_transfer import calculate_solar_elevation_W
 # is_day_saving = False
 
 latitude, longitude   = 31.31, 120.77
-year, day, hour, zone = 2023, 68, 17.5, -8
+year, day, hour, zone = 2023, 68, 10., -8
 # year, day, hour, zone = 1977, 120, 15, 8
 is_day_saving = False
 

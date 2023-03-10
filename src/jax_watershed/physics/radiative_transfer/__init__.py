@@ -1,3 +1,5 @@
 from .solar_angle import calculate_solar_elevation
 from .solar_angle import calculate_solar_elevation_Walraven
 from .solar_angle import calculate_solar_elevation_Walraven_CANOAK
+
+from .solar_radiation_partition import partition_solar_radiation
