@@ -5,12 +5,19 @@ sys.path.append('/Users/jian449/Library/CloudStorage/OneDrive-PNNL/Codes/jax-wat
 
 from jax import jit
 import jax.numpy as jnp
-from jax_watershed.physics.radiative_transfer import calculate_solar_elevation, calculate_solar_elevation_Walraven
+from jax_watershed.physics.radiative_transfer import calculate_solar_elevation
+from jax_watershed.physics.radiative_transfer import calculate_solar_elevation_Walraven
+from jax_watershed.physics.radiative_transfer import calculate_solar_elevation_Walraven_CANOAK
 
 # latitude, longitude =46.264305, -119.533354 
-latitude, longitude =47, -122
-year, day, hour, zone = 2023, 68, 17.5, 8
-# year, day, hour, zone = 2023, 150, 20., 8
+# year, day, hour, zone = 2023, 68, 15.5, 8
+# latitude, longitude   = 38.538, -121.758 
+# year, day, hour, zone = 1977, 120, 15, 8
+# is_day_saving = False
+
+latitude, longitude   = 31.31, 120.77
+year, day, hour, zone = 2023, 68, 17.5, -8
+# year, day, hour, zone = 1977, 120, 15, 8
 is_day_saving = False
 
 class TestSolarAngle(unittest.TestCase):

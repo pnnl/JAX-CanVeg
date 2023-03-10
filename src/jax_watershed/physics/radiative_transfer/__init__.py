@@ -1,1 +1,3 @@
-from .solar_angle import calculate_solar_elevation, calculate_solar_elevation_Walraven
+from .solar_angle import calculate_solar_elevation
+from .solar_angle import calculate_solar_elevation_Walraven
+from .solar_angle import calculate_solar_elevation_Walraven_CANOAK
