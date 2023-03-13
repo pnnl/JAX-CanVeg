@@ -1,8 +1,5 @@
 import unittest
 
-# import sys
-# sys.path.append('/Users/jian449/Library/CloudStorage/OneDrive-PNNL/Codes/jax-watershed/src')
-
 from jax import jit
 import jax.numpy as jnp
 from jax_watershed.physics.radiative_transfer import calculate_solar_elevation

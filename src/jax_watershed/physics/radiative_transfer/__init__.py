@@ -3,3 +3,5 @@ from .solar_angle import calculate_solar_elevation_Walraven
 from .solar_angle import calculate_solar_elevation_Walraven_CANOAK
 
 from .solar_radiation_partition import partition_solar_radiation
+
+from .canopy_radiative_transfer import calculate_canopy_fluxes_per_unit_incident
