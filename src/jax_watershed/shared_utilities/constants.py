@@ -6,8 +6,10 @@ RADIANS = .017453293
 PI      = 3.141592653589793
 TWOPI   = PI*2
 
-PO = 101.325 # sea level pressure [kPa]
-
+# Physical constants
+PO                        = 101.325 # sea level pressure [kPa]
+STEFAN_BOLTZMANN_CONSTANT = 5.67e-8 # [W m-2 K-4]
+C_TO_K                    = 273.15 # conversion from degC to degK
 
 # Plant functional type optical properties (from Table 3.1 in CLM5)
 pft_clm5 = ["NET Temperature", "NET Boreal", "NDT Boreal", "BET Tropical", "BET temperate", "BDT tropical", "BDT temperate", "BDT boreal",
@@ -32,11 +34,17 @@ pft_clm5 = ["NET Temperature", "NET Boreal", "NDT Boreal", "BET Tropical", "BET 
 }
 
 # Intercepted snow optical properties (from Table 3.2 in CLM5)
-ω_snow_clm5 = {"PAR": 0.8, "NIR": 0.4}
-β_snow_clm5 = {"PAR": 0.5, "NIR": 0.5}
+ω_snow_clm5  = {"PAR": 0.8, "NIR": 0.4}
+β_snow_clm5  = {"PAR": 0.5, "NIR": 0.5}
 β0_snow_clm5 = {"PAR": 0.5, "NIR": 0.5}
 
-# Dry and saturated soil albedos (from Table 3.3 in CLM5)
+# Soil albedos
+α_soil_clm5 = {"PAR": 0.6, "NIR": 0.4}
+
+# Soil and snow emissivities
+ε_soil_clm5, ε_snow_clm5 = 0.96, 0.97
+
+# TODO: Dry and saturated soil albedos (from Table 3.3 in CLM5)
 
 
 # Spectral bands and weights used for snow radiative transfer (from table 3.4 in CLM5)

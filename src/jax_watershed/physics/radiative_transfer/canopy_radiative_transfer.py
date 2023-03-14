@@ -18,9 +18,10 @@ from ...shared_utilities.constants import τ_leaf_clm5, τ_stem_clm5
 from ...shared_utilities.constants import ω_snow_clm5, β_snow_clm5, β0_snow_clm5
 
 def calculate_canopy_fluxes_per_unit_incident(
-    solar_elev_angle: float, α_g_db: float, α_g_dif: float,
-    L: float, S: float, f_cansno: float,
-    rad_type: int, pft_ind: str
+    solar_elev_angle: float, 
+    α_g_db: float, α_g_dif: float,
+    L: float, S: float, f_cansno: float, f_snow: float,
+    rad_type: str, pft_ind: int
 ) -> Float_1D:
     """Calculate the canopy radiative fluxes per unit incident radiation based on Section 3.1 in CLM5.
 
@@ -30,16 +31,16 @@ def calculate_canopy_fluxes_per_unit_incident(
         α_g_dif (float): The overall diffuse ground albedo [-]
         L (float): The exposed leaf area index [m2 m2-1]
         S (float): The exposed stem area index [m2 m2-1]
-        f_cansno (float): The canopy snow-covered fraction
+        f_cansno (float): The canopy snow-covered fraction [-]
+        f_snow (float): The fraction of ground covered by snow [-]
         rad_type (str): The radiation type or band, either PAR or NIR
         pft_ind (int): The index of plant functional type based on the pft_clm5
 
     Returns:
         Float_1D: Different components of canopy radiative fluxes per unit incident radiation.
     """
-    # Get the parameters from CLM5 database
+    # get the parameters from clm5 database
     χl      = χl_clm5[pft_ind]
-    # χl      = -1
     α_leaf  = α_leaf_clm5[rad_type][pft_ind]
     α_stem  = α_stem_clm5[rad_type][pft_ind]
     τ_leaf  = τ_leaf_clm5[rad_type][pft_ind]
@@ -75,8 +76,8 @@ def calculate_canopy_fluxes_per_unit_incident(
     #       where it should be max(μ*φ2+G(φ1,φ2,μ),1e-6) to avoid the impact of small values
     min_value = jnp.max(jnp.array([μ*φ2+G(φ1,φ2,μ),1e-6]))
     as_μ      = ω_veg/2. * G(φ1,φ2,μ)/min_value * ( 1. - μ*φ1/min_value * jnp.log((μ*φ1+min_value)/(μ*φ1)) )   # Eq(3.16) in CLM5
-    β_veg    = 0.5 * ( α + τ + (α-τ) * ((1 + χl)/2)**2 ) / ω_veg  # Eq(3.13) in CLM5
-    β0_veg   = (1 + μ_bar * K) / (ω_veg*μ_bar*K) * as_μ   # Eq(3.15) in CLM5
+    β_veg     = 0.5 * ( α + τ + (α-τ) * ((1 + χl)/2)**2 ) / ω_veg  # Eq(3.13) in CLM5
+    β0_veg    = (1 + μ_bar * K) / (ω_veg*μ_bar*K) * as_μ   # Eq(3.15) in CLM5
     ω         = ω_veg * (1 - f_cansno) + ω_snow * f_cansno  # Eq(3.5) in CLM5
     ωβ        = ω_veg * β_veg * (1 - f_cansno) + ω_snow * β_snow * f_cansno  # Eq(3.6) in CLM5
     ωβ0       = ω_veg * β0_veg * (1 - f_cansno) + ω_snow * β0_snow * f_cansno  # Eq(3.7) in CLM5
@@ -117,10 +118,48 @@ def calculate_canopy_fluxes_per_unit_incident(
     I_can_sha_dif = I_can_dif - I_can_sun_dif
 
     # Note that the sum of the them equal to 2.
-    return jnp.array([
-        I_up_db, I_up_dif, I_down_db, I_down_dif, I_down_trans_can,
-        I_can_sun_db, I_can_sha_db, I_can_sun_dif, I_can_sha_dif
-    ])
+    return I_up_db, I_up_dif, I_down_db, I_down_dif, I_down_trans_can, \
+           I_can_sun_db, I_can_sha_db, I_can_sun_dif, I_can_sha_dif
+    # return jnp.array([
+    #     I_up_db, I_up_dif, I_down_db, I_down_dif, I_down_trans_can,
+    #     I_can_sun_db, I_can_sha_db, I_can_sun_dif, I_can_sha_dif
+    # ])
+
+
+def calculate_sunlit_shaded_plant_area_index(
+    L: float, S: float, solar_elev_angle: float, pft_ind: int
+) -> tuple:
+    """Calculate the sunlit and shared plant area indices.
+
+    Args:
+        L (float): The exposed leaf area index [m2 m2-1]
+        S (float): The exposed stem area index [m2 m2-1]
+        solar_elev_angle (float): Solar elevation angle [degree]
+        pft_ind (int): The index of plant functional type based on the pft_clm5
+
+    Returns:
+        tuple: The sunlit and shaded plant area indices
+    """
+    # get the parameters from clm5 database
+    χl      = χl_clm5[pft_ind]
+
+    # Calculate the cosine of the solar zenith angle of the incident beam
+    # , or the sine of the solar elevation angle
+    solar_elev_rad = solar_elev_angle * RADD
+    μ              = jnp.sin(solar_elev_rad)
+
+    # Calculate G, K, and μ_bar
+    # TODO: the calculation of φ1 and φ2 might be incorrect
+    #       the following is only applicable to -0.4 <= χl <= 0.6
+    φ1    = 0.5 - 0.633*χl - 0.33*χl**2
+    φ2    = 0.877 * (1-2*φ1)
+    K     = G(φ1, φ2, μ) / μ
+
+    # Calculate the plant area index
+    L_sun = (1 - jnp.exp(-K*(L+S))) / K  # Eq.(4.7) in CLM5
+    L_sha = (L+S) - L_sun                
+
+    return L_sun, L_sha
 
 
 def G(φ1, φ2, μ):
