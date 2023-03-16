@@ -1,7 +1,7 @@
 import unittest
 
 from jax_watershed.shared_utilities.constants import pft_clm5
-from jax_watershed.physics.radiative_transfer import calculate_canopy_fluxes_per_unit_incident
+from jax_watershed.physics.energy_flux.radiative_transfer import calculate_canopy_fluxes_per_unit_incident
 
 class TestCanopyRadiation(unittest.TestCase):
 
