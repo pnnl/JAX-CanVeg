@@ -2,7 +2,7 @@ import unittest
 
 from jax import jit
 import jax.numpy as jnp
-from jax_watershed.physics.energy_flux.radiative_transfer import main_func
+from jax_watershed.physics.energy_fluxes.radiative_transfer import main_func
 
 
 class TestMainFunc(unittest.TestCase):

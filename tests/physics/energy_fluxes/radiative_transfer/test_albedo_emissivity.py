@@ -2,7 +2,7 @@ import unittest
 
 from jax import jit
 import jax.numpy as jnp
-from jax_watershed.physics.energy_flux.radiative_transfer import calculate_ground_albedos, calculate_ground_vegetation_emissivity
+from jax_watershed.physics.energy_fluxes.radiative_transfer import calculate_ground_albedos, calculate_ground_vegetation_emissivity
 
 solar_elev_angle, f_snow = 30., 0.3
 L, S = 2., 1,

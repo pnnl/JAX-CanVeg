@@ -10,6 +10,8 @@ TWOPI   = PI*2
 PO                        = 101.325 # sea level pressure [kPa]
 STEFAN_BOLTZMANN_CONSTANT = 5.67e-8 # [W m-2 K-4]
 C_TO_K                    = 273.15 # conversion from degC to degK
+G                         = 9.81 # the gravitational acceleration [m s-2]
+VON_KARMAN_CONSTANT       = 0.41
 
 # Plant functional type optical properties (from Table 3.1 in CLM5)
 pft_clm5 = ["NET Temperature", "NET Boreal", "NDT Boreal", "BET Tropical", "BET temperate", "BDT tropical", "BDT temperate", "BDT boreal",

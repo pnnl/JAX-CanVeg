@@ -10,8 +10,8 @@ from typing import Tuple
 
 import jax.numpy as jnp
 
-from ...shared_utilities.constants import α_soil_clm5, ε_soil_clm5, ε_snow_clm5, χl_clm5
-from ...shared_utilities.constants import RADIANS as RADD
+from ....shared_utilities.constants import α_soil_clm5, ε_soil_clm5, ε_snow_clm5, χl_clm5
+from ....shared_utilities.constants import RADIANS as RADD
 
 from .canopy_radiative_transfer import G
 

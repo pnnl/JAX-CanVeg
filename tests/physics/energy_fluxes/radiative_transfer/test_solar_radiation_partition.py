@@ -6,8 +6,8 @@ import unittest
 import jax
 from jax import jit, vmap
 import jax.numpy as jnp
-from jax_watershed.physics.energy_flux.radiative_transfer import partition_solar_radiation
-from jax_watershed.physics.energy_flux.radiative_transfer import calculate_solar_elevation
+from jax_watershed.physics.energy_fluxes.radiative_transfer import partition_solar_radiation
+from jax_watershed.physics.energy_fluxes.radiative_transfer import calculate_solar_elevation
 
 
 class PartitionSolarRadiation(unittest.TestCase):

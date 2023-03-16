@@ -11,8 +11,8 @@ Date: 2023.03.09
 import jax
 import jax.numpy as jnp
 
-from ...shared_utilities.constants import PI, TWOPI
-from ...shared_utilities.constants import RADIANS as RADD
+from ....shared_utilities.constants import PI, TWOPI
+from ....shared_utilities.constants import RADIANS as RADD
 
 def calculate_solar_elevation(
     latitude: float, longitude: float, 

@@ -11,9 +11,9 @@ Date: 2023.3.10
 import jax
 import jax.numpy as jnp
 
-from ...shared_utilities.types import Float_1D
-from ...shared_utilities.constants import PO as p0
-from ...shared_utilities.constants import RADIANS as RADD
+from ....shared_utilities.types import Float_1D
+from ....shared_utilities.constants import PO as p0
+from ....shared_utilities.constants import RADIANS as RADD
 
 # # Fraction of NIR and PAR (visible)
 # fir, fv = 0.54, 0.46

@@ -10,12 +10,12 @@ Date: 2023.3.12
 import jax
 import jax.numpy as jnp
 
-from ...shared_utilities.types import Float_1D
+from ....shared_utilities.types import Float_1D
 
-from ...shared_utilities.constants import RADIANS as RADD
-from ...shared_utilities.constants import χl_clm5, α_leaf_clm5, α_stem_clm5
-from ...shared_utilities.constants import τ_leaf_clm5, τ_stem_clm5
-from ...shared_utilities.constants import ω_snow_clm5, β_snow_clm5, β0_snow_clm5
+from ....shared_utilities.constants import RADIANS as RADD
+from ....shared_utilities.constants import χl_clm5, α_leaf_clm5, α_stem_clm5
+from ....shared_utilities.constants import τ_leaf_clm5, τ_stem_clm5
+from ....shared_utilities.constants import ω_snow_clm5, β_snow_clm5, β0_snow_clm5
 
 def calculate_canopy_fluxes_per_unit_incident(
     solar_elev_angle: float, 

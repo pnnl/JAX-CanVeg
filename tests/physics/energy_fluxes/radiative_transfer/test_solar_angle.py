@@ -2,9 +2,9 @@ import unittest
 
 from jax import jit
 import jax.numpy as jnp
-from jax_watershed.physics.energy_flux.radiative_transfer import calculate_solar_elevation
-from jax_watershed.physics.energy_flux.radiative_transfer import calculate_solar_elevation_Walraven
-from jax_watershed.physics.energy_flux.radiative_transfer import calculate_solar_elevation_Walraven_CANOAK
+from jax_watershed.physics.energy_fluxes.radiative_transfer import calculate_solar_elevation
+from jax_watershed.physics.energy_fluxes.radiative_transfer import calculate_solar_elevation_Walraven
+from jax_watershed.physics.energy_fluxes.radiative_transfer import calculate_solar_elevation_Walraven_CANOAK
 
 # latitude, longitude =46.264305, -119.533354 
 # year, day, hour, zone = 2023, 68, 15.5, 8

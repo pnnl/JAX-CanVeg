@@ -9,8 +9,8 @@ from typing import Tuple
 
 import jax
 import jax.numpy as jnp
-from ...shared_utilities.constants import STEFAN_BOLTZMANN_CONSTANT as σ
-from ...shared_utilities.constants import C_TO_K
+from ....shared_utilities.constants import STEFAN_BOLTZMANN_CONSTANT as σ
+from ....shared_utilities.constants import C_TO_K
 
 
 def calculate_net_radiation_at_the_surface(
