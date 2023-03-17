@@ -1,5 +1,5 @@
 """
-Calculating the components of the Monin-Obukhov theory, including
+Calculating the components of the Monin-Obukhov similarity theory (MOST), including
 (1) the Monin-Obukhov length;
 (2) the Monin-Obukhov psi function for momentum and scalars;
 (3) ustar, tstar, and qstar.
@@ -10,6 +10,9 @@ Chapter 6 in "Climate Change and Terrestrial Ecosystem Modeling" by Bonan (2019)
 Author: Peishi Jiang
 Date: 2023.03.16.
 """
+
+# TODO: Note that the current implementation of MOST assume short canopy (e.g., grassland).
+#       For large canopy (e.g., tall trees), sublayer roughness parameterization is needed. (see Chapter 6 in Bonan2019)
 
 import jax
 import jax.numpy as jnp
@@ -27,7 +30,7 @@ from ....shared_utilities.constants import VON_KARMAN_CONSTANT as k
 #     pass
 
 def func_most(
-    L_guess: float, uz: float, tz: float, qz: float, ts: float, qs: float,
+    L_guess: float, uz: float, Tz: float, qz: float, Ts: float, qs: float,
     z: float, d: float, z0m: float, z0c: float, 
 ) -> float:
     """This is the function to solve for the Obukhov length. For the current estimate of the Obukhov length (x),
@@ -37,9 +40,9 @@ def func_most(
     Args:
         L_guess (float): The initial guess of the Obukhov length [m].
         uz (float): The wind velocity at the reference height [m s-1].
-        tz (float): The temperature at the reference height [degK].
+        Tz (float): The temperature at the reference height [degK].
         qz (float): The specific humidity at the reference height [g kg-1]
-        ts (float): The surface temperature [degK]
+        Ts (float): The surface temperature [degK]
         qs (float): The surface specific humidity [g kg-1]
         z (float): The reference height [m]
         d (float): The displacement height [m]
@@ -62,29 +65,29 @@ def func_most(
 
     # Calculate ustar, tstar, qstar, tzv, and tvstar
     ustar = calculate_ustar(u1=0., u2=uz, z1=d+z0m, z2=z, d=d, ψm1=ψm_z0m, ψm2=ψm_z)
-    tstar = calculate_tstar(t1=ts, t2=tz, z1=d+z0c, z2=z, d=d, ψc1=ψc_z0c, ψc2=ψc_z)
+    tstar = calculate_Tstar(T1=Ts, T2=Tz, z1=d+z0c, z2=z, d=d, ψc1=ψc_z0c, ψc2=ψc_z)
     qstar = calculate_qstar(q1=qs, q2=uz, z1=d+z0c, z2=z, d=d, ψc1=ψc_z0c, ψc2=ψc_z)
 
-    tzv = tz * (1 + 0.608 * qz)
-    tvstar = tstar * (1 + 0.608 * qz) + 0.608 * tz * qstar  # Eq(5.17) in CLM5
+    Tzv = Tz * (1 + 0.608 * qz)
+    Tvstar = tstar * (1 + 0.608 * qz) + 0.608 * Tz * qstar  # Eq(5.17) in CLM5
 
-    L_est = calculate_L(ustar=ustar, t2v=tzv, tvstar=tvstar)
+    L_est = calculate_L(ustar=ustar, T2v=Tzv, Tvstar=Tvstar)
 
     return L_guess - L_est
 
 
-def calculate_L(ustar: float, t2v: float, tvstar: float) -> float:
+def calculate_L(ustar: float, T2v: float, Tvstar: float) -> float:
     """Calculating the Monin Obukhov length based on Eq(6.31) in Bonan (2019).
 
     Args:
         ustar (float): the friction velocity [m s-1]
-        t2v (float): the potential virtual temperature at [degK]
-        tvstar (float): the characteristic scale for the temperature [degK]
+        T2v (float): the potential virtual temperature at [degK]
+        Tvstar (float): the characteristic scale for the temperature [degK]
 
     Returns:
         float: the Monin Obukhov length [m]
     """
-    L = ustar**2 * t2v / (k*g*tvstar)
+    L = ustar**2 * T2v / (k*g*Tvstar)
     return L
 
 
@@ -107,12 +110,12 @@ def calculate_ustar(u1: float, u2: float, z1: float, z2: float, d: float, ψm1: 
     return ustar
 
 
-def calculate_tstar(t1: float, t2: float, z1: float, z2: float, d: float, ψc1: float, ψc2: float) -> float:
+def calculate_Tstar(T1: float, T2: float, z1: float, z2: float, d: float, ψc1: float, ψc2: float) -> float:
     """Calculating the characteristic scale of temperature based on Eq(6.41) in Bonan(2019).
 
     Args:
-        t1 (float): The temperature at height z1 [degK]
-        t2 (float): The temperature at height z2 [degK]
+        T1 (float): The temperature at height z1 [degK]
+        T2 (float): The temperature at height z2 [degK]
         z1 (float): The height where u1 is measured [m]
         z2 (float): The height where u2 is measured [m]
         d (float): The displacement height [m]
@@ -122,8 +125,8 @@ def calculate_tstar(t1: float, t2: float, z1: float, z2: float, d: float, ψc1: 
     Returns:
         float: The friction velocity [m s-1]
     """
-    tstar = (t2 - t1) * k / (jnp.log((z2-d)/(z1-d)) - (ψc2-ψc1))
-    return tstar
+    Tstar = (T2 - T1) * k / (jnp.log((z2-d)/(z1-d)) - (ψc2-ψc1))
+    return Tstar
 
 
 def calculate_qstar(q1: float, q2: float, z1: float, z2: float, d: float, ψc1: float, ψc2: float) -> float:
