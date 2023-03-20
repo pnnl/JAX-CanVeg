@@ -41,3 +41,21 @@ def calculate_E(
         float: The water vapor flux [kg m-2 s-1]
     """
     return ρ_atm * (q_2 - q_1) * ge
+
+
+def calculate_G(
+    T_g: float, T_s1: float, κ: float, dz: float
+) -> float:
+    """Calculating the ground heat flux based on the temperature difference between the ground and first soil layer.
+
+    Args:
+        T_g (float): The ground temperature [degK]
+        T_s1 (float): The temperature of the first soil layer [degK]
+        κ (float): the thermal conductivity [W m-1 K-1]
+        dz (float): The soil depth of the first soil layer [m]
+
+    Returns:
+        float: The ground heat flux [W m-2]
+    """
+    # Based on Eq(7.8) in Bonan (2019)
+    return κ * (T_g - T_s1) / dz

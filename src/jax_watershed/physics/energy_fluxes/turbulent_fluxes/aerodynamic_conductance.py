@@ -11,6 +11,7 @@ import jax.numpy as jnp
 
 from ....shared_utilities.constants import VON_KARMAN_CONSTANT as k
 
+
 def calculate_momentum_conduct_surf_atmos(
     uref: float, zref: float, d: float, z0m: float, 
     ψmref: float, ψms: float
@@ -64,7 +65,7 @@ def calculate_scalar_conduct_surf_atmos(
 def calculate_conductance_ground_canopy(
     L: float, S: float, ustar: float, z0m: float
 ) -> float:
-    """Calculating the aerodynamic conductance to heat/moisture transfer between the ground and the canopy air.
+    """Calculating the aerodynamic conductance to heat/moisture transfer between the ground and the canopy surface/air.
 
     Args:
         L (float): The exposed leaf area index [m2 m2-1]
@@ -91,6 +92,28 @@ def calculate_conductance_ground_canopy(
     return ga
 
 
+def calculate_conductance_ground_canopy_water_vapo(
+    L: float, S: float, ustar: float, z0m: float, gsoil: float 
+) -> float:
+    """Calculating the total conductance of water vapor transfer between the ground and the canopy surface/air.
+
+    Args:
+        L (float): The exposed leaf area index [m2 m2-1]
+        S (float): The exposed stem area index [m2 m2-1]
+        ustar (float): The friction velocity [m s-1]
+        z0m (float) : The surface roughness length for momentum [m]
+        gsoil (float): The soil water vapor conductance from the top soil layer to [m s-1]
+
+    Returns:
+        float: The total conductance of water vapor transfer between the ground and the canopy air [m s-1].
+    """
+
+    gh = calculate_conductance_ground_canopy(L=L, S=S, ustar=ustar, z0m=z0m)
+
+    # Based on Eq(5.110) in CLM5
+    return 1. / (1./gh + 1./gsoil)
+
+
 def calculate_conductance_leaf_boundary(ustar: float) -> float:
     """Calculating the leaf boundary layer conduntance based on Eq(5.122) in CLM5.
 
@@ -105,3 +128,32 @@ def calculate_conductance_leaf_boundary(ustar: float) -> float:
     glb = cv * (ustar / dleaf) ** 0.5
 
     return glb
+
+
+def calculate_total_conductance_leaf_boundary(ustar: float, L: float, S: float) -> float:
+    """Calculating the total leaf boundary layer conductance
+
+    Args:
+        ustar (float): The friction velocity [m s-1]
+        L (float): The exposed leaf area index [m2 m2-1]
+        S (float): The exposed stem area index [m2 m2-1]
+
+    Returns:
+        float: The total leaf boundary layer conductance [m s-1]
+    """
+    # Eq(5.96) in CLM5
+    return calculate_conductance_leaf_boundary(ustar) * (L+S)
+
+
+def calculate_total_conductance_leaf_water_vapor(gh: float, gs: float) -> float:
+    """Calculating the total water vapor conductance of leaf [m s-1]
+
+    Args:
+        gh (float): The total leaf boundary layer conductance [m s-1]
+        gs (float): The stomatal conductance [m s-1]
+
+    Returns:
+        float: The total water vapor conductance of leaf [m s-1]
+    """
+    # Eq(10.8) in Bonan (2019)
+    return 1. / (1./gh + 1./gs)

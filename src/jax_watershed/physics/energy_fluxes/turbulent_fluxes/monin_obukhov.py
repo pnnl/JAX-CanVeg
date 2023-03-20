@@ -33,7 +33,7 @@ def func_most(
     L_guess: float, uz: float, Tz: float, qz: float, Ts: float, qs: float,
     z: float, d: float, z0m: float, z0c: float, 
 ) -> float:
-    """This is the function to solve for the Obukhov length. For the current estimate of the Obukhov length (x),
+    """This is the function to solve for the Obukhov length. Given the current estimate of the Obukhov length (x),
        calcuate ustar, tstar, and qstar and then the new length. The function is the change in Obukhov length.
        It is modifed from a matlab implementation: https://github.com/gbonan/bonanmodeling/blob/master/sp_07_01/most.m.
 

@@ -12,6 +12,13 @@ STEFAN_BOLTZMANN_CONSTANT = 5.67e-8 # [W m-2 K-4]
 C_TO_K                    = 273.15 # conversion from degC to degK
 G                         = 9.81 # the gravitational acceleration [m s-2]
 VON_KARMAN_CONSTANT       = 0.41
+κ                         = 1.38065e-23 # Boltzmann constant [J K-1 molecule-1]
+NA                        = 6.02214e26 # Avogadro's number [molecule kmol-1]
+MW_DA                     = 28.966 # Molecular weight of dry air [kg kmol-1]
+R_GAS                     = NA * κ # Universal gas constant [J K-1 kmol-1]
+R_DA                      = R_GAS / MW_DA # dry air gas constant [J K-1 kg-1]
+C_P                       = 1.00464e3 # Specific heat capacity of dry air [J kg-1 K-1]
+λ_VAP                     = 2.501e6 # latent heat of vaporization [J kg-1]
 
 # Plant functional type optical properties (from Table 3.1 in CLM5)
 pft_clm5 = ["NET Temperature", "NET Boreal", "NDT Boreal", "BET Tropical", "BET temperate", "BDT tropical", "BDT temperate", "BDT boreal",

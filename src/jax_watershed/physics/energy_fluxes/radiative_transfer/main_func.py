@@ -126,5 +126,5 @@ def main_func(
         L_up_g=L_up_g, L_down_v=L_down_v, L_up_v=L_up_v, δ_veg=δ_veg
     )
 
-    return Rnet, S_v, S_g, L_v, L_g, solar_rad_balanced, longwave_balanced
+    # return Rnet, S_v, S_g, L_v, L_g, solar_rad_balanced, longwave_balanced
     return Rnet, S_v, S_g, L_v, L_g, solar_rad_balanced
