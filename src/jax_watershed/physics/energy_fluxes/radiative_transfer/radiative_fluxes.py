@@ -80,10 +80,10 @@ def calculate_longwave_fluxes(
 
     Args:
         L_down (float): The downward atmospheric longwave radiation [W m-2]
-        T_v_t1 (float): The vegetation temperature at the previous time step [degC]
-        T_v_t2 (float): The vegetation temperature at the current time step [degC]
-        T_g_t1 (float): The snow/soil surface temperature at the previous time step [degC]
-        T_g_t2 (float): The snow/soil surface temperature at the current time step [degC]
+        T_v_t1 (float): The vegetation temperature at the previous time step [degK]
+        T_v_t2 (float): The vegetation temperature at the current time step [degK]
+        T_g_t1 (float): The snow/soil surface temperature at the previous time step [degK]
+        T_g_t2 (float): The snow/soil surface temperature at the current time step [degK]
         L (float): The exposed leaf area index [m2 m2-1]
         S (float): The exposed stem area index [m2 m2-1]
 
@@ -94,9 +94,9 @@ def calculate_longwave_fluxes(
     # δ_veg = 0.
     # δ_veg = 1.
 
-    # Convert the temperature units form degC to degK
-    T_v_t1, T_v_t2 = T_v_t1 + C_TO_K, T_v_t2 + C_TO_K
-    T_g_t1, T_g_t2 = T_g_t1 + C_TO_K, T_g_t2 + C_TO_K
+    # # Convert the temperature units form degC to degK
+    # T_v_t1, T_v_t2 = T_v_t1 + C_TO_K, T_v_t2 + C_TO_K
+    # T_g_t1, T_g_t2 = T_g_t1 + C_TO_K, T_g_t2 + C_TO_K
 
     # The upward longwave radiation from the vegetation/soi system for exposed leaf and stem area
     # based on Eq(4.14) in CLM5

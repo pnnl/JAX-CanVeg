@@ -19,6 +19,71 @@ from .radiative_fluxes import calculate_solar_fluxes, calculate_longwave_fluxes
 from .radiative_fluxes import check_solar_energy_conservation, check_longwave_energy_conservation
 
 
+def main_calculate_solar_fluxes(
+    solar_rad: float, pres: float, solar_elev_angle: float, 
+    α_g_db_par: float, α_g_dif_par: float, α_g_db_nir: float, α_g_dif_nir: float,
+    f_snow: float, f_cansno: float, L: float, S: float, pft_ind: int,
+) -> Tuple:
+    """A main function for calculating different solar flux components
+
+    Args:
+        solar_rad (float): The incoming solar radiation [W m2-1]
+        pres (float): The atmospheric pressure [kPa]
+        solar_elev_angle (float): The solar elevation [degree]
+        f_cansno (float): The canopy snow-covered fraction [-]
+        f_snow (float): The fraction of ground covered by snow [-]
+        L (float): The exposed leaf area index [m2 m2-1]
+        S (float): The exposed stem area index [m2 m2-1]
+        pft_ind (int): The index of plant functional type based on the pft_clm5
+
+    Returns:
+        Tuple: Different solar flux components
+    """
+    # Perform the solar radiation partitioning
+    S_db_par, S_dif_par, S_db_nir, S_dif_nir = partition_solar_radiation(
+        solar_rad=solar_rad, solar_elev_angle=solar_elev_angle, pres=pres
+    )
+
+    # Calculate the canopy radiative transfer (PAR)
+    I_up_db_par, I_up_dif_par, I_down_db_par, I_down_dif_par, I_down_trans_can_par, \
+    I_can_sun_db_par, I_can_sha_db_par, I_can_sun_dif_par, I_can_sha_dif_par = \
+        calculate_canopy_fluxes_per_unit_incident(
+            solar_elev_angle=solar_elev_angle, L=L, S=S, f_cansno=f_cansno,
+            α_g_db=α_g_db_par, α_g_dif=α_g_dif_par, f_snow=f_snow, rad_type='PAR', pft_ind=pft_ind
+        )
+
+    # Calculate the canopy radiative transfer (NIR)
+    I_up_db_nir, I_up_dif_nir, I_down_db_nir, I_down_dif_nir, I_down_trans_can_nir, \
+    I_can_sun_db_nir, I_can_sha_db_nir, I_can_sun_dif_nir, I_can_sha_dif_nir = \
+        calculate_canopy_fluxes_per_unit_incident(
+            solar_elev_angle=solar_elev_angle, L=L, S=S, f_cansno=f_cansno,
+            α_g_db=α_g_db_nir, α_g_dif=α_g_dif_nir, f_snow=f_snow, rad_type='NIR', pft_ind=pft_ind
+        )
+
+    # print(I_can_sun_db_par+I_can_sha_db_par+I_up_db_par+I_down_trans_can_par*(1-α_g_db_par)+I_down_db_par*(1-α_g_dif_par))
+    # print(I_can_sun_db_nir+I_can_sha_db_nir+I_up_db_nir+I_down_trans_can_nir*(1-α_g_db_nir)+I_down_db_nir*(1-α_g_dif_nir))
+    # print(I_can_sun_dif_par+I_can_sha_dif_par+I_up_dif_par+I_down_dif_par*(1-α_g_dif_par))
+    # print(I_can_sun_dif_nir+I_can_sha_dif_nir+I_up_dif_nir+I_down_dif_nir*(1-α_g_dif_nir))
+
+    # Calculate different solar fluxes
+    S_v, S_g = calculate_solar_fluxes(
+        S_db_par=S_db_par, S_dif_par=S_dif_par, S_db_nir=S_db_nir, S_dif_nir=S_dif_nir,
+        I_can_db_par=I_can_sun_db_par+I_can_sha_db_par, I_can_dif_par=I_can_sun_dif_par+I_can_sha_dif_par, 
+        I_can_db_nir=I_can_sun_db_nir+I_can_sha_db_nir, I_can_dif_nir=I_can_sun_dif_nir+I_can_sha_dif_nir,
+        I_down_db_par=I_down_db_par, I_down_dif_par=I_down_dif_par, I_down_db_nir=I_down_db_nir, I_down_dif_nir=I_down_dif_nir, 
+        I_down_trans_can_par=I_down_trans_can_par, I_down_trans_can_nir=I_down_trans_can_nir,
+        α_g_db_par=α_g_db_par, α_g_dif_par=α_g_dif_par, α_g_db_nir=α_g_db_nir, α_g_dif_nir=α_g_dif_nir, 
+    )
+
+    # Check the energy balance of solar radiation
+    is_solar_rad_balanced = check_solar_energy_conservation(
+        S_db_par=S_db_par, S_dif_par=S_dif_par, S_db_nir=S_db_nir, S_dif_nir=S_dif_nir, S_v=S_v, S_g=S_g,
+        I_up_db_par=I_up_db_par, I_up_dif_par=I_up_dif_par, I_up_db_nir=I_up_db_nir, I_up_dif_nir=I_up_dif_nir,
+    )
+
+    return S_v, S_g, is_solar_rad_balanced
+
+
 def main_func(
     solar_rad: float, L_down: float, pres: float,
     f_snow: float, f_cansno: float, L: float, S: float, pft_ind: int,
@@ -115,16 +180,16 @@ def main_func(
     Rnet = calculate_net_radiation_at_the_surface(S_v, S_g, L_v, L_g)
 
     # Check the energy balance of solar radiation
-    solar_rad_balanced = check_solar_energy_conservation(
+    is_solar_rad_balanced = check_solar_energy_conservation(
         S_db_par=S_db_par, S_dif_par=S_dif_par, S_db_nir=S_db_nir, S_dif_nir=S_dif_nir, S_v=S_v, S_g=S_g,
         I_up_db_par=I_up_db_par, I_up_dif_par=I_up_dif_par, I_up_db_nir=I_up_db_nir, I_up_dif_nir=I_up_dif_nir,
     )
 
     # Check the energy balance of longwave radiation
-    longwave_balanced = check_longwave_energy_conservation(
+    is_longwave_balanced = check_longwave_energy_conservation(
         L_down=L_down, L_v=L_v, L_g=L_g, L_up=L_up, 
         L_up_g=L_up_g, L_down_v=L_down_v, L_up_v=L_up_v, δ_veg=δ_veg
     )
 
     # return Rnet, S_v, S_g, L_v, L_g, solar_rad_balanced, longwave_balanced
-    return Rnet, S_v, S_g, L_v, L_g, solar_rad_balanced
+    return Rnet, S_v, S_g, L_v, L_g, is_solar_rad_balanced

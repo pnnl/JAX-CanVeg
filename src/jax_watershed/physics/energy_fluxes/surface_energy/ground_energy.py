@@ -12,7 +12,7 @@ Date: 2023.03.20.
 
 """
 
-from ....shared_utilities.constants import λ
+from ....shared_utilities.constants import λ_VAP as λ
 
 from ..turbulent_fluxes import calculate_H, calculate_E, calculate_G
 

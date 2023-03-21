@@ -15,15 +15,15 @@ def calculate_H(
     """Calculating sensible heat flux
 
     Args:
-        T_2 (float): The temperature at the top or towards negative h direction [degK]
-        T_1 (float): The temperature at the bottom or towards positive h direction [degK]
+        T_2 (float): The temperature at the top or towards positive H direction [degK]
+        T_1 (float): The temperature at the bottom or towards negative H direction [degK]
         ρ_atm (float): The density of atmospheric air [kg m-3]
         gh (float): The conductance of heat flux [m s-1]
 
     Returns:
         float: The sensible heat flux [W m-2]
     """
-    return ρ_atm * Cp * (T_2 - T_1) * gh
+    return - ρ_atm * Cp * (T_2 - T_1) * gh
 
 
 def calculate_E(
@@ -32,15 +32,15 @@ def calculate_E(
     """Calculating the water vapor flux.
 
     Args:
-        q_2 (float): The specific humidity at the top or towards negative E direction [kg kg-1]
-        q_1 (float): The specific humidity at the bottom or towards positive E direction [kg kg-1]
+        q_2 (float): The specific humidity at the top or towards positive E direction [kg kg-1]
+        q_1 (float): The specific humidity at the bottom or towards negative E direction [kg kg-1]
         ρ_atm (float): The density of atmospheric air [kg m-3]
         ge (float): The conductance of water vapor [m s-1]
 
     Returns:
         float: The water vapor flux [kg m-2 s-1]
     """
-    return ρ_atm * (q_2 - q_1) * ge
+    return - ρ_atm * (q_2 - q_1) * ge
 
 
 def calculate_G(
@@ -58,4 +58,4 @@ def calculate_G(
         float: The ground heat flux [W m-2]
     """
     # Based on Eq(7.8) in Bonan (2019)
-    return κ * (T_g - T_s1) / dz
+    return - κ * (T_g - T_s1) / dz

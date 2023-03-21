@@ -11,7 +11,7 @@ Author: Peishi Jiang
 Date: 2023.03.20.
 """
 
-from ....shared_utilities.constants import λ
+from ....shared_utilities.constants import λ_VAP as λ
 
 from ..radiative_transfer import calculate_longwave_fluxes
 from ..turbulent_fluxes import calculate_H, calculate_E
@@ -49,6 +49,9 @@ def leaf_energy_balance(
     # Eq(5.101) in CLM5
     E = calculate_E(q_1=q_v_sat, q_2=q_s, ρ_atm=ρ_atm, ge=ge)  # [kg m-2 s-1]
     λE = λ * E # [W m-2]
+
+    # print(T_v, T_s, q_s, q_v_sat)
+    # print(S_v, L_v, H, E, λE)
 
     # leaf energy balance
     return S_v - L_v - H - λE
