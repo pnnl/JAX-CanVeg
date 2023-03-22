@@ -36,9 +36,9 @@ def calculate_qs_from_qvqgqa(
     """Calculating the surface/canopy air specific humidity.
 
     Args:
-        qv_sat (float): The vegetation saturated specific humidity [g kg-1]
-        qg (float): The ground specific humidity [g kg-1]
-        qa (float): The reference atmospheric specific humidity [g kg-1]
+        qv_sat (float): The vegetation saturated specific humidity [kg kg-1]
+        qg (float): The ground specific humidity [kg kg-1]
+        qa (float): The reference atmospheric specific humidity [kg kg-1]
         gaw (float): The water vapor conductance from the surface to the atmosphere [m s-1]
         gvw (float): The water vapor conductance from the vegetation to the surface [m s-1]
         ggw (float): The water vapor conductance from the ground to the surface [m s-1]

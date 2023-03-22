@@ -41,9 +41,9 @@ def func_most(
         L_guess (float): The initial guess of the Obukhov length [m].
         uz (float): The wind velocity at the reference height [m s-1].
         Tz (float): The temperature at the reference height [degK].
-        qz (float): The specific humidity at the reference height [g kg-1]
+        qz (float): The specific humidity at the reference height [kg kg-1]
         Ts (float): The surface temperature [degK]
-        qs (float): The surface specific humidity [g kg-1]
+        qs (float): The surface specific humidity [kg kg-1]
         z (float): The reference height [m]
         d (float): The displacement height [m]
         z0m (float): The roughness length for momentum [m]
@@ -66,11 +66,14 @@ def func_most(
     # Calculate ustar, tstar, qstar, tzv, and tvstar
     ustar = calculate_ustar(u1=0., u2=uz, z1=d+z0m, z2=z, d=d, ψm1=ψm_z0m, ψm2=ψm_z) # [m s-1]
     tstar = calculate_Tstar(T1=Ts, T2=Tz, z1=d+z0c, z2=z, d=d, ψc1=ψc_z0c, ψc2=ψc_z) # [degK]
-    qstar = calculate_qstar(q1=qs, q2=qz, z1=d+z0c, z2=z, d=d, ψc1=ψc_z0c, ψc2=ψc_z) # [g kg-1]
-    qstar = qstar * 1e-3  # [kg kg-1]
+    qstar = calculate_qstar(q1=qs, q2=qz, z1=d+z0c, z2=z, d=d, ψc1=ψc_z0c, ψc2=ψc_z) # [kg kg-1]
+    # qstar = qstar * 1e-3  # [kg kg-1]
 
     Tzv = Tz * (1 + 0.608 * qz)
-    Tvstar = tstar * (1 + 0.608 * qz * 1e-3) + 0.608 * Tz * qstar * 1e-3  # Eq(5.17) in CLM5
+    # Tvstar = tstar * (1 + 0.608 * qz * 1e-3) + 0.608 * Tz * qstar * 1e-3  # Eq(5.17) in CLM5
+    Tvstar = tstar * (1 + 0.608 * qz) + 0.608 * Tz * qstar # Eq(5.17) in CLM5
+
+    # jax.debug.print("{}", jnp.array([ustar, tstar, qstar, Tzv, Tvstar]))
 
     L_est = calculate_L(ustar=ustar, T2v=Tzv, Tvstar=Tvstar)
 
@@ -134,8 +137,8 @@ def calculate_qstar(q1: float, q2: float, z1: float, z2: float, d: float, ψc1: 
     """Calculating the characteristic scale of water content based on Eq(6.42) in Bonan(2019).
 
     Args:
-        q1 (float): The specific humidity at height z1 [g kg-1]
-        q2 (float): The specific humidity at height z2 [g kg-1]
+        q1 (float): The specific humidity at height z1 [kg kg-1]
+        q2 (float): The specific humidity at height z2 [kg kg-1]
         z1 (float): The height where u1 is measured [m]
         z2 (float): The height where u2 is measured [m]
         d (float): The displacement height [m]

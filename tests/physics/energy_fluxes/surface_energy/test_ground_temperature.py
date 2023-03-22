@@ -1,5 +1,6 @@
 import unittest
 
+import jax
 import jax.numpy as jnp
 
 from diffrax import NewtonNonlinearSolver
@@ -29,8 +30,8 @@ class TestGroundTemperature(unittest.TestCase):
         year, day, hour, zone          = 2023, 68, 10., -8
         # T_v_t1, T_v_t2, T_g_t1, T_g_t2 = 15., 16., 10., 11.
         T_v_t1, T_v_t2 = 15.+c2k, 15.+c2k
-        T_g_t1, T_g_t2, q_g_t2 = 10.+c2k, 11.+c2k, 0.01*1e3
-        T_a_t2, u_a_t2, z_a, q_a_t2 = 12.+c2k, 4., 2.5, 0.015*1e3
+        T_g_t1, T_g_t2, q_g_t2 = 10.+c2k, 11.+c2k, 0.01
+        T_a_t2, u_a_t2, z_a, q_a_t2 = 12.+c2k, 4., 2.5, 0.015
         T_soil1_t1, dz, κ = 9.+c2k, 0.05, 1. 
         z0m, z0c, d, L_guess = 0.05, 0.05, 0.05, -1.
         gsoil, gstomatal = 1e10, 1./180.
@@ -45,7 +46,7 @@ class TestGroundTemperature(unittest.TestCase):
         )
 
         # Calculate the air density
-        e_a = (pres*1e3 * q_a_t2*1e-3) / (0.622 + 0.378 * q_a_t2*1e-3) # [Pa]
+        e_a = (pres*1e3 * q_a_t2) / (0.622 + 0.378 * q_a_t2) # [Pa]
         ρ_atm = (pres*1e3 - 0.378*e_a) / (Rda * T_a_t2) # [kg m-3]
         # print(e_a, ρ_atm)
 
@@ -91,7 +92,7 @@ class TestGroundTemperature(unittest.TestCase):
         # TODO: Check the units!
         a, b = 17.2693882, 35.86
         e_v_sat_t2 = 610.78 * jnp.exp(a * (T_v_t2 - c2k) / (T_v_t2 - b)) # [Pa]
-        q_v_sat_t2 = 1e3 * (0.622 * e_v_sat_t2) / (pres*1e3 - 0.378 *e_v_sat_t2) # [g kg-1]
+        q_v_sat_t2 = (0.622 * e_v_sat_t2) / (pres*1e3 - 0.378 *e_v_sat_t2) # [kg kg-1]
         # print(e_v_sat_t2, q_v_sat_t2, q_g_t2, q_a_t2)
 
         # Calculate the temperature and specific humidity of the canopy air/surface
@@ -107,7 +108,7 @@ class TestGroundTemperature(unittest.TestCase):
 
         # Solve the energy balance to estimate the ground temperature
         # print(ground_energy_balance(T_g=T_g_t2, T_s=T_s_t2, T_s1=T_soil1_t1, κ=κ, dz=dz, q_g=q_g_t2*1e-3, q_s=q_s_t2*1e-3, gh=ggm, ge=ggw, S_g=S_g, L_g=L_g, ρ_atm=ρ_atm))
-        args = dict(T_s=T_s_t2, T_s1=T_soil1_t1, κ=κ, dz=dz, q_g=q_g_t2*1e-3, q_s=q_s_t2*1e-3, gh=ggm, ge=ggw, S_g=S_g, L_g=L_g, ρ_atm=ρ_atm)
+        args = dict(T_s=T_s_t2, T_s1=T_soil1_t1, κ=κ, dz=dz, q_g=q_g_t2, q_s=q_s_t2, gh=ggm, ge=ggw, S_g=S_g, L_g=L_g, ρ_atm=ρ_atm)
         func = lambda T_g, args: ground_energy_balance(T_g=T_g, **args)
         # print(func(T_v_t2, args))
 
@@ -129,8 +130,8 @@ class TestGroundTemperature(unittest.TestCase):
         year, day, hour, zone          = 2023, 68, 10., -8
         # T_v_t1, T_v_t2, T_g_t1, T_g_t2 = 15., 16., 10., 11.
         T_v_t1, T_v_t2 = 15.+c2k, 15.+c2k
-        T_g_t1, T_g_t2, q_g_t2 = 10.+c2k, 11.+c2k, 0.01*1e3
-        T_a_t2, u_a_t2, z_a, q_a_t2 = 12.+c2k, 4., 2.5, 0.015*1e3
+        T_g_t1, T_g_t2, q_g_t2 = 10.+c2k, 11.+c2k, 0.01
+        T_a_t2, u_a_t2, z_a, q_a_t2 = 12.+c2k, 4., 2.5, 0.015
         T_soil1_t1, dz, κ = 9.+c2k, 0.05, 1. 
         z0m, z0c, d, L_guess = 0.05, 0.05, 0.05, -1.
         gsoil, gstomatal = 1e10, 1./180.
@@ -145,7 +146,7 @@ class TestGroundTemperature(unittest.TestCase):
         )
 
         # Calculate the air density
-        e_a = (pres*1e3 * q_a_t2*1e-3) / (0.622 + 0.378 * q_a_t2*1e-3) # [Pa]
+        e_a = (pres*1e3 * q_a_t2) / (0.622 + 0.378 * q_a_t2) # [Pa]
         ρ_atm = (pres*1e3 - 0.378*e_a) / (Rda * T_a_t2) # [kg m-3]
         # print(e_a, ρ_atm)
 
@@ -227,7 +228,7 @@ def calculate_ground_canopy_temp_L(
     # TODO: Check the units!
     a, b = 17.2693882, 35.86
     e_v_sat_t2 = 610.78 * jnp.exp(a * (T_v_t2 - c2k) / (T_v_t2 - b)) # [Pa]
-    q_v_sat_t2 = 1e3 * (0.622 * e_v_sat_t2) / (pres*1e3 - 0.378 *e_v_sat_t2) # [g kg-1]
+    q_v_sat_t2 = (0.622 * e_v_sat_t2) / (pres*1e3 - 0.378 *e_v_sat_t2) # [kg kg-1]
     # print(e_v_sat_t2, q_v_sat_t2, q_g_t2, q_a_t2)
 
     # Calculate the temperature and specific humidity of the canopy air/surface
@@ -236,18 +237,18 @@ def calculate_ground_canopy_temp_L(
     # print(T_s_t2, q_s_t2)
 
     # Calculate the updated Obukhov length
-    tstar = calculate_Tstar_most(T1=T_s_t2, T2=T_a_t2, z1=d+z0c, z2=z_a, d=d, ψc1=ψc_s, ψc2=ψc_a) # [degK]
-    qstar = calculate_qstar_most(q1=q_s_t2, q2=q_a_t2, z1=d+z0c, z2=z_a, d=d, ψc1=ψc_s, ψc2=ψc_a) # [g kg-1]
-    Tzv = T_a_t2 * (1 + 0.608 * q_a_t2)
-    Tvstar = tstar * (1 + 0.608 * q_a_t2 * 1e-3) + 0.608 * T_a_t2 * qstar * 1e-3 # Eq(5.17) in CLM5
-    L_est = calculate_L_most(ustar=ustar, T2v=Tzv, Tvstar=Tvstar)
-    dL = L_est - L_guess
+    tstar  = calculate_Tstar_most(T1=T_s_t2, T2=T_a_t2, z1=d+z0c, z2=z_a, d=d, ψc1=ψc_s, ψc2=ψc_a) # [degK]
+    qstar  = calculate_qstar_most(q1=q_s_t2, q2=q_a_t2, z1=d+z0c, z2=z_a, d=d, ψc1=ψc_s, ψc2=ψc_a) # [kg kg-1]
+    Tzv    = T_a_t2 * (1 + 0.608 * q_a_t2)
+    Tvstar = tstar * (1 + 0.608 * q_a_t2) + 0.608 * T_a_t2 * qstar # Eq(5.17) in CLM5
+    # jax.debug.print("{}", jnp.array([ustar, tstar, qstar, Tzv, Tvstar]))
+    L_est  = calculate_L_most(ustar=ustar, T2v=Tzv, Tvstar=Tvstar)
+    dL     = L_est - L_guess
 
     # Solve the energy balance to estimate the vegetation temperature
-    denergy_v = leaf_energy_balance(T_v=T_v_t2, T_s=T_s_t2, q_v_sat=q_v_sat_t2*1e-3, q_s=q_s_t2*1e-3, gh=gvm, ge=gvw, S_v=S_v, L_v=L_v, ρ_atm=ρ_atm)
+    denergy_v = leaf_energy_balance(T_v=T_v_t2, T_s=T_s_t2, q_v_sat=q_v_sat_t2, q_s=q_s_t2, gh=gvm, ge=gvw, S_v=S_v, L_v=L_v, ρ_atm=ρ_atm)
 
     # Solve the energy balance to estimate the ground temperature
-    denergy_v = leaf_energy_balance(T_v=T_v_t2, T_s=T_s_t2, q_v_sat=q_v_sat_t2*1e-3, q_s=q_s_t2*1e-3, gh=gvm, ge=gvw, S_v=S_v, L_v=L_v, ρ_atm=ρ_atm)
-    denergy_g = ground_energy_balance(T_g=T_g_t2, T_s=T_s_t2, T_s1=T_soil1_t1, κ=κ, dz=dz, q_g=q_g_t2*1e-3, q_s=q_s_t2*1e-3, gh=ggm, ge=ggw, S_g=S_g, L_g=L_g, ρ_atm=ρ_atm)
+    denergy_g = ground_energy_balance(T_g=T_g_t2, T_s=T_s_t2, T_s1=T_soil1_t1, κ=κ, dz=dz, q_g=q_g_t2, q_s=q_s_t2, gh=ggm, ge=ggw, S_g=S_g, L_g=L_g, ρ_atm=ρ_atm)
 
     return jnp.array([dL, denergy_v, denergy_g])

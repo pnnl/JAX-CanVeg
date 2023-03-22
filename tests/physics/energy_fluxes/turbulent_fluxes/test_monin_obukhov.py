@@ -20,7 +20,7 @@ class TestMoninObukhov(unittest.TestCase):
         uz, z, d = 3., 2., 0.5
         z0m, z0c = 0.05, 0.05
         ts, tz = 12. + C_TO_K, 10. + C_TO_K
-        qs, qz = 10., 8.
+        qs, qz = 10.*1e-3, 8.*1e-3
         kwarg = dict(uz=uz, Tz=tz, qz=qz, Ts=ts, qs=qs, z=z, d=d, z0m=z0m, z0c=z0c)
         # args = dict(uz=uz, tz=tz, qz=qz, ts=ts, qs=qs, z=z, d=d, z0m=z0m, z0c=z0c)
 

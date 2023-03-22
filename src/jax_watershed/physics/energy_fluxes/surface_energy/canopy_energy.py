@@ -28,8 +28,8 @@ def leaf_energy_balance(
     Args:
         T_v (float): The vegetation/leaf temperature [degK]
         T_s (float): The surface atmosphere temperature [degK]
-        q_v_sat (float): The saturated specific humidity of the surface atmosphere temperature [g kg-1]
-        q_s (float): The surface specific humidity [g kg-1]
+        q_v_sat (float): The saturated specific humidity of the surface atmosphere temperature [kg kg-1]
+        q_s (float): The surface specific humidity [kg kg-1]
         gh (float): The total leaf boundary conductance [m s-1]
         ge (float): The total leaf conductance to water vapor [m s-1]
         S_v (float): The net solar fluxes absorbed by the vegetation [W m-2]
@@ -67,8 +67,8 @@ def leaf_energy_balance(
 #     Args:
 #         T_v (float): The vegetation/leaf temperature [degK]
 #         T_s (float): The surface atmosphere temperature [degK]
-#         q_v_sat (float): The saturated specific humidity of the surface atmosphere temperature [g kg-1]
-#         q_s (float): The surface specific humidity [g kg-1]
+#         q_v_sat (float): The saturated specific humidity of the surface atmosphere temperature [kg kg-1]
+#         q_s (float): The surface specific humidity [kg kg-1]
 #         gs (float): The stomatal conductance [m s-1]
 #         S_v (float): The net solar fluxes absorbed by the vegetation [W m-2]
 #         L_v (float): The net longwave flux leaving from canopy to the atmosphere [W m-2]

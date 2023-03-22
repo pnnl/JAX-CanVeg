@@ -31,8 +31,8 @@ def ground_energy_balance(
         T_s1 (float): The temperature of the first soil layer [degK]
         κ (float): the thermal conductivity [W m-1 K-1]
         dz (float): The soil depth of the first soil layer [m]
-        q_g (float): The specific humidity of the ground [g kg-1]
-        q_s (float): The surface specific humidity [g kg-1]
+        q_g (float): The specific humidity of the ground [kg kg-1]
+        q_s (float): The surface specific humidity [kg kg-1]
         gh (float): The heat conductance from ground to surface [m s-1]
         ge (float): The water vapor conductance from ground to surface [m s-1]
         S_g (float): The net solar fluxes absorbed by the ground [W m-2]
@@ -55,5 +55,7 @@ def ground_energy_balance(
     # Calculate the ground heat flux
     G = calculate_G(T_g=T_g, T_s1=T_s1, κ=κ, dz=dz) 
 
+    # print(q_g, q_s)
+    # print(S_g, L_g, H, λE, G)
     # leaf energy balance
     return S_g - L_g - H - λE - G
