@@ -3,6 +3,7 @@ import unittest
 from jax import jit
 import jax.numpy as jnp
 from jax_watershed.physics.energy_fluxes.radiative_transfer import main_func
+from jax_watershed.shared_utilities.constants import C_TO_K as c2k
 
 
 class TestMainFunc(unittest.TestCase):
@@ -13,7 +14,7 @@ class TestMainFunc(unittest.TestCase):
         latitude, longitude            = 31.31, 120.77
         year, day, hour, zone          = 2023, 68, 10., -8
         # T_v_t1, T_v_t2, T_g_t1, T_g_t2 = 15., 16., 10., 11.
-        T_v_t1, T_v_t2, T_g_t1, T_g_t2 = 15., 16., 10., 11.
+        T_v_t1, T_v_t2, T_g_t1, T_g_t2 = 15.+c2k, 16.+c2k, 10.+c2k, 11.+c2k
 
         f_snow, f_cansno = 0.1, 0.1
 

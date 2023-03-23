@@ -67,13 +67,12 @@ def func_most(
     ustar = calculate_ustar(u1=0., u2=uz, z1=d+z0m, z2=z, d=d, ψm1=ψm_z0m, ψm2=ψm_z) # [m s-1]
     tstar = calculate_Tstar(T1=Ts, T2=Tz, z1=d+z0c, z2=z, d=d, ψc1=ψc_z0c, ψc2=ψc_z) # [degK]
     qstar = calculate_qstar(q1=qs, q2=qz, z1=d+z0c, z2=z, d=d, ψc1=ψc_z0c, ψc2=ψc_z) # [kg kg-1]
-    # qstar = qstar * 1e-3  # [kg kg-1]
 
     Tzv = Tz * (1 + 0.608 * qz)
-    # Tvstar = tstar * (1 + 0.608 * qz * 1e-3) + 0.608 * Tz * qstar * 1e-3  # Eq(5.17) in CLM5
     Tvstar = tstar * (1 + 0.608 * qz) + 0.608 * Tz * qstar # Eq(5.17) in CLM5
 
     # jax.debug.print("{}", jnp.array([ustar, tstar, qstar, Tzv, Tvstar]))
+    # jax.debug.print("{}", jnp.array([qs, qz, qstar]))
 
     L_est = calculate_L(ustar=ustar, T2v=Tzv, Tvstar=Tvstar)
 

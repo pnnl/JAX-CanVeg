@@ -105,10 +105,10 @@ def main_func(
         L (float): The exposed leaf area index [m2 m2-1]
         S (float): The exposed stem area index [m2 m2-1]
         pft_ind (int): The index of plant functional type based on the pft_clm5
-        T_v_t1 (float): The vegetation temperature at the previous time step [degC]
-        T_v_t2 (float): The vegetation temperature at the current time step [degC]
-        T_g_t1 (float): The snow/soil surface temperature at the previous time step [degC]
-        T_g_t2 (float): The snow/soil surface temperature at the current time step [degC]
+        T_v_t1 (float): The vegetation temperature at the previous time step [degK]
+        T_v_t2 (float): The vegetation temperature at the current time step [degK]
+        T_g_t1 (float): The snow/soil surface temperature at the previous time step [degK]
+        T_g_t2 (float): The snow/soil surface temperature at the current time step [degK]
         latitude (float): The latitude [degree].
         longitude (float): The longitude [degree].
         year (int): The year.

@@ -94,10 +94,6 @@ def calculate_longwave_fluxes(
     # δ_veg = 0.
     # δ_veg = 1.
 
-    # # Convert the temperature units form degC to degK
-    # T_v_t1, T_v_t2 = T_v_t1 + C_TO_K, T_v_t2 + C_TO_K
-    # T_g_t1, T_g_t2 = T_g_t1 + C_TO_K, T_g_t2 + C_TO_K
-
     # The upward longwave radiation from the vegetation/soi system for exposed leaf and stem area
     # based on Eq(4.14) in CLM5
     L_up_v = (1-ε_g) * (1-ε_v) * (1-ε_v) * L_down + \
