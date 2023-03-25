@@ -14,6 +14,8 @@ from jax_watershed.physics.energy_fluxes.radiative_transfer import main_calculat
 
 from jax_watershed.physics.energy_fluxes.turbulent_fluxes import *
 
+from jax_watershed.physics.water_fluxes import qsat_from_temp_pres
+
 from jax_watershed.shared_utilities.constants import R_DA as Rda
 from jax_watershed.shared_utilities.constants import C_TO_K as c2k
 
@@ -24,13 +26,15 @@ class TestGroundTemperature(unittest.TestCase):
 
     def test_estimate_ground_temperature(self):
         print("Performing test_estimate_ground_temperature()...")
+        # solar_rad, L_down, pres        = 352., 200., 101.976
         solar_rad, L_down, pres        = 352., 200., 101.976
         L, S, pft_ind                  = 2., 1., 10
         latitude, longitude            = 31.31, 120.77
         year, day, hour, zone          = 2023, 68, 10., -8
         # T_v_t1, T_v_t2, T_g_t1, T_g_t2 = 15., 16., 10., 11.
         T_v_t1, T_v_t2 = 15.+c2k, 15.+c2k
-        T_g_t1, T_g_t2, q_g_t2 = 10.+c2k, 11.+c2k, 0.01
+        # T_g_t1, T_g_t2, q_g_t2 = 10.+c2k, 11.+c2k, 0.01
+        T_g_t1, T_g_t2 = 10.+c2k, 11.+c2k
         T_a_t2, u_a_t2, z_a, q_a_t2 = 12.+c2k, 4., 2.5, 0.015
         T_soil1_t1, dz, κ = 9.+c2k, 0.05, 1. 
         z0m, z0c, d, L_guess = 0.05, 0.05, 0.05, -1.
@@ -95,6 +99,10 @@ class TestGroundTemperature(unittest.TestCase):
         q_v_sat_t2 = (0.622 * e_v_sat_t2) / (pres*1e3 - 0.378 *e_v_sat_t2) # [kg kg-1]
         # print(e_v_sat_t2, q_v_sat_t2, q_g_t2, q_a_t2)
 
+        # TODO: Calculate the specific humidity on the ground (Eq(5.73) in CLM5)
+        q_g_t2_sat = qsat_from_temp_pres(T=T_g_t2, pres=pres*1e3)
+        q_g_t2     = q_g_t2_sat
+
         # Calculate the temperature and specific humidity of the canopy air/surface
         T_s_t2 = calculate_Ts_from_TvTgTa(Tv=T_v_t2, Tg=T_g_t2, Ta=T_a_t2, gam=gam, gvm=gvm, ggm=ggm)
         q_s_t2 = calculate_qs_from_qvqgqa(qv_sat=q_v_sat_t2, qg=q_g_t2, qa=q_a_t2, gaw=gaw, gvw=gvw, ggw=ggw)
@@ -130,7 +138,8 @@ class TestGroundTemperature(unittest.TestCase):
         year, day, hour, zone          = 2023, 68, 10., -8
         # T_v_t1, T_v_t2, T_g_t1, T_g_t2 = 15., 16., 10., 11.
         T_v_t1, T_v_t2 = 15.+c2k, 15.+c2k
-        T_g_t1, T_g_t2, q_g_t2 = 10.+c2k, 11.+c2k, 0.01
+        # T_g_t1, T_g_t2, q_g_t2 = 10.+c2k, 11.+c2k, 0.01
+        T_g_t1, T_g_t2 = 10.+c2k, 11.+c2k
         T_a_t2, u_a_t2, z_a, q_a_t2 = 12.+c2k, 4., 2.5, 0.015
         T_soil1_t1, dz, κ = 9.+c2k, 0.05, 1. 
         z0m, z0c, d, L_guess = 0.05, 0.05, 0.05, -1.
@@ -168,7 +177,7 @@ class TestGroundTemperature(unittest.TestCase):
         func = lambda x, args: calculate_ground_canopy_temp_L(x, **args)
         args = dict(S_v=S_v, S_g=S_g, L_down=L_down, pres=pres, ρ_atm=ρ_atm, 
              T_soil1_t1=T_soil1_t1, κ=κ, dz=dz, T_v_t1=T_v_t1, T_g_t1=T_g_t1, T_g_t2=T_g_t2, 
-             T_a_t2=T_a_t2, u_a_t2=u_a_t2, q_a_t2=q_a_t2, q_g_t2=q_g_t2, L=L, S=S, ε_g=ε_g, ε_v=ε_v, 
+             T_a_t2=T_a_t2, u_a_t2=u_a_t2, q_a_t2=q_a_t2, L=L, S=S, ε_g=ε_g, ε_v=ε_v, 
              z_a=z_a, z0m=z0m, z0c=z0c, d=d, gstomatal=gstomatal, gsoil=gsoil)
 
         solver = NewtonNonlinearSolver(atol=atol, rtol=rtol)
@@ -186,7 +195,7 @@ def calculate_ground_canopy_temp_L(
     x, S_v, S_g, L_down, pres, ρ_atm,
     T_soil1_t1, κ, dz,
     T_v_t1, T_g_t1, T_g_t2, T_a_t2, 
-    u_a_t2, q_a_t2, q_g_t2, L, S, ε_g, ε_v,
+    u_a_t2, q_a_t2, L, S, ε_g, ε_v,
     z_a, z0m, z0c, d, gstomatal, gsoil):
 
     # T_v_t2 = x 
@@ -230,6 +239,10 @@ def calculate_ground_canopy_temp_L(
     e_v_sat_t2 = 610.78 * jnp.exp(a * (T_v_t2 - c2k) / (T_v_t2 - b)) # [Pa]
     q_v_sat_t2 = (0.622 * e_v_sat_t2) / (pres*1e3 - 0.378 *e_v_sat_t2) # [kg kg-1]
     # print(e_v_sat_t2, q_v_sat_t2, q_g_t2, q_a_t2)
+
+    # TODO: Calculate the specific humidity on the ground (Eq(5.73) in CLM5)
+    q_g_t2_sat = qsat_from_temp_pres(T=T_g_t2, pres=pres*1e3)
+    q_g_t2     = q_g_t2_sat
 
     # Calculate the temperature and specific humidity of the canopy air/surface
     T_s_t2 = calculate_Ts_from_TvTgTa(Tv=T_v_t2, Tg=T_g_t2, Ta=T_a_t2, gam=gam, gvm=gvm, ggm=ggm)

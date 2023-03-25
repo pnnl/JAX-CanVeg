@@ -110,6 +110,7 @@ def calculate_ustar(u1: float, u2: float, z1: float, z2: float, d: float, ψm1: 
         float: The friction velocity [m s-1]
     """
     ustar = (u2 - u1) * k / (jnp.log((z2-d)/(z1-d)) - (ψm2-ψm1))
+    # jax.debug.print("ustar: {}", jnp.array([u2-u1, jnp.log((z2-d)/(z1-d)), (ψm2-ψm1)]))
     return ustar
 
 

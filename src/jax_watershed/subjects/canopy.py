@@ -55,13 +55,13 @@ class Canopy(BaseSubject):
         self._state_initialize()
 
     def _parameter_initialize(self) -> None:
-        for paraname, para in self.parameters:
+        for paraname, para in self.parameters.items():
             self.parameters[paraname] = parameter_initialize(
                 para, self.spatial_domain, paraname, parameters_default[paraname] 
             )
 
     def _state_initialize(self) -> None:
-        for statename, state in self.states:
+        for statename, state in self.states.items():
             self.states[statename] = state_initialize(
-                state, self.temporal_domain, self.spatial_domain, statename, parameters_default[statename] 
+                state, self.temporal_domain, self.spatial_domain, statename, states_default[statename] 
             )

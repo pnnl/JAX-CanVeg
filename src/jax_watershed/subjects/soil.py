@@ -10,6 +10,7 @@ Date: 2023. 3. 8.
 """
 # TODO:
 # (1) Add a unit test
+# (2) Change the units to W m-2 and degK
 
 from typing import Optional
 
@@ -72,7 +73,7 @@ class Soil(BaseSubject):
             cs (Float_general): Soil heat capacity [MJ kg-1 degC-1 or MJ kg-1 degK-1]
             kthermal (Float_general): Soil thermal conductivity [MJ m-1 d-1 degC-1 or MJ m-1 d-1 degK-1]
             rho (Float_general): Soil density [kg m-3]
-            temp (Float_general): Soil temperature [degC]
+            temp (Float_general): Soil temperature [degK]
             vwc (Float_general): Volumetric soil water content [-]
         """
         super().__init__(ts, space)
@@ -112,13 +113,13 @@ class Soil(BaseSubject):
         self._state_initialize()
 
     def _parameter_initialize(self) -> None:
-        for paraname, para in self.parameters:
+        for paraname, para in self.parameters.items():
             self.parameters[paraname] = parameter_initialize(
                 para, self.spatial_domain, paraname, parameters_default[paraname] 
             )
 
     def _state_initialize(self) -> None:
-        for statename, state in self.states:
+        for statename, state in self.states.items():
             self.states[statename] = state_initialize(
-                state, self.temporal_domain, self.spatial_domain, statename, parameters_default[statename] 
+                state, self.temporal_domain, self.spatial_domain, statename, states_default[statename] 
             )

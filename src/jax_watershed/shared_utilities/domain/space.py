@@ -28,31 +28,35 @@ class BaseSpace:
     def ndim(self) -> int:
         return self._ndim
     
+    @property
     def shape(self) -> Tuple:
         raise Exception("Not implemented")
 
+    @property
     def xs(self) -> Float_1D:
         raise Exception("Not implemented")
 
+    @property
     def ys(self) -> Float_1D:
         raise Exception("Not implemented")
 
+    @property
     def zs(self) -> Float_1D:
         raise Exception("Not implemented")
 
+    @property
     def mesh(self) -> Float_1D:
         raise Exception("Not implemented")
 
 class Column(BaseSpace):
 
-    def __init__(self, xs: Float_1D, ndim: int) -> None:
+    def __init__(self, xs: Float_1D) -> None:
         """A class for 1D or column-based domain.
 
         Args:
-            xs (Float_1D): The list of spatial locations.
-            ndim (int): See the base class note.
+            xs (Float_1D): List of spatially discretized cells (i.e., the center of each cell).
         """
-        super().__init__(ndim)
+        super().__init__(ndim=1)
         self._xs = xs.sort()
     
     @property
@@ -69,15 +73,14 @@ class Column(BaseSpace):
 
 class TwoDimSpace(BaseSpace):
 
-    def __init__(self, xs: Float_1D, ys: Float_1D, ndim: int) -> None:
+    def __init__(self, xs: Float_1D, ys: Float_1D) -> None:
         """A class for two dimensional space using rectangular grids.
 
         Args:
             xs (Float_1D): The list of x-direction discretization.
             ys (Float_1D): The list of y-direction discretization.
-            ndim (int): See the base class note.
         """
-        super().__init__(ndim)
+        super().__init__(ndim=2)
         self._xs, self._ys = xs.sort(), ys.sort()
     
     @property
@@ -99,16 +102,15 @@ class TwoDimSpace(BaseSpace):
 
 class ThreeDimSpace(BaseSpace):
 
-    def __init__(self, xs: Float_1D, ys: Float_1D, zs: Float_1D, ndim: int) -> None:
+    def __init__(self, xs: Float_1D, ys: Float_1D, zs: Float_1D) -> None:
         """A class for three dimensional space using rectangular grids.
 
         Args:
             xs (Float_1D): The list of x-direction discretization. 
             ys (Float_1D): The list of y-direction discretization. 
             zs (Float_1D): The list of z-direction discretization. 
-            ndim (int): See the base class note.
         """
-        super().__init__(ndim)
+        super().__init__(ndim=3)
         self._xs, self._ys, self._zs = xs.sort(), ys.sort(), zs.sort()
 
     @property

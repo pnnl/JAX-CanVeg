@@ -2,6 +2,8 @@
 A list of constants here.
 """
 
+import jax.numpy as jnp
+
 RADIANS = .017453293
 PI      = 3.141592653589793
 TWOPI   = PI*2
@@ -24,22 +26,23 @@ C_P                       = 1.00464e3 # Specific heat capacity of dry air [J kg-
 pft_clm5 = ["NET Temperature", "NET Boreal", "NDT Boreal", "BET Tropical", "BET temperate", "BDT tropical", "BDT temperate", "BDT boreal",
             "BES temperate", "BDS temperate", "BDS boreal", "C3 arctic grass", "C3 grass", "C4 grass", "C3 Crop",
             "Temp Corn", "Spring Wheat", "Temp Soybean", "Cotton", "Rice", "Sugarcane", "Tropical Corn", "Tropical Soybean"]
-χl_clm5 = [0.01]*3 + [0.1]*2 +[0.01, 0.25, 0.25, 0.01, 0.25, 0.25] + [-0.3]*4 + [-0.5]*8
+# χl_clm5 = [0.01]*3 + [0.1]*2 +[0.01, 0.25, 0.25, 0.01, 0.25, 0.25] + [-0.3]*4 + [-0.5]*8
+χl_clm5 = jnp.array([0.01]*3 + [0.1]*2 +[0.01, 0.25, 0.25, 0.01, 0.25, 0.25] + [-0.3]*4 + [-0.5]*8)
 α_leaf_clm5 = {
-    "PAR": [0.7]*3 + [0.1]*5 + [0.7, 0.1, 0.1] + [0.11]*12,
-    "NIR": [0.35]*3 + [0.45]*5 + [0.35, 0.45, 0.45] + [0.35]*12
+    "PAR": jnp.array([0.7]*3 + [0.1]*5 + [0.7, 0.1, 0.1] + [0.11]*12),
+    "NIR": jnp.array([0.35]*3 + [0.45]*5 + [0.35, 0.45, 0.45] + [0.35]*12)
 }
 α_stem_clm5 = {
-    "PAR": [0.16]*11 + [0.31]*12,
-    "NIR": [0.39]*11 + [0.53]*12
+    "PAR": jnp.array([0.16]*11 + [0.31]*12),
+    "NIR": jnp.array([0.39]*11 + [0.53]*12)
 }
 τ_leaf_clm5 = {
-    "PAR": [0.05]*23,
-    "NIR": [0.1]*3 + [0.25]*5 + [0.1,0.25,0.25] + [0.34]*12
+    "PAR": jnp.array([0.05]*23),
+    "NIR": jnp.array([0.1]*3 + [0.25]*5 + [0.1,0.25,0.25] + [0.34]*12)
 }
 τ_stem_clm5 = {
-    "PAR": [0.001]*11 + [0.12]*12,
-    "NIR": [0.001]*11 + [0.25]*12
+    "PAR": jnp.array([0.001]*11 + [0.12]*12),
+    "NIR": jnp.array([0.001]*11 + [0.25]*12)
 }
 
 # Intercepted snow optical properties (from Table 3.2 in CLM5)

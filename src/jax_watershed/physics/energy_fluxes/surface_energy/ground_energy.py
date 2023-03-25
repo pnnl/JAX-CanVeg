@@ -12,6 +12,9 @@ Date: 2023.03.20.
 
 """
 
+import jax
+import jax.numpy as jnp
+
 from ....shared_utilities.constants import λ_VAP as λ
 
 from ..turbulent_fluxes import calculate_H, calculate_E, calculate_G
@@ -57,5 +60,7 @@ def ground_energy_balance(
 
     # print(q_g, q_s)
     # print(S_g, L_g, H, λE, G)
-    # leaf energy balance
+    # jax.debug.print("{}", jnp.array([S_g, L_g, G]))
+    jax.debug.print("ground energy balance: {}", jnp.array([T_g, S_g, L_g, H, λE]))
     return S_g - L_g - H - λE - G
+    # return S_g - L_g - H - λE

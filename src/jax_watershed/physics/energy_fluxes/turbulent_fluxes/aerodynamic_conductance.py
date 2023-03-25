@@ -7,6 +7,7 @@ Author: Peishi Jiang
 Date: 2023.03.17.
 """
 
+import jax
 import jax.numpy as jnp
 
 from ....shared_utilities.constants import VON_KARMAN_CONSTANT as k
@@ -126,7 +127,7 @@ def calculate_conductance_leaf_boundary(ustar: float) -> float:
     cv = 0.01 # [m s-1]
     dleaf = 0.04 # [m], based on Table 5.1 in CLM5
     glb = cv * (ustar / dleaf) ** 0.5
-
+    # jax.debug.print("ustar: {}", jnp.array([ustar, cv, dleaf, glb]))
     return glb
 
 

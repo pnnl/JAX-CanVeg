@@ -11,6 +11,9 @@ Author: Peishi Jiang
 Date: 2023.03.20.
 """
 
+import jax
+import jax.numpy as jnp
+
 from ....shared_utilities.constants import λ_VAP as λ
 
 from ..radiative_transfer import calculate_longwave_fluxes
@@ -54,6 +57,7 @@ def leaf_energy_balance(
     # print(S_v, L_v, H, E, λE)
 
     # leaf energy balance
+    jax.debug.print("canopy energy balance: {}", jnp.array([T_v, T_s, S_v, L_v, H, λE]))
     return S_v - L_v - H - λE
 
 
