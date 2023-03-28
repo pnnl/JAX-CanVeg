@@ -57,7 +57,7 @@ def esat_from_temp(T: float) -> float:
     """
     a, b = 17.2693882, 35.86
     esat = 610.78 * jnp.exp(a * (T - c2k) / (T - b)) # [Pa]
-    jax.debug.print("esat terms: {}",  jnp.array([T, T - c2k, T - b]))
+    # jax.debug.print("esat terms: {}",  jnp.array([T, T - c2k, T - b]))
     return  esat
 
 

@@ -57,7 +57,7 @@ def leaf_energy_balance(
     # print(S_v, L_v, H, E, λE)
 
     # leaf energy balance
-    jax.debug.print("canopy energy balance: {}", jnp.array([T_v, T_s, S_v, L_v, H, λE]))
+    # jax.debug.print("canopy energy balance: {}", jnp.array([T_v, T_s, S_v, L_v, H, λE]))
     return S_v - L_v - H - λE
 
 

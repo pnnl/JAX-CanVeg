@@ -61,6 +61,6 @@ def ground_energy_balance(
     # print(q_g, q_s)
     # print(S_g, L_g, H, λE, G)
     # jax.debug.print("{}", jnp.array([S_g, L_g, G]))
-    jax.debug.print("ground energy balance: {}", jnp.array([T_g, S_g, L_g, H, λE]))
+    # jax.debug.print("ground energy balance: {}", jnp.array([T_g, S_g, L_g, H, λE]))
     return S_g - L_g - H - λE - G
     # return S_g - L_g - H - λE
