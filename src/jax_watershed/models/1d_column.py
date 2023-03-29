@@ -114,14 +114,14 @@ while t_now < tn:
     # l, T_v_t2, T_g_t2, S_v_t2, S_g_t2, L_v_t2, L_g_t2, H_v_t2, H_g_t2, E_v_t2, E_g_t2, G_t2 = solve_surface_energy_jit(
     # l, T_v_t2, T_g_t2, S_v_t2, S_g_t2, L_v_t2, L_g_t2, H_v_t2, H_g_t2, E_v_t2, E_g_t2, G_t2 = solve_surface_energy(
     l, T_v_t2, S_v_t2, S_g_t2, L_v_t2, L_g_t2, H_v_t2, H_g_t2, E_v_t2, E_g_t2, G_t2 = solve_surface_energy_jit(
-        # l_guess=-1.,
-        l_guess=l_guess,
+        l_guess=-1.,
+        # l_guess=l_guess,
         longitude=longitude, latitude=latitude, year=year, day=day, hour=hour, zone=zone,
         f_snow=f_snow, f_cansno=f_cansno, pft_ind=pft_ind,
         z_a=z_a, z0m=z0m, z0c=z0c, d=d, gstomatal=gstomatal, gsoil=gsoil, 
         solar_rad_t2=solar_rad_t2, L_down_t2=L_down_t2, L_t2=L_t2, S_t2=S_t2, 
         u_a_t2=u_a_t2, q_a_t2=q_a_t2, T_a_t2=T_a_t2, pres_a_t2=pres_a_t2, ρ_atm_t2=ρ_atm_t2, 
-        T_v_t1=T_v_t1, T_v_t2_guess=T_v_t2_guess, T_g_t1=T_g_t1, T_g_t2_guess=T_g_t2_guess,
+        T_v_t1=T_v_t1, T_v_t2_guess=T_v_t2_guess, T_g_t1=T_g_t1, T_g_t2=T_g_t2_guess,
         # T_soil1_t1=T_soil1_t1, κ=κ, dz=dz_soil1,
     )
 
@@ -141,7 +141,7 @@ while t_now < tn:
         z_a=z_a, z0m=z0m, z0c=z0c, d=d, gstomatal=gstomatal, gsoil=gsoil, 
         solar_rad_t2=solar_rad_t2, L_down_t2=L_down_t2, L_t2=L_t2, S_t2=S_t2, 
         u_a_t2=u_a_t2, q_a_t2=q_a_t2, T_a_t2=T_a_t2, pres_a_t2=pres_a_t2, ρ_atm_t2=ρ_atm_t2, 
-        T_v_t1=T_v_t1, T_v_t2_guess=T_v_t2_guess, T_g_t1=T_g_t1, T_g_t2_guess=T_g_t2_guess,
+        T_v_t1=T_v_t1, T_v_t2_guess=T_v_t2_guess, T_g_t1=T_g_t1, T_g_t2=T_g_t2_guess,
         # T_soil1_t1=T_soil1_t1, κ=κ, dz=dz_soil1,
     )
     # print(args)
