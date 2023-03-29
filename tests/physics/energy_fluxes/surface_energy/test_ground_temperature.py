@@ -360,12 +360,12 @@ def calculate_ground_canopy_temp(
     L_update = solution.root
     # jax.debug.print("Updated L: {}", L_update)
 
-    # Monin-Ob similarity theory (MOST)
-    ψm_a  = calculate_ψm_most(ζ=z_a-d / L_guess)
-    ψm_s  = calculate_ψm_most(ζ=z0m / L_guess)
-    ψc_a  = calculate_ψc_most(ζ=z_a-d / L_guess)
-    ψc_s  = calculate_ψc_most(ζ=z0c / L_guess)
-    ustar = calculate_ustar_most(u1=0, u2=u_a_t2, z1=z0m+d, z2=z_a, d=d, ψm1=ψm_s, ψm2=ψm_a)
+    # # Monin-Ob similarity theory (MOST)
+    # ψm_a  = calculate_ψm_most(ζ=z_a-d / L_guess)
+    # ψm_s  = calculate_ψm_most(ζ=z0m / L_guess)
+    # ψc_a  = calculate_ψc_most(ζ=z_a-d / L_guess)
+    # ψc_s  = calculate_ψc_most(ζ=z0c / L_guess)
+    # ustar = calculate_ustar_most(u1=0, u2=u_a_t2, z1=z0m+d, z2=z_a, d=d, ψm1=ψm_s, ψm2=ψm_a)
 
     # Use the updated Obukhov to perform Monin Obukhov similarity theory again (MOST)
     _, gam, gaw, gvm, gvw, ggm, ggw, q_v_sat_t2, T_s_t2, q_s_t2 = perform_most_dual_source(

@@ -98,6 +98,7 @@ def perform_most_dual_source(
     gvw = calculate_total_conductance_leaf_water_vapor(gh=gvm, gs=gstomatal)
     ggm = calculate_conductance_ground_canopy(L=L, S=S, ustar=ustar, z0m=z0m)
     ggw = calculate_conductance_ground_canopy_water_vapo(L=L, S=S, ustar=ustar, z0m=z0m, gsoil=gsoil)
+    # jax.debug.print("Conductances: {}", jnp.array([ustar, u_a, gam, gvm, ggm, gaw, gvw, ggw]))
     # print(gvw, gvm)
 
     # Calculate the saturated specific humidity from temperature and pressure

@@ -46,7 +46,7 @@ from jax_watershed.subjects import Soil, Surface
 # Spatio-temporal information/discretizations
 t0, tn, dt = 0., 200., 1. # [day]
 z0, zn, nz = 0.05, 10.-0.05, 19 # [m]
-latitude, longitude, zone  = 31.31, 120.77, 8
+latitude, longitude, zone  = 31.31, -120.77, 8
 
 # Surface characteristics
 pft_ind = 10
@@ -73,7 +73,7 @@ T_a_ind, pres_a_ind, ρ_atm_ind = forcing_list.index('TA'), forcing_list.index('
 # ---------------------------------------------------------------------------- #
 #                            Initialize the subjects                           #
 # ---------------------------------------------------------------------------- #
-time = Time(t0=t0, tn=tn, dt=dt, start_time='2016-01-05')
+time = Time(t0=t0, tn=tn, dt=dt, start_time='2016-01-05 12:00:00')
 column = Column(xs=jnp.linspace(z0, zn, nz))
 surface = Surface(ts=time, space=Column(xs=jnp.array([0.])))
 soil    = Surface(ts=time, space=column)
@@ -89,9 +89,11 @@ tind_prev, tind_now = 0, 0
 solve_surface_energy_jit = jax.jit(solve_surface_energy)
 
 while t_now < tn:
-    # Get the current time step
+    # ------------------------- Get the current time step ------------------------ #
     t_now_fmt       = time.return_formatted_time(t_now)
-    year, day, hour = t_now_fmt.year, t_now_fmt.day, t_now_fmt.hour
+    year, day, hour = t_now_fmt.year, t_now_fmt.timetuple().tm_yday , t_now_fmt.hour
+    # year, day, hour = t_now_fmt.year, t_now_fmt.day, t_now_fmt.hour
+    # hour = 12
      
     # Get the forcing data
     forcing_now                 = forcings.interpolate_time(t_now)
@@ -100,16 +102,19 @@ while t_now < tn:
     T_a_t2, pres_a_t2, ρ_atm_t2 = forcing_now[T_a_ind], forcing_now[pres_a_ind], forcing_now[ρ_atm_ind]
     S_t2                        = 0. # TODO: Assume the stem area index zero
 
-    # Get the necessary model parameters and states at the current and the next time steps
+    # - Get the necessary model parameters/states at the current/next time steps - #
     l_t1           = surface.states['l'][tind_prev,0]
     T_v_t1, T_g_t1 = surface.states['T_v'][tind_prev,0], surface.states['T_g'][tind_prev,0]
-    T_soil1_t1     = T_g_t1  # TODO: replace it with the real first layer soil temperature
+    # T_soil1_t1     = T_g_t1  # TODO: replace it with the real first layer soil temperature
 
     l_guess, T_v_t2_guess, T_g_t2_guess = l_t1, T_v_t1, T_g_t1
 
-    # Evolve the model
-    l, T_v_t2, T_g_t2, S_v_t2, S_g_t2, L_v_t2, L_g_t2, H_v_t2, H_g_t2, E_v_t2, E_g_t2, G_t2 = solve_surface_energy_jit(
+    # ----------------------------- Evolve the model ----------------------------- #
+    # -------------------------- 1. Solve surface energy ------------------------- #
+    # l, T_v_t2, T_g_t2, S_v_t2, S_g_t2, L_v_t2, L_g_t2, H_v_t2, H_g_t2, E_v_t2, E_g_t2, G_t2 = solve_surface_energy_jit(
     # l, T_v_t2, T_g_t2, S_v_t2, S_g_t2, L_v_t2, L_g_t2, H_v_t2, H_g_t2, E_v_t2, E_g_t2, G_t2 = solve_surface_energy(
+    l, T_v_t2, S_v_t2, S_g_t2, L_v_t2, L_g_t2, H_v_t2, H_g_t2, E_v_t2, E_g_t2, G_t2 = solve_surface_energy_jit(
+        # l_guess=-1.,
         l_guess=l_guess,
         longitude=longitude, latitude=latitude, year=year, day=day, hour=hour, zone=zone,
         f_snow=f_snow, f_cansno=f_cansno, pft_ind=pft_ind,
@@ -117,35 +122,43 @@ while t_now < tn:
         solar_rad_t2=solar_rad_t2, L_down_t2=L_down_t2, L_t2=L_t2, S_t2=S_t2, 
         u_a_t2=u_a_t2, q_a_t2=q_a_t2, T_a_t2=T_a_t2, pres_a_t2=pres_a_t2, ρ_atm_t2=ρ_atm_t2, 
         T_v_t1=T_v_t1, T_v_t2_guess=T_v_t2_guess, T_g_t1=T_g_t1, T_g_t2_guess=T_g_t2_guess,
-        T_soil1_t1=T_soil1_t1, κ=κ, dz=dz_soil1,
+        # T_soil1_t1=T_soil1_t1, κ=κ, dz=dz_soil1,
     )
 
+    # -------------------- 2. Solve subsurface energy (e.g., ) ------------------- #
+
+
+    # ----------------------- 3. Adjust the surface energy ----------------------- #
+
+
+    # --------------------------- Do some printing here -------------------------- #
     print("Time: {}".format(t_now))
     args=dict(
-        l_guess=l_guess,
+        # l_guess=l_guess,
+        l_guess=-1,
         longitude=longitude, latitude=latitude, year=year, day=day, hour=hour, zone=zone,
         f_snow=f_snow, f_cansno=f_cansno, pft_ind=pft_ind,
         z_a=z_a, z0m=z0m, z0c=z0c, d=d, gstomatal=gstomatal, gsoil=gsoil, 
         solar_rad_t2=solar_rad_t2, L_down_t2=L_down_t2, L_t2=L_t2, S_t2=S_t2, 
         u_a_t2=u_a_t2, q_a_t2=q_a_t2, T_a_t2=T_a_t2, pres_a_t2=pres_a_t2, ρ_atm_t2=ρ_atm_t2, 
         T_v_t1=T_v_t1, T_v_t2_guess=T_v_t2_guess, T_g_t1=T_g_t1, T_g_t2_guess=T_g_t2_guess,
-        T_soil1_t1=T_soil1_t1, κ=κ, dz=dz_soil1,
+        # T_soil1_t1=T_soil1_t1, κ=κ, dz=dz_soil1,
     )
-    print(args)
+    # print(args)
 
     # break
     if jnp.isnan(l):
         break
     else:
-        print(l_guess, T_v_t2_guess, T_g_t2_guess)
-        print(l, T_v_t2, T_g_t2)
+        # print(l_guess, T_v_t2_guess, T_g_t2_guess)
+        print("Updated states: {}".format([l, T_v_t2,]))
         print("")
 
     # Update the model state
     # TODO: make the following cleaner
     surface.set_state_value(state_name='l', time_ind=tind_now, space_ind=0, value=l)
     surface.set_state_value(state_name='T_v', time_ind=tind_now, space_ind=0, value=T_v_t2)
-    surface.set_state_value(state_name='T_g', time_ind=tind_now, space_ind=0, value=T_g_t2)
+    # surface.set_state_value(state_name='T_g', time_ind=tind_now, space_ind=0, value=T_g_t2)
 
     # Update the time step
     t_prev = t_now

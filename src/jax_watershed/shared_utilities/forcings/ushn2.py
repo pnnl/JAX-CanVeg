@@ -17,7 +17,7 @@ site = 'US-Hn2'
 network = 'AMERIFLUX'
 product = 'MCD15A3H'
 
-start, end = '2016-01-05', '2017-10-01'
+start, end = '2016-01-05 12:00:00', '2017-10-01 12:00:00'
 
 # flux_varn_list = ['PPFD_IN', 'SW_IN_F_MDS', 'LW_IN_F_MDS', 'NETRAD', 'G_F_MDS',
 #              'P_F', 'WS_F', 'VPD_F_MDS', 'TA_F_MDS',  'PA_F',
