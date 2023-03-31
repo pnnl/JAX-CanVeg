@@ -6,7 +6,7 @@ Date: 2023.03.13.
 """
 
 from typing import Tuple
-from ....shared_utilities.types import Float_0D
+from ....shared_utilities.types import Float_0D, Array
 
 import jax.numpy as jnp
 from ....shared_utilities.constants import STEFAN_BOLTZMANN_CONSTANT as σ
@@ -238,7 +238,7 @@ def check_solar_energy_conservation(
     I_up_dif_par: Float_0D,
     I_up_db_nir: Float_0D,
     I_up_dif_nir: Float_0D,
-) -> bool:
+) -> bool | Array:
     # Eq(4.4) in CLM5
     lhs = S_db_par + S_dif_par + S_db_nir + S_dif_nir
     rhs = (
@@ -249,9 +249,9 @@ def check_solar_energy_conservation(
         + S_db_nir * I_up_db_nir
         + S_dif_nir * I_up_dif_nir
     )
-    # return lhs == rhs
+    return lhs == rhs
     # TODO: Check the boolean type in jax
-    return bool(lhs == rhs)
+    # return bool(lhs == rhs)
 
 
 # TODO: Check the longwave energy balance/conservation
