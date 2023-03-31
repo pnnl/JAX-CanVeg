@@ -7,11 +7,16 @@ Date: 2023. 3. 8.
 
 import jax.numpy as jnp
 
-from ..shared_utilities.types import Float_general
+from typing import Optional
+
+from ..shared_utilities.types import Float_general, Float_0D
 from ..shared_utilities.domain import Time
 from ..shared_utilities.domain import BaseSpace
 
-def parameter_initialize(para: Float_general, space:BaseSpace, paraname:str, default=0.) -> Float_general:
+
+def parameter_initialize(
+    paraname: str, space: BaseSpace, para: Optional[Float_general] = None, default=0.0
+) -> Float_general:
     """Initialize the parameter based on the spatial domain.
 
     Args:
@@ -25,14 +30,26 @@ def parameter_initialize(para: Float_general, space:BaseSpace, paraname:str, def
     """
     if para is None:
         return jnp.zeros(space.shape) + default
-    elif isinstance(para, float):
+    elif isinstance(para, Float_0D):
         return jnp.zeros(space.shape) + para
-    elif para.shape == space.shape:
+    elif para.shape == space.shape and not isinstance(para, Float_0D):
         return jnp.array(para)
-    elif para.shape != space.shape:
-        raise Exception("The shape {} of is not idential to the shape of spatial domain {}".format(paraname, space.shape)) 
+    # elif para.shape != space.shape:
+    else:
+        raise Exception(
+            "The shape {} of is not idential to the shape of spatial domain {}".format(
+                paraname, space.shape
+            )
+        )
 
-def state_initialize(state: Float_general, time:Time, space:BaseSpace, statename:str, default=0.) -> Float_general:
+
+def state_initialize(
+    statename: str,
+    time: Time,
+    space: BaseSpace,
+    state: Optional[Float_general] = None,
+    default=0.0,
+) -> Float_general:
     """Initialize the model state based on the spatio-temporal domain.
 
     Args:
@@ -44,13 +61,18 @@ def state_initialize(state: Float_general, time:Time, space:BaseSpace, statename
 
     Returns:
         Float_general: The state values with shape identical to the spatio-temporal domain.
-    """
+    """  # noqa: E501
     shape = (time.nt,) + space.shape
     if state is None:
         return jnp.zeros(shape) + default
-    elif isinstance(state, float):
+    elif isinstance(state, Float_0D):
         return jnp.zeros(shape) + state
-    elif state.shape == shape:
+    elif state.shape == shape and not isinstance(state, Float_0D):
         return jnp.array(state)
-    elif state.shape != shape:
-        raise Exception("The shape {} of is not idential to the shape of spatio-temporal domain {}".format(statename, shape)) 
+    # elif state.shape != shape:
+    else:
+        raise Exception(
+            "The shape {} of is not idential to the shape of spatio-temporal domain {}".format(  # noqa: E501
+                statename, shape
+            )
+        )

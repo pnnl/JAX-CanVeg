@@ -1,6 +1,5 @@
 """This implements the class of zero-dimensional data."""
 
-from functools import partial
 
 import jax
 import jax.numpy as jnp
@@ -11,8 +10,8 @@ from ..domain import Time
 from typing import List
 from ..types import Float_0D, Float_1D, Float_2D, Float_3D
 
-class PointData(Data):
 
+class PointData(Data):
     def __init__(self, varn_list: List[str], data: Float_2D, ts: Time) -> None:
         super().__init__(varn_list, data)
         self.ts = ts
@@ -25,13 +24,16 @@ class PointData(Data):
     def interpolate_time(self, t: Float_0D) -> Float_1D:
         def interpolate(x):
             return jnp.interp(t, self.ts.t_list, x)
+
         x_interp = jax.vmap(interpolate, in_axes=(0,))(self.data)
         return x_interp
 
     def interpolate_time_by_varn(self, varn: str, ts_interp: Float_1D) -> Float_1D:
         idx = self.varn_list.index(varn)
+
         def interpolate(t):
-            return jnp.interp(t, self.ts.t_list, self.data[idx,:])
+            return jnp.interp(t, self.ts.t_list, self.data[idx, :])
+
         x_interp = jax.vmap(interpolate, in_axes=(0,))(ts_interp)
         return x_interp
 
@@ -40,7 +42,7 @@ class PointData(Data):
         x_interp = self.interpolate_time(t)
         x_interp_normalize = self.normalize(x_interp)
         return x_interp_normalize
-    
+
     # @partial(jax.jit, static_argnums=[0])
     def normalize(self, data: Float_2D) -> Float_2D:
         return super().normalize(data)
@@ -52,8 +54,9 @@ class PointData(Data):
 
 # TODO: The multiple point data class is useful to define river network catchment
 class MultiplePointData(Data):
-
-    def __init__(self, varn_list: List[str], data: Float_3D, ts: Float_1D, locs: Float_2D) -> None:
+    def __init__(
+        self, varn_list: List[str], data: Float_3D, ts: Float_1D, locs: Float_2D
+    ) -> None:
         super().__init__(varn_list, data)
         self.ts = ts
         self.locs = locs

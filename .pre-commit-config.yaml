@@ -11,7 +11,7 @@ repos:
     rev: v1.1.301
     hooks:
     - id: pyright
-      additional_dependencies: [equinox, diffrax, jax, jaxtyping]
+      additional_dependencies: [equinox, diffrax, jax, jaxtyping, pandas, requests]
   - repo: https://github.com/nbQA-dev/nbQA
     rev: 1.6.3
     hooks:

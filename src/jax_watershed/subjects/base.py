@@ -14,8 +14,8 @@ from typing import List, AnyStr
 from ..shared_utilities.domain import Time
 from ..shared_utilities.domain import BaseSpace
 
-class BaseSubject:
 
+class BaseSubject:
     def __init__(self, ts: Time, space: BaseSpace) -> None:
         """The base class for a subject
 
@@ -23,7 +23,7 @@ class BaseSubject:
             ts (Time): The temporal domain.
             space (BaseSpace): The spatial domain.
         """
-        self._time  = ts
+        self._time = ts
         self._space = space
 
         # The followings should be provided by each subject

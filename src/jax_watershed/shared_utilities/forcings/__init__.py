@@ -1,6 +1,4 @@
-# from .ushn2 import obs_interp as ushn2_forcings
+from .base import DataBase, Data  # noqa: F401
+from .point_data import PointData  # noqa: F401
 
-from .base import DataBase, Data
-from .point_data import PointData
-
-from .ushn2 import forcings as ushn2_forcings
+from .ushn2 import forcings as ushn2_forcings  # noqa: F401
