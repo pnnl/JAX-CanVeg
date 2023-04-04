@@ -10,7 +10,6 @@ Date: 2023. 3. 8.
 """
 # TODO:
 # (1) Add a unit test
-# (2) Change the units to W m-2 and degK
 
 from typing import Optional
 
@@ -22,18 +21,21 @@ from .utils import parameter_initialize, state_initialize
 from .base import BaseSubject
 
 parameters_default = {
-    "theta_sat": 0.4,
-    "theta_r": 0.0001,
-    "theta_wp": 0.01,
-    "theta_lim": 0.2,
-    "ksat": 3e-7 * 86400,
+    "θ_sat": 0.4,
+    "θ_r": 0.0001,
+    "θ_wp": 0.01,
+    "θ_lim": 0.2,
+    # "ksat": 3e-7 * 86400,
+    "k_sat": 3e-7,
     "alpha": 1.32,
     "n": 2.0,
-    "cs": 2e-3,
-    "kthermal": 2.0 * 86400 * 1e-6,
-    "rho": 1300.0,
+    # "cv": 2e-3,
+    # "κ": 2.0 * 86400 * 1e-6,
+    "cv": 2.5e6,
+    "κ": 2.0,
+    "ρ": 1300.0,
 }
-states_default = {"temp": 20.0, "vwc": 0.07}
+states_default = {"Tsoil": 20.0, "θ": 0.07}
 
 
 class Soil(BaseSubject):
@@ -41,50 +43,50 @@ class Soil(BaseSubject):
         self,
         ts: Time,
         space: BaseSpace,
-        theta_sat: Optional[Float_general] = None,
-        theta_r: Optional[Float_general] = None,
-        theta_wp: Optional[Float_general] = None,
-        theta_lim: Optional[Float_general] = None,
-        ksat: Optional[Float_general] = None,
+        θ_sat: Optional[Float_general] = None,
+        θ_r: Optional[Float_general] = None,
+        θ_wp: Optional[Float_general] = None,
+        θ_lim: Optional[Float_general] = None,
+        k_sat: Optional[Float_general] = None,
         alpha: Optional[Float_general] = None,
         n: Optional[Float_general] = None,
-        cs: Optional[Float_general] = None,
-        kthermal: Optional[Float_general] = None,
-        rho: Optional[Float_general] = None,
-        temp: Optional[Float_general] = None,
-        vwc: Optional[Float_general] = None,
+        cv: Optional[Float_general] = None,
+        κ: Optional[Float_general] = None,
+        ρ: Optional[Float_general] = None,
+        Tsoil: Optional[Float_general] = None,
+        θ: Optional[Float_general] = None,
     ) -> None:
         """The soil subject class.
 
         Args:
             ts (Time): See BaseSubject.
             space (BaseSpace): See BaseSubject.
-            theta_sat (Float_general): Saturated volumetric soil water content [-]
-            theta_r (Float_general): Residual water content [-]
-            theta_wp (Float_general): Wilting point [-]
-            theta_lim (Float_general): Limiting soil moisture for vegetation [-]
-            ksat (Float_general): Saturated hydraulic conductivity [m d-1]
+            θ_sat (Float_general): Saturated volumetric soil water content [-]
+            θ_r (Float_general): Residual water content [-]
+            θ_wp (Float_general): Wilting point [-]
+            θ_lim (Float_general): Limiting soil moisture for vegetation [-]
+            k_sat (Float_general): Saturated hydraulic conductivity [m s-1]
             alpha (Float_general): Van Genuchten parameter alpha
             n (Float_general): Van Genuchten parameter n
-            cs (Float_general): Soil heat capacity [MJ kg-1 degC-1 or MJ kg-1 degK-1]
-            kthermal (Float_general): Soil thermal conductivity [MJ m-1 d-1 degC-1 or MJ m-1 d-1 degK-1]
-            rho (Float_general): Soil density [kg m-3]
-            temp (Float_general): Soil temperature [degK]
-            vwc (Float_general): Volumetric soil water content [-]
+            cv (Float_general): Soil heat capacity [J m-3 K-1]
+            κ (Float_general): Soil thermal conductivity [W m-1 K-1]
+            ρ (Float_general): Soil density [kg m-3]
+            Tsoil (Float_general): Soil temperature [degK]
+            θ (Float_general): Volumetric soil water content [-]
         """  # noqa: E501
         super().__init__(ts, space)
         # Parameters
         self.parameters = {
-            "theta_sat": theta_sat,
-            "theta_r": theta_r,
-            "theta_wp": theta_wp,
-            "theta_lim": theta_lim,
-            "ksat": ksat,
+            "θ_sat": θ_sat,
+            "θ_r": θ_r,
+            "θ_wp": θ_wp,
+            "θ_lim": θ_lim,
+            "k_sat": k_sat,
             "alpha": alpha,
             "n": n,
-            "cs": cs,
-            "kthermal": kthermal,
-            "rho": rho,
+            "cv": cv,
+            "κ": κ,
+            "ρ": ρ,
         }
         # self.theta_sat = theta_sat
         # self.theta_r   = theta_r
@@ -98,7 +100,7 @@ class Soil(BaseSubject):
         # self.rho       = rho
 
         # States
-        self.states = {"temp": temp, "vwc": vwc}
+        self.states = {"Tsoil": Tsoil, "θ": θ}
         # self.temp = temp
         # self.vwc  = vwc
 
