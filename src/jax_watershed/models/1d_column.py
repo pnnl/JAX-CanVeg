@@ -20,9 +20,14 @@ import jax.numpy as jnp
 # from jax_watershed.shared_utilities.constants import C_TO_K as c2k
 
 from jax_watershed.physics.energy_fluxes.surface_energy import solve_surface_energy
-from jax_watershed.shared_utilities.forcings import ushn2_forcings
+from jax_watershed.physics.energy_fluxes.subsurface_energy import (
+    solve_subsurface_energy,
+)
+
+# from jax_watershed.shared_utilities.forcings import ushn2_forcings_daily
+from jax_watershed.shared_utilities.forcings import ushn2_forcings_30min
 from jax_watershed.shared_utilities.domain import Time, Column
-from jax_watershed.subjects import Surface
+from jax_watershed.subjects import Surface, Soil
 
 # from ..shared_utilities.forcings import ushn2_forcings
 # from ..shared_utilities.domain import Time, Column
@@ -39,8 +44,9 @@ from jax_watershed.subjects import Surface
 #                           Model parameter settings                           #
 # ---------------------------------------------------------------------------- #
 # Spatio-temporal information/discretizations
-t0, tn, dt = 0.0, 200.0, 1.0  # [day]
-z0, zn, nz = 0.05, 10.0 - 0.05, 19  # [m]
+t0, tn, dt = 0.0, 200.0, 1.0 / 24.0  # [day]
+# t0, tn, dt = 0.0, 200.0, 1.  # [day]
+z0, zn, nz = 0.0, 10.0, 21  # [m]
 latitude, longitude, zone = 31.31, -120.77, 8
 
 # Surface characteristics
@@ -50,14 +56,15 @@ z_a, z0m, z0c, d = 2.5, 0.05, 0.05, 0.05
 gsoil, gstomatal = 1e10, 1.0 / 180.0
 
 # Subsurface characteristics
-κ = 0.05
-dz_soil1 = z0
+# κ = 0.05
+# dz_soil1 = z0
 
 
 # ---------------------------------------------------------------------------- #
 #                               Read forcing data                              #
 # ---------------------------------------------------------------------------- #
-forcings = ushn2_forcings
+forcings = ushn2_forcings_30min
+# forcings = ushn2_forcings_daily
 # Get the indices of different focings
 forcing_list = forcings.varn_list
 solar_rad_ind, L_down_ind = forcing_list.index("SW_IN"), forcing_list.index("LW_IN")
@@ -77,19 +84,22 @@ T_a_ind, pres_a_ind, ρ_atm_ind = (
 #                            Initialize the subjects                           #
 # ---------------------------------------------------------------------------- #
 time = Time(t0=t0, tn=tn, dt=dt, start_time="2016-01-05 12:00:00")
-column = Column(xs=jnp.linspace(z0, zn, nz))
-surface = Surface(ts=time, space=Column(xs=jnp.array([0.0])))
-soil = Surface(ts=time, space=column)
+soil_column = Column(xs=jnp.linspace(z0, zn, nz))
+Δz = soil_column.Δx
+
+surface = Surface(ts=time, space=Column(xs=soil_column.xs[:2]))
+soil = Soil(ts=time, space=soil_column)
 
 
 # ---------------------------------------------------------------------------- #
 #                     Numerically solve the model over time                    #
 # ---------------------------------------------------------------------------- #
-t_prev, t_now = t0, t0  # t_now == t_prev for the initial step
+t_prev, t_now = t0, t0 + dt  # t_now == t_prev for the initial step
 tind_prev, tind_now = 0, 0
 
-# JIT the function
+# JIT the functions
 solve_surface_energy_jit = jax.jit(solve_surface_energy)
+solve_subsurface_energy_jit = jax.jit(solve_subsurface_energy)
 
 while t_now < tn:
     # ------------------------- Get the current time step ------------------------ #
@@ -120,6 +130,7 @@ while t_now < tn:
         surface.states["T_g"][tind_prev, 0],  # pyright: ignore
     )
     # T_soil1_t1 = T_g_t1  # TODO: replace it with the real first layer soil temperature
+    Tsoil_t1 = soil.states["Tsoil"][tind_prev]
 
     l_guess, T_v_t2_guess, T_g_t2_guess = l_t1, T_v_t1, T_g_t1
 
@@ -172,8 +183,17 @@ while t_now < tn:
     )
 
     # -------------------- 2. Solve subsurface energy (e.g., ) ------------------- #
+    Tsoil_t2, T_g_t2 = solve_subsurface_energy_jit(
+        Tsoil=Tsoil_t1,
+        κ=soil.parameters["κ"],
+        cv=soil.parameters["cv"],
+        Δz=Δz,
+        Δt=dt,
+        G=G_t2,
+    )
 
     # ----------------------- 3. Adjust the surface energy ----------------------- #
+    # TODO
 
     # --------------------------- Do some printing here -------------------------- #
     print("Time: {}".format(t_now))
@@ -217,14 +237,7 @@ while t_now < tn:
         break
     else:
         # print(l_guess, T_v_t2_guess, T_g_t2_guess)
-        print(
-            "Updated states: {}".format(
-                [
-                    l_t2,
-                    T_v_t2,
-                ]
-            )
-        )
+        print("Updated states: {}".format([l_t2, T_v_t2, T_g_t2, Tsoil_t2]))
         print("")
 
     # Update the model state
@@ -233,6 +246,10 @@ while t_now < tn:
     surface.set_state_value(
         state_name="T_v", time_ind=tind_now, space_ind=0, value=T_v_t2
     )
+    surface.set_state_value(
+        state_name="T_g", time_ind=tind_now, space_ind=0, value=T_g_t2
+    )
+    soil.set_state_value(state_name="Tsoil", time_ind=tind_now, value=Tsoil_t2)
 
     # Update the time step
     t_prev = t_now

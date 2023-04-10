@@ -93,16 +93,32 @@ class Surface(BaseSubject):
         self._state_initialize()
 
     def set_state_value(
-        self, state_name: str, time_ind: int, space_ind: int, value: Float_0D
+        self,
+        state_name: str,
+        value: Float_0D,
+        time_ind: int,
+        space_ind: Optional[int] = None,
     ):
-        self.states[state_name] = (
-            self.states[state_name]
-            .at[(time_ind, space_ind)]  # pyright: ignore
-            .set(value)
-        )
+        if space_ind is not None:
+            self.states[state_name] = (
+                self.states[state_name]
+                .at[(time_ind, space_ind)]  # pyright: ignore
+                .set(value)
+            )
+        else:
+            self.states[state_name] = (
+                self.states[state_name].at[time_ind].set(value)  # pyright: ignore
+            )
 
-    def set_para_value(self, para_name: str, space_ind: int, value: Float_0D):
-        self.parameters[para_name] = self.parameters[para_name].at[space_ind].set(value)
+    def set_para_value(
+        self, para_name: str, value: Float_0D, space_ind: Optional[int] = None
+    ):
+        if space_ind is not None:
+            self.parameters[para_name] = (
+                self.parameters[para_name].at[space_ind].set(value)
+            )  # noqa: E501
+        else:
+            self.parameters[para_name] = self.parameters[para_name].at[:].set(value)
 
     def _parameter_initialize(self) -> None:
         for paraname, para in self.parameters.items():

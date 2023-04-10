@@ -13,7 +13,7 @@ Date: 2023. 3. 8.
 
 from typing import Optional
 
-from ..shared_utilities.types import Float_general
+from ..shared_utilities.types import Float_0D, Float_general
 from ..shared_utilities.domain import Time
 from ..shared_utilities.domain import BaseSpace
 
@@ -35,7 +35,7 @@ parameters_default = {
     "κ": 2.0,
     "ρ": 1300.0,
 }
-states_default = {"Tsoil": 20.0, "θ": 0.07}
+states_default = {"Tsoil": 280.15, "θ": 0.07}
 
 
 class Soil(BaseSubject):
@@ -106,6 +106,36 @@ class Soil(BaseSubject):
 
         self._parameter_initialize()
         self._state_initialize()
+
+    def set_state_value(
+        self,
+        state_name: str,
+        value: Float_0D,
+        time_ind: int,
+        space_ind: Optional[int] = None,
+    ):
+        if space_ind is not None:
+            self.states[state_name] = (
+                self.states[state_name]
+                .at[(time_ind, space_ind)]  # pyright: ignore
+                .set(value)
+            )
+        else:
+            self.states[state_name] = (
+                self.states[state_name].at[time_ind].set(value)  # pyright: ignore
+            )
+
+    def set_para_value(
+        self, para_name: str, value: Float_0D, space_ind: Optional[int] = None
+    ):
+        if space_ind is not None:
+            self.parameters[para_name] = (
+                self.parameters[para_name].at[space_ind].set(value)  # pyright: ignore
+            )  # noqa: E501
+        else:
+            self.parameters[para_name] = (
+                self.parameters[para_name].at[:].set(value)  # pyright: ignore
+            )
 
     def _parameter_initialize(self) -> None:
         for paraname, para in self.parameters.items():

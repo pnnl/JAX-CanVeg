@@ -28,6 +28,7 @@ def Tsoil_vector_field(
         Tsoil (Float_1D): The soil temperature with nsoil layers [degK]
         cv (Float_1D): The volumetric heat capacity with nsoil layers [J m-3 K-1]
         κ (Float_1D): The thermal conductivity with nsoil layers [W m-1 K-1]
+        Δz (Float_1D): The thickness of the nsoil layers [m]
         G (Float_0D): The ground heat flux with positive values indicating the upward direction [W m-2]
 
     Returns:
@@ -73,3 +74,22 @@ def Tsoil_vector_field(
     fi = (-F[:-1] + F[1:]) / (cv[1:-1] * Δz[1:-1])
 
     return jnp.concatenate([jnp.array([f1]), fi, jnp.array([fN])])
+
+
+def calculate_Tg_from_Tsoil1(
+    Tsoil1: Float_0D, G: Float_0D, Δz: Float_0D, κ: Float_0D
+) -> Float_0D:
+    """Calculate the ground surface temperature from the first layer of soil temperature.
+
+    Args:
+        Tsoil1 (Float_0D): The temperature of the first soil layer [degK]
+        κ (Float_1D): The thermal conductivity of the first soil layer [W m-1 K-1]
+        Δz (Float_1D): The distance between the ground and the center of the first layer [m]
+        G (Float_0D): The ground heat flux with positive values indicating the upward direction [W m-2]
+
+    Returns:
+        Float_0D: The ground surface temperature [degK]
+    """  # noqa: E501
+    Tg = -G * Δz / κ + Tsoil1
+
+    return Tg

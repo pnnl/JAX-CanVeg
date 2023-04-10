@@ -54,7 +54,7 @@ class Column(BaseSpace):
         """A class for 1D or column-based domain.
 
         Args:
-            xs (Float_1D): List of spatially discretized cells (i.e., the center of each cell).
+            xs (Float_1D): List of spatially discretized cells (i.e., the sides of the cells).
         """  # noqa: E501
         super().__init__(ndim=1)
         self._xs = xs.sort()
@@ -64,8 +64,13 @@ class Column(BaseSpace):
         return self._xs
 
     @property
+    def Δx(self) -> Float_1D:
+        # Return the thicknesses of the layers
+        return self._xs[1:] - self._xs[:-1]
+
+    @property
     def shape(self) -> Tuple:
-        return (self._xs.size,)
+        return (self._xs.size - 1,)
 
     @property
     def mesh(self) -> Float_1D:
@@ -93,7 +98,7 @@ class TwoDimSpace(BaseSpace):
 
     @property
     def shape(self) -> Tuple:
-        return (self._xs.size, self._ys.size)
+        return (self._xs.size - 1, self._ys.size - 1)
 
     @property
     def mesh(self) -> List[Float_2D]:
@@ -126,7 +131,7 @@ class ThreeDimSpace(BaseSpace):
 
     @property
     def shape(self) -> Tuple:
-        return (self._xs.size, self._ys.size, self._zs.size)
+        return (self._xs.size - 1, self._ys.size - 1, self._zs.size - 1)
 
     @property
     def mesh(self) -> List[Float_3D]:

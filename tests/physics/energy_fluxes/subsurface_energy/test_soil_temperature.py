@@ -4,7 +4,10 @@ import diffrax as dr
 
 import jax.numpy as jnp
 
-from jax_watershed.physics.energy_fluxes.subsurface_energy import Tsoil_vector_field
+from jax_watershed.physics.energy_fluxes.subsurface_energy import (
+    Tsoil_vector_field,
+    calculate_Tg_from_Tsoil1,
+)
 from jax_watershed.shared_utilities.forcings import ushn2
 
 # import matplotlib.pyplot as plt
@@ -51,6 +54,14 @@ class TestSoilTemperature(unittest.TestCase):
         # print(dT)
         print("")
         self.assertEqual(dT.size, nz)
+
+    def test_calculate_Tg_from_Tsoil1(self):
+        print("Performing test_calculate_Tg_from_Tsoil1()...")
+        G, Tsoil1 = -100.0, 280
+        Tg = calculate_Tg_from_Tsoil1(Tsoil1=Tsoil1, κ=2.0, Δz=0.05, G=G)
+        print("The estimated ground temperature is: {}".format(Tg))
+        print("")
+        self.assertTrue(Tg > Tsoil1)
 
     def test_estimate_soil_temperature_one_step(self):
         print("Performing test_estiamte_soil_temperature_one_step()...")

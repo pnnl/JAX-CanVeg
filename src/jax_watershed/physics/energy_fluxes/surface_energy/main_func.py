@@ -2,7 +2,7 @@
 These are some main functions for solving surface energy balances.
 
 Author: Peishi Jiang
-Date: 2023.03.24
+Date: 2023.03.24.
 
 """
 
