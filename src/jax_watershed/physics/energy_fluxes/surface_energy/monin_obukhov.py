@@ -6,6 +6,9 @@ Author: Peishi Jiang
 Date: 2023.03.28.
 """
 
+# import jax
+# import jax.numpy as jnp
+
 from typing import Tuple
 from ....shared_utilities.types import Float_0D
 
@@ -149,9 +152,11 @@ def perform_most_dual_source(
     """
 
     # Monin-Ob similarity theory (MOST)
-    ψm_a = calculate_ψm_most(ζ=z_a - d / L_guess)
+    ψm_a = calculate_ψm_most(ζ=(z_a - d) / L_guess)
+    # jax.debug.print("ψm_a: {}", jnp.array([ψm_a, L_guess, z_a, d]))
     ψm_s = calculate_ψm_most(ζ=z0m / L_guess)
-    ψc_a = calculate_ψc_most(ζ=z_a - d / L_guess)
+    # jax.debug.print("ψm_s: {}", jnp.array([ψm_s, L_guess, z0m]))
+    ψc_a = calculate_ψc_most(ζ=(z_a - d) / L_guess)
     ψc_s = calculate_ψc_most(ζ=z0c / L_guess)
     ustar = calculate_ustar_most(
         u1=0, u2=u_a, z1=z0m + d, z2=z_a, d=d, ψm1=ψm_s, ψm2=ψm_a
@@ -176,7 +181,8 @@ def perform_most_dual_source(
     ggw = calculate_conductance_ground_canopy_water_vapo(
         L=L, S=S, ustar=ustar, z0m=z0m, gsoil=gsoil
     )
-    # jax.debug.print("Conductances: {}", jnp.array([ustar, u_a, gam, gvm, ggm, gaw, gvw, ggw]))  # noqa: E501
+    # jax.debug.print("Conductances: {}", jnp.array([ustar, u_a, gam, gvm, ggm, gaw, gvw, ggw, L, S]))  # noqa: E501
+    # jax.debug.print("gvm: {}", jnp.array([ustar, L, S]))  # noqa: E501
     # print(gvw, gvm)
 
     # Calculate the saturated specific humidity from temperature and pressure
@@ -203,5 +209,6 @@ def perform_most_dual_source(
     Tzv = T_a * (1 + 0.608 * q_a)
     Tvstar = tstar * (1 + 0.608 * q_a) + 0.608 * T_a * qstar  # Eq(5.17) in CLM5
     L_est = calculate_L_most(ustar=ustar, T2v=Tzv, Tvstar=Tvstar)
+    # jax.debug.print("L_est: {}", jnp.array([Tzv, Tvstar, L_est]))  # noqa: E501
 
     return L_est, gam, gaw, gvm, gvw, ggm, ggw, q_v_sat, T_s, q_s

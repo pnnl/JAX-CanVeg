@@ -126,7 +126,7 @@ def calculate_ustar(
         Float_0D: The friction velocity [m s-1]
     """
     ustar = (u2 - u1) * k / (jnp.log((z2 - d) / (z1 - d)) - (ψm2 - ψm1))
-    # jax.debug.print("ustar: {}", jnp.array([u2-u1, jnp.log((z2-d)/(z1-d)), (ψm2-ψm1)]))  # noqa: E501
+    # jax.debug.print("ustar: {}", jnp.array([ustar, u2-u1, jnp.log((z2-d)/(z1-d)), ψm2, ψm1]))  # noqa: E501
     return ustar
 
 
@@ -197,7 +197,8 @@ def calculate_ψc(ζ: Float_0D) -> Float_0D:
 
     def ψc_cond1(ζ):
         χ = (1 - 16 * ζ) ** (0.25)
-        return 2 * jnp.log((1 + χ**2) / χ)
+        # return 2 * jnp.log((1 + χ**2) / χ)
+        return 2 * jnp.log((1 + χ**2) / 2)
 
     def ψc_cond2(ζ):
         return -5 * ζ
@@ -221,9 +222,12 @@ def calculate_ψm(ζ: Float_0D) -> Float_0D:
     def ψm_cond1(ζ):
         χ = (1 - 16 * ζ) ** (0.25)
         return (
-            2 * jnp.log((1 + χ) / χ)
-            + jnp.log((1 + χ**2) / χ)
+            # 2 * jnp.log((1 + χ) / χ)
+            # + jnp.log((1 + χ**2) / χ)
+            2 * jnp.log((1 + χ) / 2.0)
+            + jnp.log((1 + χ**2) / 2.0)
             - 2.0 * jnp.arctan(χ)
+            # - 2.0 / jnp.tan(χ)
             + π / 2.0
         )
 
