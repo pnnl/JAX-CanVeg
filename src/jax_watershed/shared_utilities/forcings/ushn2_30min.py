@@ -135,7 +135,8 @@ varn_list = [
 ]
 df_obs = pd.concat([df_flux, df_modis], axis=1)
 df_obs = df_obs[varn_list]
-df_obs.interpolate(axis=0, inplace=True)
+# df_obs.interpolate(axis=0, inplace=True)
+df_obs = df_obs.interpolate(axis=0).ffill().bfill()
 
 # Rename
 varn_list_new = [
