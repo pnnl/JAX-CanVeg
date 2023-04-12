@@ -90,6 +90,12 @@ def calculate_solar_elevation(
     # Calculate solar elevation, degrees
     beta_deg = beta_rad * 180 / PI
 
+    # TODO: DOUBLE CHECK!
+    # Convert it close to zero if negative
+    # Here, we convert it to slightly larger than zero
+    # in case there is some solar radiation observed.
+    beta_deg = jnp.max(jnp.array([0.001, beta_deg]))
+
     return beta_deg
 
 
