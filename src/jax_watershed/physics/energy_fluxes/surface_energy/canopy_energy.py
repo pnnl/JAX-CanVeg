@@ -11,6 +11,9 @@ Author: Peishi Jiang
 Date: 2023.03.20.
 """
 
+# import jax
+# import jax.numpy as jnp
+
 from ....shared_utilities.types import Float_0D
 
 from ....shared_utilities.constants import λ_VAP as λ
@@ -64,4 +67,5 @@ def leaf_energy_balance(
 
     # leaf energy balance
     # jax.debug.print("canopy energy balance: {}", jnp.array([T_v, T_s, S_v, L_v, H, λE]))  # noqa: E501
+    # jax.debug.print("canopy energy balance: {}", jnp.array([S_v, L_v, H, λE]))
     return S_v - L_v - H - λE

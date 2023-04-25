@@ -1,5 +1,6 @@
 import unittest
 
+# import jax
 import jax.numpy as jnp
 
 from diffrax import NewtonNonlinearSolver
@@ -61,7 +62,8 @@ class TestCanopyTemperature(unittest.TestCase):
         T_v_t1, T_v_t2 = 15.0 + c2k, 15.0 + c2k
         T_g_t1, T_g_t2, q_g_t2 = 10.0 + c2k, 11.0 + c2k, 0.01
         T_a_t2, u_a_t2, z_a, q_a_t2 = 12.0 + c2k, 4.0, 2.5, 0.015
-        z0m, z0c, d, L_guess = 0.05, 0.05, 0.05, -1.0
+        # z0m, z0c, d, L_guess = 0.05, 0.05, 0.05, -1.0
+        z0m, z0c, d, L_guess = 0.05, 0.05, 0.05, -2.93194
         gsoil, gstomatal = 1e10, 1.0 / 180.0
         f_snow, f_cansno = 0.1, 0.1
 
@@ -120,9 +122,9 @@ class TestCanopyTemperature(unittest.TestCase):
         )
 
         # Monin-Ob similarity theory (MOST)
-        ψm_a = calculate_ψm_most(ζ=z_a - d / L_guess)
+        ψm_a = calculate_ψm_most(ζ=(z_a - d) / L_guess)
         ψm_s = calculate_ψm_most(ζ=z0m / L_guess)
-        ψc_a = calculate_ψc_most(ζ=z_a - d / L_guess)
+        ψc_a = calculate_ψc_most(ζ=(z_a - d) / L_guess)
         ψc_s = calculate_ψc_most(ζ=z0c / L_guess)
         ustar = calculate_ustar_most(
             u1=0, u2=u_a_t2, z1=z0m + d, z2=z_a, d=d, ψm1=ψm_s, ψm2=ψm_a
@@ -148,6 +150,7 @@ class TestCanopyTemperature(unittest.TestCase):
         ggw = calculate_conductance_ground_canopy_water_vapo(
             L=L, S=S, ustar=ustar, z0m=z0m, gsoil=gsoil
         )
+        # jax.debug.print("Conductances: {}", jnp.array([ustar, u_a_t2, gam, gvm, ggm, gaw, gvw, ggw, L, S]))  # noqa: E501
         # print(gvw, gvm)
 
         # Calculate the saturated specific humidity from temperature and pressure
@@ -185,6 +188,10 @@ class TestCanopyTemperature(unittest.TestCase):
             return leaf_energy_balance(T_v=T_v, **args)
 
         # print(func(T_v_t2, args))
+        # jax.debug.print("Variables used in leaf energy balance: {}", jnp.array([
+        #     T_v_t2, T_s_t2, q_v_sat_t2, q_s_t2,
+        #     gvm, gvw, S_v, L_v, ρ_atm
+        # ]))
 
         solver = NewtonNonlinearSolver(atol=atol, rtol=rtol)
         solution = solver(func, T_v_t2, args=args)
@@ -197,11 +204,33 @@ class TestCanopyTemperature(unittest.TestCase):
 
     def test_estimate_L_then_canopy_temperature(self):
         print("Performing test_estimate_L_then_canopy_temperature()...")
-        solar_rad, L_down, pres = 352.0, 200.0, 101976.0
-        L, S, pft_ind = 2.0, 1.0, 10
-        latitude, longitude = 31.31, 120.77
-        year, day, hour, zone = 2023, 68, 10.0, -8
-        # T_v_t1, T_v_t2, T_g_t1, T_g_t2 = 15., 16., 10., 11.
+        # solar_rad, L_down, pres = 352.0, 200.0, 101976.0
+        # L, S, pft_ind = 2.0, 1.0, 10
+        # latitude, longitude = 31.31, 120.77
+        # year, day, hour, zone = 2023, 68, 10.0, -8
+        # T_v_t1, T_v_t2 = 15.0 + c2k, 15.0 + c2k
+        # T_g_t1, T_g_t2, q_g_t2 = 10.0 + c2k, 11.0 + c2k, 0.01
+        # T_a_t2, u_a_t2, z_a, q_a_t2 = 12.0 + c2k, 4.0, 2.5, 0.015
+        # z0m, z0c, d, L_guess = 0.05, 0.05, 0.05, -1.0
+        # gsoil, gstomatal = 1e10, 1.0 / 180.0
+        # f_snow, f_cansno = 0.1, 0.1
+        # solar_rad, L_down, pres = 352.0, 200.0, 101.976*1e3
+        # L, S, pft_ind = 2.0, 1.0, 10
+        # latitude, longitude = 31.31, 120.77
+        # year, day, hour, zone = 2023, 68, 10.0, -8
+        # # T_v_t1, T_v_t2, T_g_t1, T_g_t2 = 15., 16., 10., 11.
+        # T_v_t1, T_v_t2 = 15.0 + c2k, 15.0 + c2k
+        # T_g_t1, T_g_t2, q_g_t2 = 10.0 + c2k, 11.0 + c2k, 0.01
+        # T_a_t2, u_a_t2, z_a, q_a_t2 = 12.0 + c2k, 4.0, 2.5, 0.015
+        # # z0m, z0c, d, L_guess = 0.05, 0.05, 0.05, -1.0
+        # z0m, z0c, d, L_guess = 0.05, 0.05, 0.05, -2.93194
+        # gsoil, gstomatal = 1e10, 1.0 / 180.0
+        # f_snow, f_cansno = 0.1, 0.1
+        solar_rad, L_down, pres = 0.0, 275.738, 99599.5
+        L, S, pft_ind = 1.127, 0.0, 10
+        latitude, longitude = 31.31, -120.77
+        year, day, hour, zone = 2023, 68, 18.0, -8
+        # year, day, hour, zone = 2016, 5, 18.0, -8
         T_v_t1, T_v_t2 = 15.0 + c2k, 15.0 + c2k
         T_g_t1, T_g_t2, q_g_t2 = 10.0 + c2k, 11.0 + c2k, 0.01
         T_a_t2, u_a_t2, z_a, q_a_t2 = 12.0 + c2k, 4.0, 2.5, 0.015
@@ -249,6 +278,7 @@ class TestCanopyTemperature(unittest.TestCase):
             S=S,
             pft_ind=pft_ind,
         )
+        print(S_v, S_g, solar_elev_angle)
 
         # Estimate T_v_t2 and L
         def func(x, args):
@@ -579,7 +609,9 @@ def calculate_canopy_temp(
     solver = NewtonNonlinearSolver(atol=1e-5, rtol=1e-7)
     solution = solver(func, L_guess, args=kwarg)
     L_update = solution.root
+    # L_update = L_guess
     # jax.debug.print("Updated L: {}", L_update)
+    # jax.debug.print("The current T_v_t2: {}", T_v_t2)
 
     # Use the updated Obukhov to perform Monin Obukhov similarity theory again (MOST)
     (
@@ -613,6 +645,10 @@ def calculate_canopy_temp(
     )
 
     # Solve the energy balance to estimate the vegetation temperature
+    # jax.debug.print("Variables used in leaf energy balance: {}", jnp.array([
+    #     T_v_t2, T_s_t2, q_v_sat_t2, q_s_t2,
+    #     gvm, gvw, S_v, L_v, ρ_atm
+    # ]))
     denergy_v = leaf_energy_balance(
         T_v=T_v_t2,
         T_s=T_s_t2,

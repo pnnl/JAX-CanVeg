@@ -8,8 +8,11 @@ Author: Peishi Jiang
 Date: 2023.03.13
 """
 
+# import jax
+# import jax.numpy as jnp
+
 from typing import Tuple
-from ....shared_utilities.types import Float_0D
+from ....shared_utilities.types import Float_0D, Array
 
 from .solar_angle import calculate_solar_elevation
 from .solar_radiation_partition import partition_solar_radiation
@@ -38,7 +41,7 @@ def main_calculate_solar_fluxes(
     L: Float_0D,
     S: Float_0D,
     pft_ind: int,
-) -> Tuple[Float_0D, Float_0D, bool]:
+) -> Tuple[Float_0D, Float_0D, bool | Array]:
     """A main function for calculating different solar flux components
 
     Args:
@@ -55,9 +58,18 @@ def main_calculate_solar_fluxes(
         Tuple: Different solar flux components
     """
     # Perform the solar radiation partitioning
+    # S_db_par, S_dif_par, S_db_nir, S_dif_nir = jax.lax.cond(
+    #     solar_elev_angle > 0,
+    #     lambda x: partition_solar_radiation(
+    #         x[0], x[1], x[2]
+    #     ), # if true, perform the partitioning
+    #     lambda x: jnp.array([0.,0.,0.,0.]),  # else, return zero fluxes
+    #     [solar_rad, solar_elev_angle, pres]
+    # )
     S_db_par, S_dif_par, S_db_nir, S_dif_nir = partition_solar_radiation(
         solar_rad=solar_rad, solar_elev_angle=solar_elev_angle, pres=pres
     )
+    # print(S_db_par, S_dif_par, S_db_nir, S_dif_nir)
 
     # Calculate the canopy radiative transfer (PAR)
     (

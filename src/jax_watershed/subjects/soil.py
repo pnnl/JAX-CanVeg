@@ -35,7 +35,7 @@ parameters_default = {
     "κ": 2.0,
     "ρ": 1300.0,
 }
-states_default = {"Tsoil": 280.15, "θ": 0.07}
+states_default = {"Tsoil": 273.15, "θ": 0.07}
 
 
 class Soil(BaseSubject):

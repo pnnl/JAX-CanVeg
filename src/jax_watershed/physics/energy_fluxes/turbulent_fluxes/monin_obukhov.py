@@ -69,7 +69,7 @@ def func_most(
     ustar = calculate_ustar(
         u1=0.0, u2=uz, z1=d + z0m, z2=z, d=d, ψm1=ψm_z0m, ψm2=ψm_z
     )  # [m s-1]
-    tstar = calculate_Tstar(
+    Tstar = calculate_Tstar(
         T1=Ts, T2=Tz, z1=d + z0c, z2=z, d=d, ψc1=ψc_z0c, ψc2=ψc_z
     )  # [degK]
     qstar = calculate_qstar(
@@ -77,7 +77,7 @@ def func_most(
     )  # [kg kg-1]
 
     Tzv = Tz * (1 + 0.608 * qz)
-    Tvstar = tstar * (1 + 0.608 * qz) + 0.608 * Tz * qstar  # Eq(5.17) in CLM5
+    Tvstar = Tstar * (1 + 0.608 * qz) + 0.608 * Tz * qstar  # Eq(5.17) in CLM5
 
     # jax.debug.print("{}", jnp.array([ustar, tstar, qstar, Tzv, Tvstar]))
     # jax.debug.print("{}", jnp.array([qs, qz, qstar]))
@@ -93,12 +93,13 @@ def calculate_L(ustar: Float_0D, T2v: Float_0D, Tvstar: Float_0D) -> Float_0D:
     Args:
         ustar (Float_0D): the friction velocity [m s-1]
         T2v (Float_0D): the potential virtual temperature at [degK]
-        Tvstar (Float_0D): the characteristic scale for the temperature [degK]
+        Tvstar (Float_0D): the characteristic scale for the virtual temperature [degK]
 
     Returns:
         Float_0D: the Monin Obukhov length [m]
     """
     L = ustar**2 * T2v / (k * g * Tvstar)
+    # jax.debug.print("L components: {}", jnp.array([ustar,T2v,Tvstar]))
     return L
 
 
@@ -154,6 +155,7 @@ def calculate_Tstar(
         Float_0D: The friction velocity [m s-1]
     """  # noqa: E501
     Tstar = (T2 - T1) * k / (jnp.log((z2 - d) / (z1 - d)) - (ψc2 - ψc1))
+    # print(T2, T1, jnp.log((z2 - d) / (z1 - d)), ψc2, ψc1)
     return Tstar
 
 

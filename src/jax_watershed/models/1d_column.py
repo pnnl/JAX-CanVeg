@@ -19,7 +19,10 @@ import jax.numpy as jnp
 # from jax_watershed.shared_utilities.constants import R_DA as Rda
 # from jax_watershed.shared_utilities.constants import C_TO_K as c2k
 
-from jax_watershed.physics.energy_fluxes.surface_energy import solve_surface_energy
+# from jax_watershed.physics.energy_fluxes.surface_energy import solve_surface_energy
+from jax_watershed.physics.energy_fluxes.surface_energy import (
+    solve_surface_energy_canopy_ground,
+)
 from jax_watershed.physics.energy_fluxes.subsurface_energy import (
     solve_subsurface_energy,
 )
@@ -37,7 +40,8 @@ from jax_watershed.subjects import Surface, Soil
 
 # TODO: Check the data types!
 # Set float64
-# from jax.config import config; config.update("jax_enable_x64", True)
+# from jax.config import config
+jax.config.update("jax_enable_x64", True)
 
 
 # ---------------------------------------------------------------------------- #
@@ -98,7 +102,8 @@ t_prev, t_now = t0, t0 + dt  # t_now == t_prev for the initial step
 tind_prev, tind_now = 0, 0
 
 # JIT the functions
-solve_surface_energy_jit = jax.jit(solve_surface_energy)
+# solve_surface_energy_jit = jax.jit(solve_surface_energy)
+solve_surface_energy_jit = jax.jit(solve_surface_energy_canopy_ground)
 solve_subsurface_energy_jit = jax.jit(solve_subsurface_energy)
 
 while t_now < tn:
@@ -131,14 +136,19 @@ while t_now < tn:
     )
     # T_soil1_t1 = T_g_t1  # TODO: replace it with the real first layer soil temperature
     Tsoil_t1 = soil.states["Tsoil"][tind_prev]
+    T_soil1_t1 = Tsoil_t1[0]
+    κ_soil1 = soil.parameters["κ"][0]
+    dz_soil1 = soil_column.Δx[0]
 
     l_guess, T_v_t2_guess, T_g_t2_guess = l_t1, T_v_t1, T_g_t1
+    # print()
 
     # ----------------------------- Evolve the model ----------------------------- #
     # -------------------------- 1. Solve surface energy ------------------------- #
     (
         l_t2,
         T_v_t2,
+        T_g_t2,
         S_v_t2,
         S_g_t2,
         L_v_t2,
@@ -148,8 +158,9 @@ while t_now < tn:
         E_v_t2,
         E_g_t2,
         G_t2,
-    ) = solve_surface_energy_jit(
-        l_guess=-1.0,
+        # ) = solve_surface_energy_jit(
+    ) = solve_surface_energy_canopy_ground(
+        l_guess=-10.0,
         # l_guess=l_guess,
         longitude=longitude,
         latitude=latitude,
@@ -178,12 +189,18 @@ while t_now < tn:
         T_v_t1=T_v_t1,
         T_v_t2_guess=T_v_t2_guess,
         T_g_t1=T_g_t1,
-        T_g_t2=T_g_t2_guess,
+        T_g_t2_guess=T_g_t2_guess,
+        T_soil1_t1=T_soil1_t1,
+        κ=κ_soil1,
+        dz=dz_soil1 / 2.0,
         # T_soil1_t1=T_soil1_t1, κ=κ, dz=dz_soil1,
     )
 
     # -------------------- 2. Solve subsurface energy (e.g., ) ------------------- #
-    Tsoil_t2, T_g_t2 = solve_subsurface_energy_jit(
+    # Tsoil_t2, T_g_t2 = solve_subsurface_energy_jit(
+    # Tsoil_t2, T_g_t2 = solve_subsurface_energy(
+    Tsoil_t2 = solve_subsurface_energy_jit(
+        # Tsoil_t2 = solve_subsurface_energy(
         Tsoil=Tsoil_t1,
         κ=soil.parameters["κ"],
         cv=soil.parameters["cv"],
@@ -227,7 +244,7 @@ while t_now < tn:
         T_v_t1=T_v_t1,
         T_v_t2_guess=T_v_t2_guess,
         T_g_t1=T_g_t1,
-        T_g_t2=T_g_t2_guess,
+        T_g_t2_guess=T_g_t2_guess,
         # T_soil1_t1=T_soil1_t1, κ=κ, dz=dz_soil1,
     )
     # print(args)

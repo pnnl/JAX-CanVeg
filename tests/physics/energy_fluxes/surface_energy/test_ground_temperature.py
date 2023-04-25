@@ -13,6 +13,7 @@ from jax_watershed.physics.energy_fluxes.surface_energy import (
 from jax_watershed.physics.energy_fluxes.surface_energy import (
     func_most_dual_source,
     perform_most_dual_source,
+    solve_surface_energy_canopy_ground,
 )
 
 from jax_watershed.physics.energy_fluxes.radiative_transfer import (
@@ -48,6 +49,7 @@ from jax_watershed.physics.water_fluxes import qsat_from_temp_pres
 
 from jax_watershed.shared_utilities.constants import R_DA as Rda
 from jax_watershed.shared_utilities.constants import C_TO_K as c2k
+from jax_watershed.shared_utilities.constants import λ_VAP as λ
 
 # TODO: See the conversion among relative humidity, specific humidity, vapor pressure, saturated vapor pressure, temperature here:  # noqa: E501
 # https://cran.r-project.org/web/packages/humidity/vignettes/humidity-measures.html
@@ -426,6 +428,94 @@ class TestGroundTemperature(unittest.TestCase):
         # print(func(T_v_t2_final, args))
         print("")
         self.assertTrue(is_solar_rad_balanced)
+
+    def test_estimate_first_canopy_then_ground_temperature(self):
+        print("Performing test_estimate_first_canopy_then_ground_temperature()...")
+        # solar_rad, L_down, pres        = 352., 200., 101.976
+        solar_rad, L_down, pres = 352.0, 200.0, 101976.0
+        L, S, pft_ind = 2.0, 1.0, 10
+        latitude, longitude = 31.31, 120.77
+        year, day, hour, zone = 2023, 68, 10.0, -8
+        # T_v_t1, T_v_t2, T_g_t1, T_g_t2 = 15., 16., 10., 11.
+        T_v_t1, T_v_t2 = 15.0 + c2k, 15.0 + c2k
+        # T_g_t1, T_g_t2, q_g_t2 = 10.+c2k, 11.+c2k, 0.01
+        T_g_t1, T_g_t2 = 15.0 + c2k, 15.0 + c2k
+        T_a_t2, u_a_t2, z_a, q_a_t2 = 12.0 + c2k, 4.0, 2.5, 0.015
+        T_soil1_t1, dz, κ = 15.0 + c2k, 0.01 / 2.0, 2.0
+        z0m, z0c, d, L_guess = 0.05, 0.05, 0.05, -1.0
+        gsoil, gstomatal = 1e10, 1.0 / 180.0
+        f_snow, f_cansno = 0.1, 0.1
+
+        # atol, rtol = 1e-5, 1e-7
+
+        # Calculate the atmospheric air density
+        e_a = (pres * q_a_t2) / (0.622 + 0.378 * q_a_t2)  # [Pa]
+        ρ_atm = (pres - 0.378 * e_a) / (Rda * T_a_t2)  # [kg m-3]
+
+        (
+            L_est,
+            T_v_t2_final,
+            T_g_t2_final,
+            S_v,
+            S_g,
+            L_v,
+            L_g,
+            H_v,
+            H_g,
+            E_v,
+            E_g,
+            G,
+        ) = solve_surface_energy_canopy_ground(
+            l_guess=L_guess,
+            longitude=longitude,
+            latitude=latitude,
+            year=year,
+            day=day,
+            hour=hour,
+            zone=zone,
+            f_snow=f_snow,
+            f_cansno=f_cansno,
+            pft_ind=pft_ind,
+            z_a=z_a,
+            z0m=z0m,
+            z0c=z0c,
+            d=d,
+            gstomatal=gstomatal,
+            gsoil=gsoil,
+            solar_rad_t2=solar_rad,
+            L_down_t2=L_down,
+            L_t2=L,
+            S_t2=S,
+            u_a_t2=u_a_t2,
+            q_a_t2=q_a_t2,
+            T_a_t2=T_a_t2,
+            pres_a_t2=pres,
+            ρ_atm_t2=ρ_atm,
+            T_v_t1=T_v_t1,
+            T_v_t2_guess=T_v_t2,
+            T_g_t1=T_g_t1,
+            T_g_t2_guess=T_g_t2,
+            T_soil1_t1=T_soil1_t1,
+            κ=κ,
+            dz=dz,
+        )
+
+        print("The guess and estimated L: {}, {}".format(L_guess, L_est))
+        print(
+            "The guess and estimated vegetation temperatures: {}, {}".format(
+                T_v_t2, T_v_t2_final
+            )
+        )
+        print(
+            "The guess and estimated ground temperatures: {}, {}".format(
+                T_g_t2, T_g_t2_final
+            )
+        )
+        # print(func(T_v_t2_final, args))
+        print("")
+        print(S_v, L_v, H_v, λ * E_v)
+        self.assertAlmostEqual(S_g, L_g + H_g + λ * E_g + G, places=0)
+        self.assertAlmostEqual(S_v, L_v + H_v + λ * E_v, places=0)
 
 
 def calculate_ground_canopy_temp_L(

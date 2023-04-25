@@ -7,10 +7,11 @@ Date: 2023.03.28.
 """
 
 # import jax
-# import jax.numpy as jnp
+import jax.numpy as jnp
 
 from typing import Tuple
 from ....shared_utilities.types import Float_0D
+from ....shared_utilities.constants import G as g
 
 from ..turbulent_fluxes import calculate_ψc_most, calculate_ψm_most, calculate_L_most
 from ..turbulent_fluxes import (
@@ -106,6 +107,51 @@ def func_most_dual_source(
     dL = L_update - L_guess
 
     return dL
+
+
+# TODO: probably incorrect
+def calculate_initial_guess_L(
+    T_a: Float_0D,
+    T_s: Float_0D,
+    q_a: Float_0D,
+    q_s: Float_0D,
+    u_a: Float_0D,
+    z_a: Float_0D,
+    d: Float_0D,
+    z0m: Float_0D,
+):
+    """Calculate the initial guess of the Obukov length.
+
+    Args:
+        T_a (Float_0D): The air temperature [degK]
+        T_s (Float_0D): The surface temperature [degK]
+        q_a (Float_0D): The air specific humidity [kg kg-1]
+        q_s (Float_0D): The surface specific humidity [kg kg-1]
+        u_a (Float_0D): The air wind speed [m/s]
+        z_a (Float_0D): The
+        d (Float_0D): _description_
+        z0m (Float_0D): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    Tv_a = T_a * (1 + 0.608 * q_a)
+    Tv_s = T_s * (1 + 0.608 * q_s)
+
+    # Calculate the bulk Richardson number
+    Rb = g * (z_a - d) / (u_a**2) * (Tv_a - Tv_s) / Tv_a
+
+    # Calculate the dimensionless parameter accounting for the
+    # effect of buoyancy in the Monin-Obukhov similarity theory
+    if Rb >= 0:
+        ζ = Rb * jnp.log((z_a - d) / z0m) / (1 - 5 * jnp.min(jnp.array([Rb, 0.19])))
+    else:
+        ζ = Rb * jnp.log((z_a - d) / z0m)
+
+    # Calculate the initial guess on the length
+    L_guess = (z_a - d) / ζ
+
+    return L_guess
 
 
 def perform_most_dual_source(
@@ -209,6 +255,6 @@ def perform_most_dual_source(
     Tzv = T_a * (1 + 0.608 * q_a)
     Tvstar = tstar * (1 + 0.608 * q_a) + 0.608 * T_a * qstar  # Eq(5.17) in CLM5
     L_est = calculate_L_most(ustar=ustar, T2v=Tzv, Tvstar=Tvstar)
-    # jax.debug.print("L_est: {}", jnp.array([Tzv, Tvstar, L_est]))  # noqa: E501
+    # jax.debug.print("L_est: {}", jnp.array([ustar, tstar, qstar, Tzv, Tvstar, L_est]))  # noqa: E501
 
     return L_est, gam, gaw, gvm, gvw, ggm, ggw, q_v_sat, T_s, q_s

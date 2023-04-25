@@ -33,6 +33,9 @@ def partition_solar_radiation(
     Returns:
         Float_1D: the partitioned radiation components [W m-2]
     """
+    # if solar_elev_angle <= 0:
+    #     return jnp.array([0.,0.,0.,0.])
+
     # Convert degree to radians
     solar_elev_rad = solar_elev_angle * RADD
     sine_solar_elev = jnp.sin(solar_elev_rad)

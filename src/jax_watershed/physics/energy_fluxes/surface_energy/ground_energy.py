@@ -12,6 +12,9 @@ Date: 2023.03.20.
 
 """
 
+# import jax
+# import jax.numpy as jnp
+
 from ....shared_utilities.types import Float_0D
 
 from ....shared_utilities.constants import λ_VAP as λ
@@ -72,6 +75,6 @@ def ground_energy_balance(
     # print(q_g, q_s)
     # print(S_g, L_g, H, λE, G)
     # jax.debug.print("{}", jnp.array([S_g, L_g, G]))
-    # jax.debug.print("ground energy balance: {}", jnp.array([T_g, S_g, L_g, H, λE]))
+    # jax.debug.print("ground energy balance: {}", jnp.array([T_g, S_g, L_g, H, λE, G]))
     return S_g - L_g - H - λE - G
     # return S_g - L_g - H - λE

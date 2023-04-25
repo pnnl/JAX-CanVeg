@@ -7,7 +7,9 @@ Date: 2023.04.10.
 """
 
 import diffrax as dr
-from .soil_temp import Tsoil_vector_field, calculate_Tg_from_Tsoil1
+from .soil_temp import Tsoil_vector_field
+
+# from .soil_temp import calculate_Tg_from_Tsoil1
 
 from typing import Tuple
 from ....shared_utilities.types import Float_1D, Float_0D
@@ -59,12 +61,14 @@ def solve_subsurface_energy(
         made_jump=False,
     )
 
-    # Update the ground surface temperature
-    Tg = calculate_Tg_from_Tsoil1(
-        Tsoil1=Tsoilnew[0],
-        G=G,
-        Δz=Δz[0] / 2.0,
-        κ=κ[0],
-    )
+    return Tsoilnew
 
-    return Tsoilnew, Tg
+    # # Update the ground surface temperature
+    # Tg = calculate_Tg_from_Tsoil1(
+    #     Tsoil1=Tsoilnew[0],
+    #     G=G,
+    #     Δz=Δz[0] / 2.0,
+    #     κ=κ[0],
+    # )
+
+    # return Tsoilnew, Tg

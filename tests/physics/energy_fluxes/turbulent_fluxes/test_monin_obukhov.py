@@ -71,7 +71,7 @@ class TestMoninObukhov(unittest.TestCase):
         print("The estimated friction velocity is: {}".format(ustar))
         print("The estimated temperature scale is: {}".format(tstar))
         print("The estimated water vapor scale is: {}".format(qstar))
-        print(ψc_z, ψc_z0c, ψm_z, ψm_z0m)
+        print(z_minus_d / L, z0m / L, z0c / L, ψc_z, ψc_z0c, ψm_z, ψm_z0m)
         print("")
         # self.assertTrue(result.state.error <= tol)
         self.assertTrue(func(L, kwarg) <= atol)
