@@ -21,13 +21,11 @@ import jax.numpy as jnp
 
 # from jax_watershed.physics.energy_fluxes.surface_energy import solve_surface_energy
 from jax_watershed.physics.energy_fluxes.surface_energy import (
-    calculate_surface_energy_fluxes,
-    solve_canopy_energy,
-    # solve_surface_energy_canopy_ground,
+    solve_surface_energy_canopy_ground,
+    solve_surface_energy_canopy_ground_clm,
 )
 from jax_watershed.physics.energy_fluxes.subsurface_energy import (
-    # solve_subsurface_energy,
-    solve_subsurface_energy_varyingG,
+    solve_subsurface_energy,
 )
 
 # from jax_watershed.shared_utilities.forcings import ushn2_forcings_daily
@@ -107,11 +105,8 @@ tind_prev, tind_now = 0, 0
 # JIT the functions
 # solve_surface_energy_jit = jax.jit(solve_surface_energy)
 # solve_surface_energy_jit = jax.jit(solve_surface_energy_canopy_ground)
-# solve_surface_energy_jit = jax.jit(solve_surface_energy_canopy_ground_clm)
-# solve_subsurface_energy_jit = jax.jit(solve_subsurface_energy)
-solve_surface_energy_jit = jax.jit(solve_canopy_energy)
-solve_subsurface_energy_jit = jax.jit(solve_subsurface_energy_varyingG)
-calculate_surface_energy_fluxes_jit = jax.jit(calculate_surface_energy_fluxes)
+solve_surface_energy_jit = jax.jit(solve_surface_energy_canopy_ground_clm)
+solve_subsurface_energy_jit = jax.jit(solve_subsurface_energy)
 
 while t_now < tn:
     # ------------------------- Get the current time step ------------------------ #
@@ -155,13 +150,21 @@ while t_now < tn:
     (
         l_t2,
         T_v_t2,
+        T_g_t2,
         S_v_t2,
         S_g_t2,
-        ε_g,
-        ε_v,
-        # ) = solve_canopy_energy(
-    ) = solve_surface_energy_jit(
+        L_v_t2,
+        L_g_t2,
+        H_v_t2,
+        H_g_t2,
+        E_v_t2,
+        E_g_t2,
+        G_t2,
+        # ) = solve_surface_energy_jit(
+        # ) = solve_surface_energy_canopy_ground_clm(
+    ) = solve_surface_energy_canopy_ground(
         l_guess=-10.0,
+        # l_guess=l_guess,
         longitude=longitude,
         latitude=latitude,
         year=year,
@@ -190,75 +193,27 @@ while t_now < tn:
         T_v_t2_guess=T_v_t2_guess,
         T_g_t1=T_g_t1,
         T_g_t2_guess=T_g_t2_guess,
+        T_soil1_t1=T_soil1_t1,
+        κ=κ_soil1,
+        dz=dz_soil1 / 2.0,
+        # T_soil1_t1=T_soil1_t1, κ=κ, dz=dz_soil1,
     )
 
     # -------------------- 2. Solve subsurface energy (e.g., ) ------------------- #
+    # Tsoil_t2, T_g_t2 = solve_subsurface_energy_jit(
+    # Tsoil_t2, T_g_t2 = solve_subsurface_energy(
     Tsoil_t2 = solve_subsurface_energy_jit(
-        # Tsoil_t2 = solve_subsurface_energy_varyingG(
+        # Tsoil_t2 = solve_subsurface_energy(
         Tsoil=Tsoil_t1,
         κ=soil.parameters["κ"],
         cv=soil.parameters["cv"],
         Δz=Δz,
         Δt=dt,
-        l=l_t2,
-        S_g=S_g_t2,
-        L_down=L_down_t2,
-        pres=pres_a_t2,
-        ρ_atm_t2=ρ_atm_t2,
-        T_v_t1=T_v_t1,
-        T_v_t2=T_v_t2,
-        T_g_t1=T_g_t1,
-        T_a_t2=T_a_t2,
-        u_a_t2=u_a_t2,
-        q_a_t2=q_a_t2,
-        L=L_t2,
-        S=S_t2,
-        ε_g=ε_g,
-        ε_v=ε_v,
-        z_a=z_a,
-        z0m=z0m,
-        z0c=z0c,
-        d=d,
-        gstomatal=gstomatal,
-        gsoil=gsoil,
+        G=G_t2,
     )
-    T_g_t2 = Tsoil_t2[0]
 
-    # ----------------------- 3. Adjust the surface energy fluxes ------------------- #
-    # L_v_t2, L_g_t2, H_v_t2, H_g_t2, E_v_t2, E_g_t2, G_t2 = calculate_surface_energy_fluxes( # noqa: E501
-    (
-        L_v_t2,
-        L_g_t2,
-        H_v_t2,
-        H_g_t2,
-        E_v_t2,
-        E_g_t2,
-        G_t2,
-    ) = calculate_surface_energy_fluxes_jit(  # noqa: E501
-        l=l_t2,
-        S_v_t2=S_v_t2,
-        S_g_t2=S_g_t2,
-        L_down_t2=L_down_t2,
-        T_v_t1=T_v_t1,
-        T_v_t2=T_v_t2,
-        T_g_t1=T_g_t1,
-        T_g_t2=T_g_t2,
-        ε_v=ε_v,
-        ε_g=ε_g,
-        pres_a_t2=pres_a_t2,
-        ρ_atm_t2=ρ_atm_t2,
-        T_a_t2=T_a_t2,
-        u_a_t2=u_a_t2,
-        q_a_t2=q_a_t2,
-        z_a=z_a,
-        z0m=z0m,
-        z0c=z0c,
-        d=d,
-        L_t2=L_t2,
-        S_t2=S_t2,
-        gstomatal=gstomatal,
-        gsoil=gsoil,
-    )
+    # ----------------------- 3. Adjust the surface energy ----------------------- #
+    # TODO
 
     # --------------------------- Do some printing here -------------------------- #
     print("Time: {}".format(t_now))
@@ -293,12 +248,12 @@ while t_now < tn:
         T_v_t2_guess=T_v_t2_guess,
         T_g_t1=T_g_t1,
         T_g_t2_guess=T_g_t2_guess,
+        # T_soil1_t1=T_soil1_t1, κ=κ, dz=dz_soil1,
     )
     # print(args)
 
     # break
-    # if jnp.isnan(l_t2):
-    if t_now > 50:
+    if jnp.isnan(l_t2):
         break
     else:
         # print(l_guess, T_v_t2_guess, T_g_t2_guess)

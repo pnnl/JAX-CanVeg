@@ -6,6 +6,10 @@ from .surface_state import (
 )
 from .monin_obukhov import perform_most_dual_source, func_most_dual_source  # noqa: F401
 from .main_func import (
+    calculate_surface_energy_fluxes,  # noqa: F401
     solve_surface_energy,  # noqa: F401
+    solve_canopy_energy,  # noqa: F401
     solve_surface_energy_canopy_ground,  # noqa: F401
 )  # noqa: F401, E501
+
+from .main_func_clm import solve_surface_energy_canopy_ground_clm  # noqa: F401

@@ -11,6 +11,8 @@ from .albedo_emissivity import (
 )
 from .radiative_fluxes import (
     calculate_longwave_fluxes,  # noqa: F401
+    calculate_canopy_longwave_fluxes,  # noqa: F401
+    calculate_ground_longwave_fluxes,  # noqa: F401
     calculate_solar_fluxes,  # noqa: F401
     calculate_canopy_sunlit_shaded_par,  # noqa: F401
 )

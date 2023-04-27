@@ -6,8 +6,8 @@ Date: 2023.03.24.
 
 """
 
-# import jax
-# import jax.numpy as jnp
+import jax
+import jax.numpy as jnp
 
 from typing import Tuple
 from ....shared_utilities.types import Float_0D
@@ -17,7 +17,7 @@ from diffrax import NewtonNonlinearSolver
 
 from .monin_obukhov import perform_most_dual_source, func_most_dual_source
 
-# from .monin_obukhov import calculate_initial_guess_L
+from .monin_obukhov import calculate_initial_guess_L
 from .canopy_energy import leaf_energy_balance
 from .ground_energy import ground_energy_balance
 from ..radiative_transfer import calculate_longwave_fluxes
@@ -34,6 +34,9 @@ from ...water_fluxes import qsat_from_temp_pres
 
 
 # TODO: Further modulize the functions
+
+
+l_thres = 1
 
 
 def solve_surface_energy(
@@ -246,6 +249,307 @@ def solve_surface_energy(
     return l, T_v_t2, S_v, S_g, L_v, L_g, H_v, H_g, E_v, E_g, G
 
 
+def solve_canopy_energy(
+    l_guess: Float_0D,
+    longitude: Float_0D,
+    latitude: Float_0D,
+    year: int,
+    day: int,
+    hour: Float_0D,
+    zone: int,
+    f_snow: Float_0D,
+    f_cansno: Float_0D,
+    pft_ind: int,
+    z_a: Float_0D,
+    z0m: Float_0D,
+    z0c: Float_0D,
+    d: Float_0D,
+    gstomatal: Float_0D,
+    gsoil: Float_0D,
+    solar_rad_t2: Float_0D,
+    L_down_t2: Float_0D,
+    L_t2: Float_0D,
+    S_t2: Float_0D,
+    u_a_t2: Float_0D,
+    q_a_t2: Float_0D,
+    T_a_t2: Float_0D,
+    pres_a_t2: Float_0D,
+    ρ_atm_t2: Float_0D,
+    T_v_t1: Float_0D,
+    T_v_t2_guess: Float_0D,
+    T_g_t1: Float_0D,
+    T_g_t2_guess: Float_0D,
+    atol: Float_0D = 1e-1,
+    rtol: Float_0D = 1e-3
+    # atol=1e-5, rtol=1e-7
+) -> Tuple:
+    """Solve the surface energy by estimating the vegetation temperature, where the
+       Obukhov length is solved at each iteration.
+
+    Args:
+        l_guess (Float_0D): The initial guess of the Obukhov length.
+        latitude (Float_0D): The latitude [degree].
+        longitude (Float_0D): The longitude [degree].
+        year (int): The year.
+        day (int): The day of the year.
+        hour (Float_0D): The fractional hour.
+        zone (int, optional): The time zone. Defaults to 8..
+        f_snow (Float_0D): The fraction of ground covered by snow [-]
+        f_cansno (Float_0D): The canopy snow-covered fraction [-]
+        pft_ind (int): The index of plant functional type based on the pft_clm5
+        z_a (Float_0D): The reference height of the atmosphere [m]
+        z0m (Float_0D): The roughness length for momentum [m]
+        z0c (Float_0D): The roughness length for scalars [m]
+        d (Float_0D): The displacement height [m]
+        gstomatal (Float_0D): The stomatal conductance [m s-1]
+        gsoil (Float_0D): The soil conductance [m s-1]
+        solar_rad_t2 (Float_0D): The incoming solar radiation at the current time step t2 [W m-2]
+        L_down_t2 (Float_0D): The incoming longwave radiation at the current time step t2 [W m-2]
+        L_t2 (Float_0D): The leaf area index at the current time step t2 [m2 m-2]
+        S_t2 (Float_0D): The steam area index at the current time step t2 [m2 m-2]
+        u_a_t2 (Float_0D): The wind velocity at the reference height at the current time step t2 [m s-1]
+        q_a_t2 (Float_0D): The specific humidity at the reference height at the current time step t2 [kg kg-1]
+        T_a_t2 (Float_0D): The air temperature at the reference height at the current time step t2 [degK]
+        pres_a_t2 (Float_0D): The air pressure at the reference height at the current time step t2 [Pa]
+        ρ_atm_t2 (Float_0D): The air density at the reference height at the current time step t2 [kg m-3]
+        T_v_t1 (Float_0D): The vegetation temperature at the previous time step t1 [degK]
+        T_v_t2_guess (Float_0D): The guess of the vegetation temperature at the current time step t2 [degK]
+        T_g_t1 (Float_0D): The ground temperature at the previous time step t1 [degK]
+        T_g_t2_guess (Float_0D): The guess of the ground temperature at the current time step t2 [degK]
+        atol (Float_0D, optional): The absolute tolerance error used by diffrax.NewtonNonlinearSolver. Defaults to 1e-1.
+        rtol (Float_0D, optional): The relative tolerance error used by diffrax.NewtonNonlinearSolver. Defaults to 1e-3.
+
+    Returns:
+        tuple: _description_
+    """  # noqa: E501
+    # Calculate solar elevation angle
+    solar_elev_angle = calculate_solar_elevation(
+        latitude=latitude,
+        longitude=longitude,
+        year=year,
+        day=day,
+        hour=hour,
+        zone=zone,
+        is_day_saving=False,
+    )
+    # jax.debug.print("Solar elevation angle: {}", solar_elev_angle)
+
+    # Calculate the albedos and emissivities
+    α_g_db_par, α_g_dif_par = calculate_ground_albedos(f_snow, "PAR")
+    α_g_db_nir, α_g_dif_nir = calculate_ground_albedos(f_snow, "NIR")
+    ε_g, ε_v = calculate_ground_vegetation_emissivity(
+        solar_elev_angle=solar_elev_angle,
+        f_snow=f_snow,
+        L=L_t2,
+        S=S_t2,
+        pft_ind=pft_ind,
+    )
+
+    # Calculate the solar radiation fluxes reaching the canopy
+    S_v, S_g, is_solar_rad_balanced = main_calculate_solar_fluxes(
+        solar_rad=solar_rad_t2,
+        pres=pres_a_t2 * 1e-3,
+        solar_elev_angle=solar_elev_angle,
+        α_g_db_par=α_g_db_par,
+        α_g_dif_par=α_g_dif_par,
+        α_g_db_nir=α_g_db_nir,
+        α_g_dif_nir=α_g_dif_nir,
+        f_snow=f_snow,
+        f_cansno=f_cansno,
+        L=L_t2,
+        S=S_t2,
+        pft_ind=pft_ind,
+    )
+    # jax.debug.print('solar radiation: {}', jnp.array([S_v, S_g]))
+
+    # ---------------------- Estimate the initial guess of L --------------------- #
+    l_guess = calculate_initial_guess_L(
+        T_a=T_a_t2,
+        T_s=(T_a_t2 + T_g_t2_guess) / 2.0,
+        q_a=q_a_t2,
+        q_s=q_a_t2,
+        u_a=u_a_t2,
+        z_a=z_a,
+        d=d,
+        z0m=z0m,
+    )
+    # jax.debug.print("The initial guess of L: {}", l_guess)
+
+    # ------------------ Estimate the canopy temperature T_v_t2 ------------------ #
+    # jax.debug.print("Calculating T_v_t2 ...")
+
+    def func_canopy_temp(x, args):
+        return residual_canopy_temp(x, **args)
+
+    args = dict(
+        T_g_t2=T_g_t2_guess,
+        l_guess=l_guess,
+        l_reset=l_guess,
+        S_v=S_v,
+        L_down=L_down_t2,
+        pres=pres_a_t2,
+        ρ_atm_t2=ρ_atm_t2,
+        T_v_t1=T_v_t1,
+        T_g_t1=T_g_t1,
+        T_a_t2=T_a_t2,
+        u_a_t2=u_a_t2,
+        q_a_t2=q_a_t2,
+        L=L_t2,
+        S=S_t2,
+        ε_g=ε_g,
+        ε_v=ε_v,
+        z_a=z_a,
+        z0m=z0m,
+        z0c=z0c,
+        d=d,
+        gstomatal=gstomatal,
+        gsoil=gsoil,
+    )
+
+    solver = NewtonNonlinearSolver(atol=atol, rtol=rtol)
+    # jax.debug.print("jac : {}", solver.jac(func, [T_v_t2_guess, T_g_t2_guess], args=args))  # noqa: E501
+    solution = solver(func_canopy_temp, T_v_t2_guess, args=args)
+    T_v_t2 = solution.root
+
+    # - Use the updated Obukhov to perform Monin Obukhov similarity theory again - #
+    # TODO: Calculate the specific humidity on the ground (Eq(5.73) in CLM5)
+    q_g_t2_sat = qsat_from_temp_pres(T=T_g_t2_guess, pres=pres_a_t2)
+    q_g_t2_guess = q_g_t2_sat
+
+    kwarg = dict(
+        pres=pres_a_t2,
+        T_v=T_v_t2,
+        T_g=T_g_t2_guess,
+        T_a=T_a_t2,
+        u_a=u_a_t2,
+        q_a=q_a_t2,
+        q_g=q_g_t2_guess,
+        L=L_t2,
+        S=S_t2,
+        z_a=z_a,
+        z0m=z0m,
+        z0c=z0c,
+        d=d,
+        gstomatal=gstomatal,
+        gsoil=gsoil,
+    )
+
+    def func(L, args):
+        return func_most_dual_source(L, **args)
+
+    solver = NewtonNonlinearSolver(atol=1e-5, rtol=1e-7)
+    solution = solver(func, l_guess, args=kwarg)
+
+    l = solution.root  # noqa: E741
+    l = jax.lax.cond(  # noqa: E741
+        jnp.abs(l) > l_thres,
+        lambda x: x,
+        lambda x: l_thres * jnp.sign(x),
+        # lambda x: x, lambda x: l_guess,
+        l,
+    )
+
+    return l, T_v_t2, S_v, S_g, ε_g, ε_v
+
+
+def calculate_surface_energy_fluxes(
+    l,  # noqa: E741
+    S_v_t2,
+    S_g_t2,
+    L_down_t2,
+    T_v_t1,
+    T_v_t2,
+    T_g_t1,
+    T_g_t2,  # noqa: E741
+    ε_v,
+    ε_g,
+    pres_a_t2,
+    ρ_atm_t2,
+    T_a_t2,
+    u_a_t2,
+    q_a_t2,
+    z_a,
+    z0m,
+    z0c,
+    d,
+    L_t2,
+    S_t2,
+    gstomatal,
+    gsoil,
+):
+    # ---------------------- Update the longwave radiations ---------------------- #
+    L_v_t2, L_g_t2, L_up, L_up_g, L_down_v, L_up_v, δ_veg = calculate_longwave_fluxes(
+        L_down=L_down_t2,
+        ε_v=ε_v,
+        ε_g=ε_g,
+        T_v_t1=T_v_t1,
+        T_v_t2=T_v_t2,
+        T_g_t1=T_g_t1,
+        T_g_t2=T_g_t2,
+        L=L_t2,
+        S=S_t2,
+    )
+
+    # TODO: Calculate the specific humidity on the ground (Eq(5.73) in CLM5)
+    q_g_t2_sat = qsat_from_temp_pres(T=T_g_t2, pres=pres_a_t2)
+    q_g_t2 = q_g_t2_sat
+    # jax.debug.print("Ground specific humidity: {}", q_g_t2_sat)
+
+    (
+        _,
+        gam,
+        gaw,
+        gvm,
+        gvw,
+        ggm,
+        ggw,
+        q_v_sat_t2,
+        T_s_t2,
+        q_s_t2,
+    ) = perform_most_dual_source(
+        L_guess=l,
+        pres=pres_a_t2,
+        T_v=T_v_t2,
+        T_g=T_g_t2,
+        T_a=T_a_t2,
+        u_a=u_a_t2,
+        q_a=q_a_t2,
+        q_g=q_g_t2,
+        L=L_t2,
+        S=S_t2,
+        z_a=z_a,
+        z0m=z0m,
+        z0c=z0c,
+        d=d,
+        gstomatal=gstomatal,
+        gsoil=gsoil,
+    )
+    # jax.debug.print("Conductances: {}", jnp.array([gvm, gvw]))
+
+    # ------------------------- Update the canopy fluxes ------------------------- #
+    # print(gvm)
+    H_v_t2 = calculate_H(T_1=T_v_t2, T_2=T_s_t2, ρ_atm=ρ_atm_t2, gh=2 * gvm)
+    E_v_t2 = calculate_E(
+        q_1=q_v_sat_t2, q_2=q_s_t2, ρ_atm=ρ_atm_t2, ge=gvw
+    )  # [kg m-2 s-1]
+
+    # ------------------------- Update the ground fluxes ------------------------- #
+    H_g_t2 = calculate_H(T_1=T_g_t2, T_2=T_s_t2, ρ_atm=ρ_atm_t2, gh=ggm)
+    E_g_t2 = calculate_E(q_1=q_g_t2, q_2=q_s_t2, ρ_atm=ρ_atm_t2, ge=ggw)  # [kg m-2 s-1]
+    # G   = calculate_G(T_g=T_g_t2_guess, T_s1=T_soil1_t1, κ=κ, dz=dz)
+    G_t2 = S_g_t2 - L_g_t2 - H_g_t2 - λ * E_g_t2
+
+    # jax.debug.print("l, T_v_t2, T_g_t2: {}", jnp.array([l, T_v_t2, T_g_t2]))
+    # jax.debug.print(
+    #     "Canopy fluxes: {}", jnp.array([S_v_t2, L_v_t2, H_v_t2, λ * E_v_t2])
+    # )  # noqa: E501
+    # jax.debug.print(
+    #     "Ground fluxes: {}", jnp.array([S_g_t2, L_g_t2, H_g_t2, λ * E_g_t2, G_t2])
+    # )  # noqa: E501
+
+    return L_v_t2, L_g_t2, H_v_t2, H_g_t2, E_v_t2, E_g_t2, G_t2
+
+
 def solve_surface_energy_canopy_ground(
     l_guess: Float_0D,
     longitude: Float_0D,
@@ -365,11 +669,16 @@ def solve_surface_energy_canopy_ground(
     # jax.debug.print('solar radiation: {}', jnp.array([S_v, S_g]))
 
     # ---------------------- Estimate the initial guess of L --------------------- #
-    # l_guess = calculate_initial_guess_L(
-    #     T_a=T_a_t2, T_s=(T_a_t2+T_g_t2_guess)/2.,
-    #     q_a=q_a_t2, q_s=q_a_t2,
-    #     u_a=u_a_t2, z_a=z_a, d=d, z0m=z0m
-    # )
+    l_guess = calculate_initial_guess_L(
+        T_a=T_a_t2,
+        T_s=(T_a_t2 + T_g_t2_guess) / 2.0,
+        q_a=q_a_t2,
+        q_s=q_a_t2,
+        u_a=u_a_t2,
+        z_a=z_a,
+        d=d,
+        z0m=z0m,
+    )
     # jax.debug.print("The initial guess of L: {}", l_guess)
 
     # ------------------ Estimate the canopy temperature T_v_t2 ------------------ #
@@ -407,31 +716,21 @@ def solve_surface_energy_canopy_ground(
     solution = solver(func_canopy_temp, T_v_t2_guess, args=args)
     T_v_t2 = solution.root
 
-    # ------------------ Estimate the ground temperature T_g_t2 ------------------ #
-    # jax.debug.print("Calculating T_g_t2 ...")
+    # - Use the updated Obukhov to perform Monin Obukhov similarity theory again - #
+    # TODO: Calculate the specific humidity on the ground (Eq(5.73) in CLM5)
+    q_g_t2_sat = qsat_from_temp_pres(T=T_g_t2_guess, pres=pres_a_t2)
+    q_g_t2_guess = q_g_t2_sat
 
-    def func_ground_temp(x, args):
-        return residual_ground_temp(x, **args)
-
-    args = dict(
-        T_v_t2=T_v_t2,
-        l_guess=l_guess,
-        S_g=S_g,
-        L_down=L_down_t2,
+    kwarg = dict(
         pres=pres_a_t2,
-        ρ_atm_t2=ρ_atm_t2,
-        T_v_t1=T_v_t1,
-        T_g_t1=T_g_t1,
-        T_a_t2=T_a_t2,
-        u_a_t2=u_a_t2,
-        q_a_t2=q_a_t2,
-        T_soil1_t1=T_soil1_t1,
-        κ=κ,
-        dz=dz,
+        T_v=T_v_t2,
+        T_g=T_g_t2_guess,
+        T_a=T_a_t2,
+        u_a=u_a_t2,
+        q_a=q_a_t2,
+        q_g=q_g_t2_guess,
         L=L_t2,
         S=S_t2,
-        ε_g=ε_g,
-        ε_v=ε_v,
         z_a=z_a,
         z0m=z0m,
         z0c=z0c,
@@ -440,11 +739,55 @@ def solve_surface_energy_canopy_ground(
         gsoil=gsoil,
     )
 
-    solver = NewtonNonlinearSolver(atol=atol, rtol=rtol)
-    solution = solver(func_ground_temp, T_g_t2_guess, args=args)
+    def func(L, args):
+        return func_most_dual_source(L, **args)
 
-    T_g_t2 = solution.root
-    # T_g_t2 = T_g_t2_guess
+    solver = NewtonNonlinearSolver(atol=1e-5, rtol=1e-7)
+    solution = solver(func, l_guess, args=kwarg)
+
+    l = solution.root  # noqa: E741
+    l = jax.lax.cond(  # noqa: E741
+        jnp.abs(l) > l_thres, lambda x: x, lambda x: l_thres * jnp.sign(x), l
+    )
+
+    # ------------------ Estimate the ground temperature T_g_t2 ------------------ #
+    # jax.debug.print("Calculating T_g_t2 ...")
+
+    # def func_ground_temp(x, args):
+    #     return residual_ground_temp(x, **args)
+
+    # args = dict(
+    #     T_v_t2=T_v_t2,
+    #     l_guess=l,
+    #     S_g=S_g,
+    #     L_down=L_down_t2,
+    #     pres=pres_a_t2,
+    #     ρ_atm_t2=ρ_atm_t2,
+    #     T_v_t1=T_v_t1,
+    #     T_g_t1=T_g_t1,
+    #     T_a_t2=T_a_t2,
+    #     u_a_t2=u_a_t2,
+    #     q_a_t2=q_a_t2,
+    #     T_soil1_t1=T_soil1_t1,
+    #     κ=κ,
+    #     dz=dz,
+    #     L=L_t2,
+    #     S=S_t2,
+    #     ε_g=ε_g,
+    #     ε_v=ε_v,
+    #     z_a=z_a,
+    #     z0m=z0m,
+    #     z0c=z0c,
+    #     d=d,
+    #     gstomatal=gstomatal,
+    #     gsoil=gsoil,
+    # )
+
+    # solver = NewtonNonlinearSolver(atol=atol, rtol=rtol)
+    # solution = solver(func_ground_temp, T_g_t2_guess, args=args)
+
+    # T_g_t2 = solution.root
+    T_g_t2 = T_g_t2_guess
     # T_g_t2 = T_v_t2
 
     # ---------------------- Update the longwave radiations ---------------------- #
@@ -465,32 +808,21 @@ def solve_surface_energy_canopy_ground(
     q_g_t2 = q_g_t2_sat
     # jax.debug.print("Ground specific humidity: {}", q_g_t2_sat)
 
-    # - Use the updated Obukhov to perform Monin Obukhov similarity theory again - #
-    kwarg = dict(
-        pres=pres_a_t2,
-        T_v=T_v_t2,
-        T_g=T_g_t2,
-        T_a=T_a_t2,
-        u_a=u_a_t2,
-        q_a=q_a_t2,
-        q_g=q_g_t2,
-        L=L_t2,
-        S=S_t2,
-        z_a=z_a,
-        z0m=z0m,
-        z0c=z0c,
-        d=d,
-        gstomatal=gstomatal,
-        gsoil=gsoil,
-    )
+    # # - Use the updated Obukhov to perform Monin Obukhov similarity theory again - #
+    # kwarg = dict(
+    #     pres=pres_a_t2, T_v=T_v_t2, T_g=T_g_t2, T_a=T_a_t2,
+    #     u_a=u_a_t2, q_a=q_a_t2, q_g=q_g_t2,
+    #     L=L_t2, S=S_t2, z_a=z_a, z0m=z0m, z0c=z0c,
+    #     d=d, gstomatal=gstomatal, gsoil=gsoil,
+    # )
 
-    def func(L, args):
-        return func_most_dual_source(L, **args)
+    # def func(L, args):
+    #     return func_most_dual_source(L, **args)
 
-    solver = NewtonNonlinearSolver(atol=1e-5, rtol=1e-7)
-    solution = solver(func, l_guess, args=kwarg)
+    # solver = NewtonNonlinearSolver(atol=1e-5, rtol=1e-7)
+    # solution = solver(func, l_guess, args=kwarg)
 
-    l = solution.root  # noqa: E741
+    # l = solution.root  # noqa: E741
 
     (
         _,  # noqa: E741
@@ -566,6 +898,7 @@ def residual_canopy_temp(
     d,
     gstomatal,
     gsoil,
+    l_reset=l_thres,
 ):
 
     T_v_t2 = x
@@ -615,6 +948,13 @@ def residual_canopy_temp(
     solver = NewtonNonlinearSolver(atol=1e-5, rtol=1e-7, max_steps=5)
     solution = solver(func, l_guess, args=kwarg)
     l_update = solution.root
+    l_update = jax.lax.cond(
+        jnp.abs(l_update) > l_thres,
+        lambda x: x,
+        lambda x: l_thres * jnp.sign(x),
+        # lambda x: x, lambda x: l_reset,
+        l_update,
+    )
     # l_update = jnp.sign(l_update) * jnp.max(jnp.array([1, jnp.abs(l_update)]))
     # jax.debug.print(
     #     "l and T_v_t2 and L_v: {}", jnp.array([l_update, T_v_t2, L_v])
@@ -729,35 +1069,7 @@ def residual_ground_temp(
     q_g_t2_sat = qsat_from_temp_pres(T=T_g_t2, pres=pres)
     q_g_t2 = q_g_t2_sat
 
-    # Solve Monin-Obukhov length
-    kwarg = dict(
-        pres=pres,
-        T_v=T_v_t2,
-        T_g=T_g_t2,
-        T_a=T_a_t2,
-        u_a=u_a_t2,
-        q_a=q_a_t2,
-        q_g=q_g_t2,
-        L=L,
-        S=S,
-        z_a=z_a,
-        z0m=z0m,
-        z0c=z0c,
-        d=d,
-        gstomatal=gstomatal,
-        gsoil=gsoil,
-    )
-
-    def func(L, args):
-        return func_most_dual_source(L, **args)
-
-    solver = NewtonNonlinearSolver(atol=1e-5, rtol=1e-7, max_steps=5)
-    solution = solver(func, l_guess, args=kwarg)
-    l_update = solution.root
-    # jax.debug.print("L_v and L_g: {}", jnp.array([L_v, L_g]))
-    # l_update = jnp.min(jn)
-    # l_update = l_guess
-    # jax.debug.print("l and T_g_t2: {}", jnp.array([l_update, T_g_t2]))
+    l_update = l_guess
 
     # Use the updated Obukhov to perform Monin Obukhov similarity theory again (MOST)
     (
@@ -808,6 +1120,134 @@ def residual_ground_temp(
 
     # return jnp.array([denergy_v, denergy_g])
     return denergy_g
+
+
+# def residual_ground_temp(
+#     x,
+#     T_v_t2,
+#     l_guess,
+#     S_g,
+#     L_down,
+#     pres,
+#     ρ_atm_t2,
+#     T_v_t1,
+#     T_g_t1,
+#     T_a_t2,
+#     u_a_t2,
+#     q_a_t2,
+#     T_soil1_t1,
+#     κ,
+#     dz,
+#     L,
+#     S,
+#     ε_g,
+#     ε_v,
+#     z_a,
+#     z0m,
+#     z0c,
+#     d,
+#     gstomatal,
+#     gsoil,
+# ):
+
+#     T_g_t2 = x
+
+#     # Calculate the longwave radiation absorbed by the leaf/canopy
+#     L_v, L_g, L_up, L_up_g, L_down_v, L_up_v, δ_veg = calculate_longwave_fluxes(
+#         L_down=L_down,
+#         ε_v=ε_v,
+#         ε_g=ε_g,
+#         T_v_t1=T_v_t1,
+#         T_v_t2=T_v_t2,
+#         T_g_t1=T_g_t1,
+#         T_g_t2=T_g_t2,
+#         L=L,
+#         S=S,
+#     )
+
+#     # TODO: Calculate the specific humidity on the ground (Eq(5.73) in CLM5)
+#     q_g_t2_sat = qsat_from_temp_pres(T=T_g_t2, pres=pres)
+#     q_g_t2 = q_g_t2_sat
+
+#     # Solve Monin-Obukhov length
+#     kwarg = dict(
+#         pres=pres,
+#         T_v=T_v_t2,
+#         T_g=T_g_t2,
+#         T_a=T_a_t2,
+#         u_a=u_a_t2,
+#         q_a=q_a_t2,
+#         q_g=q_g_t2,
+#         L=L,
+#         S=S,
+#         z_a=z_a,
+#         z0m=z0m,
+#         z0c=z0c,
+#         d=d,
+#         gstomatal=gstomatal,
+#         gsoil=gsoil,
+#     )
+
+#     def func(L, args):
+#         return func_most_dual_source(L, **args)
+
+#     solver = NewtonNonlinearSolver(atol=1e-5, rtol=1e-7, max_steps=5)
+#     solution = solver(func, l_guess, args=kwarg)
+#     l_update = solution.root
+#     # jax.debug.print("L_v and L_g: {}", jnp.array([L_v, L_g]))
+#     # l_update = jnp.min(jn)
+#     # l_update = l_guess
+#     # jax.debug.print("l and T_g_t2: {}", jnp.array([l_update, T_g_t2]))
+
+#     # Use the updated Obukhov to perform Monin Obukhov similarity theory again (MOST)
+#     (
+#         _,
+#         gam,
+#         gaw,
+#         gvm,
+#         gvw,
+#         ggm,
+#         ggw,
+#         q_v_sat_t2,
+#         T_s_t2,
+#         q_s_t2,
+#     ) = perform_most_dual_source(
+#         L_guess=l_update,
+#         pres=pres,
+#         T_v=T_v_t2,
+#         T_g=T_g_t2,
+#         T_a=T_a_t2,
+#         u_a=u_a_t2,
+#         q_a=q_a_t2,
+#         q_g=q_g_t2,
+#         L=L,
+#         S=S,
+#         z_a=z_a,
+#         z0m=z0m,
+#         z0c=z0c,
+#         d=d,
+#         gstomatal=gstomatal,
+#         gsoil=gsoil,
+#     )
+
+#     # Solve the energy balance to estimate the ground temperature
+#     denergy_g = ground_energy_balance(
+#         T_g=T_g_t2,
+#         T_s=T_s_t2,
+#         T_s1=T_soil1_t1,
+#         κ=κ,
+#         dz=dz,
+#         q_g=q_g_t2,
+#         q_s=q_s_t2,
+#         gh=ggm,
+#         ge=ggw,
+#         S_g=S_g,
+#         L_g=L_g,
+#         ρ_atm=ρ_atm_t2,
+#     )
+
+#     # return jnp.array([denergy_v, denergy_g])
+#     return denergy_g
 
 
 # def solve_surface_energy_v2(

@@ -6,7 +6,7 @@ Author: Peishi Jiang
 Date: 2023.03.28.
 """
 
-# import jax
+import jax
 import jax.numpy as jnp
 
 from typing import Tuple
@@ -143,10 +143,18 @@ def calculate_initial_guess_L(
 
     # Calculate the dimensionless parameter accounting for the
     # effect of buoyancy in the Monin-Obukhov similarity theory
-    if Rb >= 0:
-        ζ = Rb * jnp.log((z_a - d) / z0m) / (1 - 5 * jnp.min(jnp.array([Rb, 0.19])))
-    else:
-        ζ = Rb * jnp.log((z_a - d) / z0m)
+    # if Rb >= 0:
+    #     ζ = Rb * jnp.log((z_a - d) / z0m) / (1 - 5 * jnp.min(jnp.array([Rb, 0.19])))
+    # else:
+    #     ζ = Rb * jnp.log((z_a - d) / z0m)
+    ζ = jax.lax.cond(
+        Rb >= 0,
+        lambda Rb: Rb
+        * jnp.log((z_a - d) / z0m)
+        / (1 - 5 * jnp.min(jnp.array([Rb, 0.19]))),  # noqa: E501
+        lambda Rb: Rb * jnp.log((z_a - d) / z0m),
+        Rb,
+    )
 
     # Calculate the initial guess on the length
     L_guess = (z_a - d) / ζ
@@ -258,3 +266,68 @@ def perform_most_dual_source(
     # jax.debug.print("L_est: {}", jnp.array([ustar, tstar, qstar, Tzv, Tvstar, L_est]))  # noqa: E501
 
     return L_est, gam, gaw, gvm, gvw, ggm, ggw, q_v_sat, T_s, q_s
+
+
+def calculate_conductances_dual_source(
+    L_guess: Float_0D,
+    u_a: Float_0D,
+    L: Float_0D,
+    S: Float_0D,
+    z_a: Float_0D,
+    z0m: Float_0D,
+    z0c: Float_0D,
+    d: Float_0D,
+    gstomatal: Float_0D,
+    gsoil: Float_0D,
+) -> Tuple:
+    """Calculate the conductances based on the environmental
+       states of a dual source model.
+
+    Args:
+        L_guess (Float_0D): The initial guess of the Obukhov length [m]
+        u_a (Float_0D): The wind speed at the reference height of the atmosphere [m/s]
+        L (Float_0D):  The leaf area index [m2 m-2]
+        S (Float_0D): The stem area index [m2 m-2]
+        z_a (Float_0D): The reference height of the atmosphere [m]
+        z0m (Float_0D): The roughness length for momentum [m]
+        z0c (Float_0D): The roughness length for scalars [m]
+        d (Float_0D): The displacement height [m]
+        gstomatal (Float_0D): The stomatal conductance [m s-1]
+        gsoil (Float_0D): The soil conductance [m s-1]
+
+    Returns:
+        Tuple: The estiamted conductances
+    """
+
+    # Monin-Ob similarity theory (MOST)
+    ψm_a = calculate_ψm_most(ζ=(z_a - d) / L_guess)
+    # jax.debug.print("ψm_a: {}", jnp.array([ψm_a, L_guess, z_a, d]))
+    ψm_s = calculate_ψm_most(ζ=z0m / L_guess)
+    # jax.debug.print("ψm_s: {}", jnp.array([ψm_s, L_guess, z0m]))
+    ψc_a = calculate_ψc_most(ζ=(z_a - d) / L_guess)
+    ψc_s = calculate_ψc_most(ζ=z0c / L_guess)
+    ustar = calculate_ustar_most(
+        u1=0, u2=u_a, z1=z0m + d, z2=z_a, d=d, ψm1=ψm_s, ψm2=ψm_a
+    )
+
+    # Calculate the conductances of heat and water vapor
+    gam = calculate_scalar_conduct_surf_atmos(
+        uref=u_a,
+        zref=z_a,
+        d=d,
+        z0m=z0m,
+        z0c=z0c,
+        ψmref=ψm_a,
+        ψms=ψm_s,
+        ψcref=ψc_a,
+        ψcs=ψc_s,
+    )
+    gaw = gam
+    gvm = calculate_total_conductance_leaf_boundary(ustar=ustar, L=L, S=S)
+    gvw = calculate_total_conductance_leaf_water_vapor(gh=gvm, gs=gstomatal)
+    ggm = calculate_conductance_ground_canopy(L=L, S=S, ustar=ustar, z0m=z0m)
+    ggw = calculate_conductance_ground_canopy_water_vapo(
+        L=L, S=S, ustar=ustar, z0m=z0m, gsoil=gsoil
+    )
+
+    return gam, gaw, gvm, gvw, ggm, ggw

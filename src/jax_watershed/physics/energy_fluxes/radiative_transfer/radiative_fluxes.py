@@ -94,6 +94,85 @@ def calculate_solar_fluxes(
     return S_v, S_g
 
 
+def calculate_canopy_longwave_fluxes(
+    T_v: Float_0D,
+    T_g: Float_0D,
+    L_down: Float_0D,
+    ε_v: Float_0D,
+    ε_g: Float_0D,
+) -> Float_0D:
+    """Calculate net longwave radiation flux for vegetation (positive toward the atmosphere).
+
+    Args:
+        L_down (Float_0D): The downward atmospheric longwave radiation [W m-2]
+        T_v (Float_0D): The vegetation temperature at the previous time step [degK]
+        T_g (Float_0D): The snow/soil surface temperature at the previous time step [degK]
+        L (Float_0D): The exposed leaf area index [m2 m2-1]
+        S (Float_0D): The exposed stem area index [m2 m2-1]
+
+    Returns:
+        Tuple: The different components of longwave fluxes.
+    """  # noqa: E501
+    # The net longwave radiation flux for vegetation (positive toward the atmosphere)
+    # based on Eq(4.18) in CLM5
+    L_v = (
+        (2 - ε_v * (1 - ε_g)) * ε_v * σ * T_v**4
+        - ε_v * ε_g * σ * T_g**4
+        - ε_v * (1 + (1 - ε_g) * (1 - ε_v)) * L_down
+    )
+
+    return L_v
+
+
+def calculate_ground_longwave_fluxes(
+    L_down: Float_0D,
+    ε_v: Float_0D,
+    ε_g: Float_0D,
+    T_v_t1: Float_0D,
+    T_v_t2: Float_0D,
+    T_g_t1: Float_0D,
+    T_g_t2: Float_0D,
+    L: Float_0D,
+    S: Float_0D,
+) -> Float_0D:
+    """Calculate net longwave radiation flux for ground (positive toward the atmosphere).
+
+    Args:
+        L_down (Float_0D): The downward atmospheric longwave radiation [W m-2]
+        T_v_t1 (Float_0D): The vegetation temperature at the previous time step [degK]
+        T_v_t2 (Float_0D): The vegetation temperature at the current time step [degK]
+        T_g_t1 (Float_0D): The snow/soil surface temperature at the previous time step
+                        [degK]
+        T_g_t2 (Float_0D): The snow/soil surface temperature at the current time step
+                        [degK]
+        L (Float_0D): The exposed leaf area index [m2 m2-1]
+        S (Float_0D): The exposed stem area index [m2 m2-1]
+
+    Returns:
+        Tuple: The different components of longwave fluxes.
+    """  # noqa: E501
+    δ_veg = jnp.heaviside(L + S - 0.05, 1.0)
+
+    # The downward longwave radiation below the vegetation
+    # based on Eq(4.16) in CLM5
+    L_down_v = (
+        (1 - ε_v) * L_down
+        + ε_v * σ * T_v_t1**4
+        + 4 * ε_v * σ * T_v_t1**3 * (T_v_t2 - T_v_t1)
+    )
+
+    # The net longwave radiation flux for the ground (positive toward the atmosphere)
+    # based on Eq(4.17) in CLM5
+    L_g = (
+        ε_g * σ * T_g_t1**4
+        - δ_veg * ε_g * L_down_v
+        - (1 - δ_veg) * ε_g * L_down
+        + 4 * ε_g * σ * T_g_t1**3 * (T_g_t2 - T_g_t1)
+    )
+
+    return L_g
+
+
 def calculate_longwave_fluxes(
     L_down: Float_0D,
     ε_v: Float_0D,
@@ -177,7 +256,7 @@ def calculate_longwave_fluxes(
     # The net longwave radiation flux for vegetation (positive toward the atmosphere)
     # based on Eq(4.18) in CLM5
     L_v = (
-        (2 - ε_v * (1 - ε_g)) * ε_v * σ * T_v_t1**4
+        (2 - ε_v * (1 - ε_g)) * ε_v * σ * T_v_t2**4
         - ε_v * ε_g * σ * T_g_t1**4
         - ε_v * (1 + (1 - ε_g) * (1 - ε_v)) * L_down
     )
