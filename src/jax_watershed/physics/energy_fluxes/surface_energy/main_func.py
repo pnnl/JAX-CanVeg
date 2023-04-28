@@ -441,13 +441,74 @@ def solve_canopy_energy(
     solution = solver(func, l_guess, args=kwarg)
 
     l = solution.root  # noqa: E741
-    l = jax.lax.cond(  # noqa: E741
-        jnp.abs(l) > l_thres,
-        lambda x: x,
-        lambda x: l_thres * jnp.sign(x),
-        # lambda x: x, lambda x: l_guess,
-        l,
-    )
+    # l = jax.lax.cond(  # noqa: E741
+    #     jnp.abs(l) > l_thres,
+    #     lambda x: x,
+    #     lambda x: l_thres * jnp.sign(x),
+    #     # lambda x: x, lambda x: l_guess,
+    #     l,
+    # )
+
+    # # ---------------------- Update the longwave radiations ---------------------- #
+    # L_v, L_g, L_up, L_up_g, L_down_v, L_up_v, δ_veg = calculate_longwave_fluxes(
+    #     L_down=L_down_t2,
+    #     ε_v=ε_v,
+    #     ε_g=ε_g,
+    #     T_v_t1=T_v_t1,
+    #     T_v_t2=T_v_t2,
+    #     T_g_t1=T_g_t1,
+    #     T_g_t2=T_g_t2_guess,
+    #     L=L_t2,
+    #     S=S_t2,
+    # )
+
+    # # TODO: Calculate the specific humidity on the ground (Eq(5.73) in CLM5)
+    # q_g_t2_sat = qsat_from_temp_pres(T=T_g_t2_guess, pres=pres_a_t2)
+    # q_g_t2 = q_g_t2_sat
+    # # jax.debug.print("Ground specific humidity: {}", q_g_t2_sat)
+
+    # (
+    #     _,  # noqa: E741
+    #     gam,
+    #     gaw,
+    #     gvm,
+    #     gvw,
+    #     ggm,
+    #     ggw,
+    #     q_v_sat_t2,
+    #     T_s_t2,
+    #     q_s_t2,
+    # ) = perform_most_dual_source(
+    #     L_guess=l,
+    #     pres=pres_a_t2,
+    #     T_v=T_v_t2,
+    #     T_g=T_g_t2_guess,
+    #     T_a=T_a_t2,
+    #     u_a=u_a_t2,
+    #     q_a=q_a_t2,
+    #     q_g=q_g_t2,
+    #     L=L_t2,
+    #     S=S_t2,
+    #     z_a=z_a,
+    #     z0m=z0m,
+    #     z0c=z0c,
+    #     d=d,
+    #     gstomatal=gstomatal,
+    #     gsoil=gsoil,
+    # )
+    # # jax.debug.print("Conductances: {}", jnp.array([gvm, gvw]))
+
+    # # ------------------------- Calculate the canopy fluxes ------------------------ #
+    # # print(gvm)
+    # H_v_t2 = calculate_H(T_1=T_v_t2, T_2=T_s_t2, ρ_atm=ρ_atm_t2, gh=2 * gvm)
+    # E_v_t2 = calculate_E(
+    #     q_1=q_v_sat_t2, q_2=q_s_t2, ρ_atm=ρ_atm_t2, ge=gvw
+    # )  # [kg m-2 s-1]
+
+    # jax.debug.print(
+    #     # "Canopy fluxes: {}", jnp.array([S_v, L_v, H_v_t2, λ * E_v_t2, gvm, gvw, T_v_t2, T_s_t2, q_v_sat_t2, q_s_t2])  # noqa: E501
+    #     "Canopy fluxes: {}", jnp.array([S_v, L_v, H_v_t2, λ*E_v_t2, T_v_t2, T_s_t2])  # noqa: E501
+    # )  # noqa: E501
 
     return l, T_v_t2, S_v, S_g, ε_g, ε_v
 
@@ -903,8 +964,6 @@ def residual_canopy_temp(
 
     T_v_t2 = x
 
-    T_g_t2 = T_v_t2
-
     # Calculate the longwave radiation absorbed by the leaf/canopy
     L_v, L_g, L_up, L_up_g, L_down_v, L_up_v, δ_veg = calculate_longwave_fluxes(
         L_down=L_down,
@@ -948,13 +1007,13 @@ def residual_canopy_temp(
     solver = NewtonNonlinearSolver(atol=1e-5, rtol=1e-7, max_steps=5)
     solution = solver(func, l_guess, args=kwarg)
     l_update = solution.root
-    l_update = jax.lax.cond(
-        jnp.abs(l_update) > l_thres,
-        lambda x: x,
-        lambda x: l_thres * jnp.sign(x),
-        # lambda x: x, lambda x: l_reset,
-        l_update,
-    )
+    # l_update = jax.lax.cond(
+    #     jnp.abs(l_update) > l_thres,
+    #     lambda x: x,
+    #     lambda x: l_thres * jnp.sign(x),
+    #     # lambda x: x, lambda x: l_reset,
+    #     l_update,
+    # )
     # l_update = jnp.sign(l_update) * jnp.max(jnp.array([1, jnp.abs(l_update)]))
     # jax.debug.print(
     #     "l and T_v_t2 and L_v: {}", jnp.array([l_update, T_v_t2, L_v])
