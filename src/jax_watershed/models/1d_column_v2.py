@@ -14,8 +14,6 @@ Date: 2023.03.23.
 import jax
 import jax.numpy as jnp
 
-# import matplotlib.pyplot as plt
-
 # from diffrax import NewtonNonlinearSolver
 
 # from jax_watershed.shared_utilities.constants import R_DA as Rda
@@ -29,14 +27,12 @@ from jax_watershed.physics.energy_fluxes.surface_energy import (
 )
 from jax_watershed.physics.energy_fluxes.subsurface_energy import (
     # solve_subsurface_energy,
-    # solve_subsurface_energy_varyingG,
-    solve_subsurface_energy_varyingG_laxscan,
+    solve_subsurface_energy_varyingG,
 )
 
 # from jax_watershed.shared_utilities.forcings import ushn2_forcings_daily
 from jax_watershed.shared_utilities.forcings import ushn2_forcings_30min
 from jax_watershed.shared_utilities.domain import Time, Column
-from jax_watershed.shared_utilities.constants import λ_VAP as λ  # noqa: F401
 from jax_watershed.subjects import Surface, Soil
 
 # from ..shared_utilities.forcings import ushn2_forcings
@@ -50,7 +46,6 @@ from jax_watershed.subjects import Surface, Soil
 # from jax.config import config
 jax.config.update("jax_enable_x64", True)
 
-plotting = True
 
 # ---------------------------------------------------------------------------- #
 #                           Model parameter settings                           #
@@ -115,9 +110,7 @@ tind_prev, tind_now = 0, 0
 # solve_surface_energy_jit = jax.jit(solve_surface_energy_canopy_ground_clm)
 # solve_subsurface_energy_jit = jax.jit(solve_subsurface_energy)
 solve_surface_energy_jit = jax.jit(solve_canopy_energy)
-# solve_subsurface_energy_jit = jax.jit(solve_subsurface_energy_varyingG)
-# solve_subsurface_energy_jit = jax.jit(solve_subsurface_energy)
-solve_subsurface_energy_jit = jax.jit(solve_subsurface_energy_varyingG_laxscan)
+solve_subsurface_energy_jit = jax.jit(solve_subsurface_energy_varyingG)
 calculate_surface_energy_fluxes_jit = jax.jit(calculate_surface_energy_fluxes)
 
 while t_now < tn:
@@ -156,7 +149,6 @@ while t_now < tn:
 
     l_guess, T_v_t2_guess, T_g_t2_guess = l_t1, T_v_t1, T_g_t1
     # print()
-    print("Time: {}".format(t_now))
 
     # ----------------------------- Evolve the model ----------------------------- #
     # -------------------------- 1. Solve surface energy ------------------------- #
@@ -167,13 +159,6 @@ while t_now < tn:
         ε_v,
         S_v_t2,
         S_g_t2,
-        L_v_t2,
-        L_g_t2,
-        H_v_t2,
-        H_g_t2,
-        E_v_t2,
-        E_g_t2,
-        G_t2,
         # ) = solve_canopy_energy(
     ) = solve_surface_energy_jit(
         l_guess=-10.0,
@@ -208,15 +193,6 @@ while t_now < tn:
     )
 
     # -------------------- 2. Solve subsurface energy (e.g., ) ------------------- #
-    # Tsoil_t2 = solve_subsurface_energy_jit(
-    #     # Tsoil_t2 = solve_subsurface_energy(
-    #     Tsoil=Tsoil_t1,
-    #     κ=soil.parameters["κ"],
-    #     cv=soil.parameters["cv"],
-    #     Δz=Δz,
-    #     Δt=dt,
-    #     G=-G_t2,
-    # )
     Tsoil_t2 = solve_subsurface_energy_jit(
         # Tsoil_t2 = solve_subsurface_energy_varyingG(
         Tsoil=Tsoil_t1,
@@ -285,6 +261,7 @@ while t_now < tn:
     )
 
     # --------------------------- Do some printing here -------------------------- #
+    print("Time: {}".format(t_now))
     args = dict(
         # l_guess=l_guess,
         l_guess=-1,
@@ -320,52 +297,25 @@ while t_now < tn:
     # print(args)
 
     # break
-    print("Air temperature: {}".format(T_a_t2))
-    print("Incoming radiations: {}".format([solar_rad_t2, L_down_t2]))
-    print("Updated states: {}".format([l_t2, T_v_t2, T_g_t2, Tsoil_t2]))
-    print("")
     # if jnp.isnan(l_t2):
-    # if t_now > 10:
-    if T_v_t2 > 400 or T_g_t2 > 400:
+    # if t_now > 106:
+    if T_g_t2 > 400:
         break
+    else:
+        # print(l_guess, T_v_t2_guess, T_g_t2_guess)
+        print("Air temperature: {}".format(T_a_t2))
+        print("Updated states: {}".format([l_t2, T_v_t2, T_g_t2, Tsoil_t2]))
+        print("")
 
     # Update the model state
     # TODO: make the following cleaner
     surface.set_state_value(state_name="l", time_ind=tind_now, space_ind=0, value=l_t2)
-    surface.set_state_value(
-        state_name="T_a", time_ind=tind_now, space_ind=0, value=T_a_t2
-    )
     surface.set_state_value(
         state_name="T_v", time_ind=tind_now, space_ind=0, value=T_v_t2
     )
     surface.set_state_value(
         state_name="T_g", time_ind=tind_now, space_ind=0, value=T_g_t2
     )
-    surface.set_state_value(
-        state_name="S_v", time_ind=tind_now, space_ind=0, value=S_v_t2
-    )
-    surface.set_state_value(
-        state_name="S_g", time_ind=tind_now, space_ind=0, value=S_g_t2
-    )
-    surface.set_state_value(
-        state_name="L_v", time_ind=tind_now, space_ind=0, value=L_v_t2
-    )
-    surface.set_state_value(
-        state_name="L_g", time_ind=tind_now, space_ind=0, value=L_g_t2
-    )
-    surface.set_state_value(
-        state_name="H_v", time_ind=tind_now, space_ind=0, value=H_v_t2
-    )
-    surface.set_state_value(
-        state_name="H_g", time_ind=tind_now, space_ind=0, value=H_g_t2
-    )
-    surface.set_state_value(
-        state_name="E_v", time_ind=tind_now, space_ind=0, value=E_v_t2
-    )
-    surface.set_state_value(
-        state_name="E_g", time_ind=tind_now, space_ind=0, value=E_g_t2
-    )
-    surface.set_state_value(state_name="G", time_ind=tind_now, space_ind=0, value=G_t2)
     soil.set_state_value(state_name="Tsoil", time_ind=tind_now, value=Tsoil_t2)
 
     # Update the time step
@@ -375,33 +325,3 @@ while t_now < tn:
     # Update the time indices
     tind_prev = tind_now
     tind_now = min(tind_now + 1, time.nt)
-
-
-# if plotting:
-#     fig, axes = plt.subplots(3, 1, figsize=(10, 15), sharex=True)
-#     ax = axes[0]
-#     ax.plot(surface.states["T_a"], label="T_a")
-#     ax.plot(surface.states["T_v"], label="T_v")
-#     ax.plot(surface.states["T_g"], label="T_g")
-#     ax.set(ylabel="[degK]", xlabel="Time [hr]", title="Temperature")
-#     ax.legend()
-
-#     ax = axes[1]
-#     ax.plot(surface.states["L_v"], "g--", label="L_v")
-#     ax.plot(surface.states["L_g"], "g", label="L_g")
-#     ax.plot(surface.states["H_v"], "r--", label="H_v")
-#     ax.plot(surface.states["H_g"], "r", label="H_g")
-#     ax.plot(λ * surface.states["E_v"], "b--", label="λE_v")
-#     ax.plot(λ * surface.states["E_g"], "b", label="λE_g")
-#     ax.plot(surface.states["G"], color="black", label="G")
-#     ax.set(ylabel="[W m-2]", xlabel="Time [hr]", title="Heat fluxes",ylim=[-150, 150])
-#     ax.legend(ncols=2)
-
-#     ax = axes[2]
-#     im = ax.imshow(soil.states["Tsoil"].T, aspect="auto")
-#     ax.set(xlabel="Time", ylabel="Soil depth [hr]", title="Soil temperature")
-#     cbar = fig.colorbar(im, orientation="horizontal")
-#     cbar.ax.set(xlabel="degK")
-
-#     plt.savefig("1d_column_energy.png")
-#     plt.show()
