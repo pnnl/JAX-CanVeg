@@ -136,6 +136,45 @@ def solve_subsurface_energy_varyingG_laxscan(
     # Convert the time interval from day to second
     Δt = Δt * 86400
 
+    # Calculate the initial ground heat flux
+    T_g_t2 = Tsoil[0]
+    q_g_t2_sat = qsat_from_temp_pres(T=T_g_t2, pres=pres)
+    q_g_t2 = q_g_t2_sat
+    (_, _, _, _, _, ggm, ggw, _, T_s_t2, q_s_t2,) = perform_most_dual_source(
+        L_guess=l,
+        pres=pres,
+        T_v=T_v_t2,
+        T_g=T_g_t2,
+        T_a=T_a_t2,
+        u_a=u_a_t2,
+        q_a=q_a_t2,
+        q_g=q_g_t2,
+        L=L,
+        S=S,
+        z_a=z_a,
+        z0m=z0m,
+        z0c=z0c,
+        d=d,
+        gstomatal=gstomatal,
+        gsoil=gsoil,
+    )
+    L_g = calculate_ground_longwave_fluxes(
+        L_down=L_down,
+        ε_v=ε_v,
+        ε_g=ε_g,
+        L=L,
+        S=S,
+        T_v_t1=T_v_t1,
+        T_v_t2=T_v_t2,
+        T_g_t1=T_g_t1,
+        T_g_t2=T_g_t2,
+    )
+    H_g = calculate_H(T_1=T_g_t2, T_2=T_s_t2, ρ_atm=ρ_atm_t2, gh=ggm)
+    E_g = calculate_E(q_1=q_g_t2, q_2=q_s_t2, ρ_atm=ρ_atm_t2, ge=ggw)  # [kg m-2 s-1]
+    λE_g = λ * E_g
+    G = S_g - L_g - H_g - λE_g
+    G = -G
+
     # Create the vector field term and the solver
     def Tsoil_vector_field_dr_each_step(t, y, args):
         return Tsoil_vector_field(
@@ -144,8 +183,11 @@ def solve_subsurface_energy_varyingG_laxscan(
 
     term = dr.ODETerm(Tsoil_vector_field_dr_each_step)
     solver = dr.ImplicitEuler(dr.NewtonNonlinearSolver(rtol=1e-5, atol=1e-5))
+    args_solver = dict(κ=κ, cv=cv, Δz=Δz, G=G)
+    state = solver.init(terms=term, t0=0.0, t1=Δt, y0=Tsoil, args=args_solver)
 
-    def update_soil_temperature(Tsoil, x=None):
+    def update_soil_temperature(carry, x=None):
+        Tsoil, state = carry
         # Calculate the ground heat flux
         T_g_t2 = Tsoil[0]
         q_g_t2_sat = qsat_from_temp_pres(T=T_g_t2, pres=pres)
@@ -188,8 +230,7 @@ def solve_subsurface_energy_varyingG_laxscan(
         G = -G
         # Solve the soil temperature profile
         args_solver = dict(κ=κ, cv=cv, Δz=Δz, G=G)
-        state = solver.init(terms=term, t0=0.0, t1=Δt, y0=Tsoil, args=args_solver)
-        Tsoilnew, _, _, state, _ = solver.step(
+        Tsoilnew, _, _, state_new, _ = solver.step(
             terms=term,
             t0=0.0,
             t1=Δt,
@@ -198,11 +239,12 @@ def solve_subsurface_energy_varyingG_laxscan(
             solver_state=state,
             made_jump=False,
         )
-        return Tsoilnew, G
+        return [Tsoilnew, state_new], G
 
-    Tsoilnew, G_list = jax.lax.scan(
-        update_soil_temperature, init=Tsoil, xs=None, length=100
+    carry, G_list = jax.lax.scan(
+        update_soil_temperature, init=[Tsoil, state], xs=None, length=100
     )
+    Tsoilnew = carry[0]
     # jax.debug.print('The updated G_list: {}', G_list)
 
     return Tsoilnew
