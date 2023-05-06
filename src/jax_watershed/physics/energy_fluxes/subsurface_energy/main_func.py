@@ -183,11 +183,8 @@ def solve_subsurface_energy_varyingG_laxscan(
 
     term = dr.ODETerm(Tsoil_vector_field_dr_each_step)
     solver = dr.ImplicitEuler(dr.NewtonNonlinearSolver(rtol=1e-5, atol=1e-5))
-    args_solver = dict(κ=κ, cv=cv, Δz=Δz, G=G)
-    state = solver.init(terms=term, t0=0.0, t1=Δt, y0=Tsoil, args=args_solver)
 
-    def update_soil_temperature(carry, x=None):
-        Tsoil, state = carry
+    def update_soil_temperature(Tsoil, x=None):
         # Calculate the ground heat flux
         T_g_t2 = Tsoil[0]
         q_g_t2_sat = qsat_from_temp_pres(T=T_g_t2, pres=pres)
@@ -230,21 +227,22 @@ def solve_subsurface_energy_varyingG_laxscan(
         G = -G
         # Solve the soil temperature profile
         args_solver = dict(κ=κ, cv=cv, Δz=Δz, G=G)
-        Tsoilnew, _, _, state_new, _ = solver.step(
+        solution = dr.diffeqsolve(
             terms=term,
+            solver=solver,
             t0=0.0,
             t1=Δt,
+            dt0=Δt,
             y0=Tsoil,
             args=args_solver,
-            solver_state=state,
-            made_jump=False,
         )
-        return [Tsoilnew, state_new], G
+        Tsoilnew = solution.ys[-1]
+        # jax.debug.print("The shape of Tsoilnew: {}", Tsoilnew.shape)
+        return Tsoilnew, G
 
-    carry, G_list = jax.lax.scan(
-        update_soil_temperature, init=[Tsoil, state], xs=None, length=100
+    Tsoilnew, G_list = jax.lax.scan(
+        update_soil_temperature, init=Tsoil, xs=None, length=100
     )
-    Tsoilnew = carry[0]
     # jax.debug.print('The updated G_list: {}', G_list)
 
     return Tsoilnew
