@@ -456,7 +456,7 @@ def solve_canopy_energy(
         return [T_v_t2_update, new_args], [T_v_t2_update, l_update]
 
     carry, y_list = jax.lax.scan(
-        update_canopy_temperature, init=[T_v_t2_guess, args], xs=None, length=5
+        update_canopy_temperature, init=[T_v_t2_guess, args], xs=None, length=10
     )
     T_v_t2, new_args = carry
     l = new_args["l_guess"]  # noqa: E741
