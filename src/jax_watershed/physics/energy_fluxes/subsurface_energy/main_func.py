@@ -182,7 +182,9 @@ def solve_subsurface_energy_varyingG_laxscan(
         )
 
     term = dr.ODETerm(Tsoil_vector_field_dr_each_step)
-    solver = dr.ImplicitEuler(dr.NewtonNonlinearSolver(rtol=1e-5, atol=1e-5))
+    # solver = dr.ImplicitEuler(dr.NewtonNonlinearSolver(rtol=1e-5, atol=1e-5))
+    solver = dr.ImplicitEuler()
+    stepsize_controller = dr.PIDController(rtol=1e-5, atol=1e-5)
 
     def update_soil_temperature(Tsoil, x=None):
         # Calculate the ground heat flux
@@ -234,6 +236,7 @@ def solve_subsurface_energy_varyingG_laxscan(
             t1=Δt,
             dt0=Δt,
             y0=Tsoil,
+            stepsize_controller=stepsize_controller,
             args=args_solver,
         )
         Tsoilnew = solution.ys[-1]
