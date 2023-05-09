@@ -4,13 +4,16 @@ import requests
 from statistics import mean
 from pathlib import Path
 
-import pandas as pd
+import jax
 import jax.numpy as jnp
+import pandas as pd
 
 from .point_data import PointData
 from ..constants import C_TO_K as c2k
 from ..domain import Time
 from ...physics.water_fluxes import esat_from_temp, ρ_from_e_pres_temp, q_from_e_pres
+
+jax.config.update("jax_enable_x64", True)
 
 site = "US-Hn2"
 network = "AMERIFLUX"
