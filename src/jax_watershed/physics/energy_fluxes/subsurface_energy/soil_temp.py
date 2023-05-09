@@ -16,7 +16,9 @@ from ....shared_utilities.constants import λ_VAP as λ
 from ..surface_energy.monin_obukhov import perform_most_dual_source
 from ..turbulent_fluxes import calculate_E, calculate_H
 from ..radiative_transfer import calculate_ground_longwave_fluxes
-from ...water_fluxes import qsat_from_temp_pres
+
+# from ...water_fluxes import qsat_from_temp_pres
+from ...water_fluxes import calculate_ground_specific_humidity
 
 
 def Tsoil_vector_field_varyingG(
@@ -81,9 +83,10 @@ def Tsoil_vector_field_varyingG(
     T_g_t2 = Tsoil[0]
 
     # Calculate the conductances and T_s/q_s
-    # TODO: Calculate the specific humidity on the ground (Eq(5.73) in CLM5)
-    q_g_t2_sat = qsat_from_temp_pres(T=T_g_t2, pres=pres)
-    q_g_t2 = q_g_t2_sat
+    # TODO: Update the ground specific humidity
+    # q_g_t2_sat = qsat_from_temp_pres(T=T_g_t2, pres=pres)
+    # q_g_t2 = q_g_t2_sat
+    q_g_t2 = calculate_ground_specific_humidity(T_g_t2, pres)
     (_, _, _, _, _, ggm, ggw, q_v_sat_t2, T_s_t2, q_s_t2,) = perform_most_dual_source(
         L_guess=l,
         pres=pres,

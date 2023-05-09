@@ -8,6 +8,8 @@ Date: 2023.04.10.
 
 import jax
 
+# import jax.numpy as jnp
+
 import diffrax as dr
 from .soil_temp import Tsoil_vector_field, Tsoil_vector_field_varyingG
 
@@ -18,7 +20,9 @@ from ....shared_utilities.constants import λ_VAP as λ
 from ..surface_energy.monin_obukhov import perform_most_dual_source
 from ..turbulent_fluxes import calculate_E, calculate_H
 from ..radiative_transfer import calculate_ground_longwave_fluxes
-from ...water_fluxes import qsat_from_temp_pres
+
+# from ...water_fluxes import qsat_from_temp_pres
+from ...water_fluxes import calculate_ground_specific_humidity
 
 # from .soil_temp import calculate_Tg_from_Tsoil1
 
@@ -138,8 +142,11 @@ def solve_subsurface_energy_varyingG_laxscan(
 
     # Calculate the initial ground heat flux
     T_g_t2 = Tsoil[0]
-    q_g_t2_sat = qsat_from_temp_pres(T=T_g_t2, pres=pres)
-    q_g_t2 = q_g_t2_sat
+    # TODO: Update the ground specific humidity
+    # q_g_t2_sat = qsat_from_temp_pres(T=T_g_t2, pres=pres)
+    # q_g_t2 = q_g_t2_sat
+    q_g_t2 = calculate_ground_specific_humidity(T_g_t2, pres)
+
     (_, _, _, _, _, ggm, ggw, _, T_s_t2, q_s_t2,) = perform_most_dual_source(
         L_guess=l,
         pres=pres,
@@ -174,6 +181,8 @@ def solve_subsurface_energy_varyingG_laxscan(
     λE_g = λ * E_g
     G = S_g - L_g - H_g - λE_g
     G = -G
+    # jax.debug.print("The ground heat flux: {}", jnp.array([S_g, L_g, H_g, λE_g, -G]))
+    # jax.debug.print("Specific humidities: {}", jnp.array([q_a_t2, q_g_t2, q_s_t2]))
 
     # Create the vector field term and the solver
     def Tsoil_vector_field_dr_each_step(t, y, args):
@@ -189,8 +198,10 @@ def solve_subsurface_energy_varyingG_laxscan(
     def update_soil_temperature(Tsoil, x=None):
         # Calculate the ground heat flux
         T_g_t2 = Tsoil[0]
-        q_g_t2_sat = qsat_from_temp_pres(T=T_g_t2, pres=pres)
-        q_g_t2 = q_g_t2_sat
+        # TODO: Update the ground specific humidity
+        # q_g_t2_sat = qsat_from_temp_pres(T=T_g_t2, pres=pres)
+        # q_g_t2 = q_g_t2_sat
+        q_g_t2 = calculate_ground_specific_humidity(T_g_t2, pres)
         (_, _, _, _, _, ggm, ggw, _, T_s_t2, q_s_t2,) = perform_most_dual_source(
             L_guess=l,
             pres=pres,

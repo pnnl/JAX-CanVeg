@@ -35,6 +35,7 @@ def calculate_Ts_from_TvTgTa(
     # Revised from Eq(15.12) in Bonan(2019) with leaf area index L imbedded in gbh
     # jax.debug.print("Conductances: {}", jnp.array([gam, gvm, ggm]))
     return (gam * Ta + 2 * gvm * Tv + ggm * Tg) / (gam + 2 * gvm + ggm)
+    # return (gam * Ta + gvm * Tv + ggm * Tg) / (gam + gvm + ggm)
     # return (gam*Ta + gvm*Tv + ggm*Tg) / (gam + gvm + ggm)
 
 

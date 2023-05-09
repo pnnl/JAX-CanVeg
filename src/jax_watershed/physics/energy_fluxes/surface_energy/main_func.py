@@ -30,7 +30,9 @@ from ..radiative_transfer import main_calculate_solar_fluxes
 
 # from ..turbulent_fluxes import *  # noqa: F403
 from ..turbulent_fluxes import calculate_E, calculate_H
-from ...water_fluxes import qsat_from_temp_pres
+
+# from ...water_fluxes import qsat_from_temp_pres
+from ...water_fluxes import calculate_ground_specific_humidity
 
 
 # TODO: Further modulize the functions
@@ -199,8 +201,10 @@ def solve_surface_energy(
     )
 
     # TODO: Calculate the specific humidity on the ground (Eq(5.73) in CLM5)
-    q_g_t2_sat = qsat_from_temp_pres(T=T_g_t2, pres=pres_a_t2)
-    q_g_t2 = q_g_t2_sat
+    # TODO: Update the ground specific humidity
+    # q_g_t2_sat = qsat_from_temp_pres(T=T_g_t2, pres=pres_a_t2)
+    # q_g_t2 = q_g_t2_sat
+    q_g_t2 = calculate_ground_specific_humidity(T_g_t2, pres_a_t2)
     # jax.debug.print("Ground specific humidity: {}", q_g_t2_sat)
 
     # Use the updated Obukhov to perform Monin Obukhov similarity theory again (MOST)
@@ -378,8 +382,10 @@ def solve_canopy_energy(
     # ------------------ Estimate the canopy temperature T_v_t2 ------------------ #
     # jax.debug.print("Calculating T_v_t2 ...")
     # TODO: Calculate the specific humidity on the ground (Eq(5.73) in CLM5)
-    q_g_t2_sat_guess = qsat_from_temp_pres(T=T_g_t2_guess, pres=pres_a_t2)
-    q_g_t2_guess = q_g_t2_sat_guess
+    # TODO: Update the ground specific humidity
+    # q_g_t2_sat_guess = qsat_from_temp_pres(T=T_g_t2_guess, pres=pres_a_t2)
+    # q_g_t2_guess = q_g_t2_sat_guess
+    q_g_t2_guess = calculate_ground_specific_humidity(T_g_t2_guess, pres_a_t2)
 
     def func_canopy_temp(x, args):
         return residual_canopy_temp(x, **args)
@@ -511,7 +517,8 @@ def solve_canopy_energy(
 
     # ------------------------- Calculate the canopy fluxes ------------------------ #
     # print(gvm)
-    H_v_t2 = calculate_H(T_1=T_v_t2, T_2=T_s_t2, ρ_atm=ρ_atm_t2, gh=2 * gvm)
+    # H_v_t2 = calculate_H(T_1=T_v_t2, T_2=T_s_t2, ρ_atm=ρ_atm_t2, gh=2 * gvm)
+    H_v_t2 = calculate_H(T_1=T_v_t2, T_2=T_s_t2, ρ_atm=ρ_atm_t2, gh=gvm)
     E_v_t2 = calculate_E(
         q_1=q_v_sat_t2, q_2=q_s_t2, ρ_atm=ρ_atm_t2, ge=gvw
     )  # [kg m-2 s-1]
@@ -526,7 +533,10 @@ def solve_canopy_energy(
 
     # jax.debug.print(
     #     # "Canopy fluxes: {}", jnp.array([S_v, L_v, H_v_t2, λ * E_v_t2, gvm, gvw, T_v_t2, T_s_t2, q_v_sat_t2, q_s_t2])  # noqa: E501
-    #     "Canopy fluxes: {}", jnp.array([S_v, L_v, H_v_t2, λ*E_v_t2, T_v_t2, T_s_t2])  # noqa: E501
+    #     "Canopy fluxes: {}",
+    #     jnp.array(
+    #         [S_v, L_v, H_v_t2, λ * E_v_t2, q_v_sat_t2, q_s_t2, T_v_t2, T_s_t2]
+    #     ),  # noqa: E501
     # )  # noqa: E501
 
     return l, T_v_t2, ε_g, ε_v, S_v, S_g, L_v, L_g, H_v_t2, H_g_t2, E_v_t2, E_g_t2, G_t2
@@ -572,8 +582,10 @@ def calculate_surface_energy_fluxes(
     )
 
     # TODO: Calculate the specific humidity on the ground (Eq(5.73) in CLM5)
-    q_g_t2_sat = qsat_from_temp_pres(T=T_g_t2, pres=pres_a_t2)
-    q_g_t2 = q_g_t2_sat
+    # TODO: Update the ground specific humidity
+    # q_g_t2_sat = qsat_from_temp_pres(T=T_g_t2, pres=pres_a_t2)
+    # q_g_t2 = q_g_t2_sat
+    q_g_t2 = calculate_ground_specific_humidity(T_g_t2, pres_a_t2)
     # jax.debug.print("Ground specific humidity: {}", q_g_t2_sat)
 
     (
@@ -605,14 +617,16 @@ def calculate_surface_energy_fluxes(
         gstomatal=gstomatal,
         gsoil=gsoil,
     )
-    # jax.debug.print("Conductances: {}", jnp.array([gvm, gvw]))
+    # jax.debug.print("Conductances: {}", jnp.array([gam, gvm, ggm, gaw, gvw, ggw]))
 
     # ------------------------- Update the canopy fluxes ------------------------- #
     # print(gvm)
     H_v_t2 = calculate_H(T_1=T_v_t2, T_2=T_s_t2, ρ_atm=ρ_atm_t2, gh=2 * gvm)
+    # H_v_t2 = calculate_H(T_1=T_v_t2, T_2=T_s_t2, ρ_atm=ρ_atm_t2, gh=gvm)
     E_v_t2 = calculate_E(
         q_1=q_v_sat_t2, q_2=q_s_t2, ρ_atm=ρ_atm_t2, ge=gvw
     )  # [kg m-2 s-1]
+    # jax.debug.print("H_v: {}", jnp.array([ρ_atm_t2, 2 * gvm * (T_v_t2 - T_s_t2)]))
 
     # ------------------------- Update the ground fluxes ------------------------- #
     H_g_t2 = calculate_H(T_1=T_g_t2, T_2=T_s_t2, ρ_atm=ρ_atm_t2, gh=ggm)
@@ -622,7 +636,7 @@ def calculate_surface_energy_fluxes(
 
     # jax.debug.print("l, T_v_t2, T_g_t2: {}", jnp.array([l, T_v_t2, T_g_t2]))
     # jax.debug.print(
-    #     "Canopy fluxes: {}", jnp.array([S_v_t2, L_v_t2, H_v_t2, λ * E_v_t2])
+    #     "Canopy fluxes: {}", jnp.array([S_v_t2, L_v_t2, H_v_t2, λ * E_v_t2, T_v_t2, T_s_t2])  # noqa: E501
     # )  # noqa: E501
     # jax.debug.print(
     #     "Ground fluxes: {}", jnp.array([S_g_t2, L_g_t2, H_g_t2, λ * E_g_t2, G_t2])
@@ -799,8 +813,10 @@ def solve_surface_energy_canopy_ground(
 
     # - Use the updated Obukhov to perform Monin Obukhov similarity theory again - #
     # TODO: Calculate the specific humidity on the ground (Eq(5.73) in CLM5)
-    q_g_t2_sat = qsat_from_temp_pres(T=T_g_t2_guess, pres=pres_a_t2)
-    q_g_t2_guess = q_g_t2_sat
+    # TODO: Update the ground specific humidity
+    # q_g_t2_sat = qsat_from_temp_pres(T=T_g_t2_guess, pres=pres_a_t2)
+    # q_g_t2_guess = q_g_t2_sat
+    q_g_t2_guess = calculate_ground_specific_humidity(T_g_t2_guess, pres_a_t2)
 
     kwarg = dict(
         pres=pres_a_t2,
@@ -885,8 +901,10 @@ def solve_surface_energy_canopy_ground(
     )
 
     # TODO: Calculate the specific humidity on the ground (Eq(5.73) in CLM5)
-    q_g_t2_sat = qsat_from_temp_pres(T=T_g_t2, pres=pres_a_t2)
-    q_g_t2 = q_g_t2_sat
+    # TODO: Update the ground specific humidity
+    # q_g_t2_sat = qsat_from_temp_pres(T=T_g_t2, pres=pres_a_t2)
+    # q_g_t2 = q_g_t2_sat
+    q_g_t2 = calculate_ground_specific_humidity(T_g_t2, pres_a_t2)
     # jax.debug.print("Ground specific humidity: {}", q_g_t2_sat)
 
     # # - Use the updated Obukhov to perform Monin Obukhov similarity theory again - #
@@ -1102,8 +1120,10 @@ def residual_ground_temp(
     )
 
     # TODO: Calculate the specific humidity on the ground (Eq(5.73) in CLM5)
-    q_g_t2_sat = qsat_from_temp_pres(T=T_g_t2, pres=pres)
-    q_g_t2 = q_g_t2_sat
+    # TODO: Update the ground specific humidity
+    # q_g_t2_sat = qsat_from_temp_pres(T=T_g_t2, pres=pres)
+    # q_g_t2 = q_g_t2_sat
+    q_g_t2 = calculate_ground_specific_humidity(T_g_t2, pres)
 
     l_update = l_guess
 
