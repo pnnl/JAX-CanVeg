@@ -17,8 +17,10 @@ VON_KARMAN_CONSTANT = 0.41
 κ = 1.38065e-23  # Boltzmann constant [J K-1 molecule-1]
 NA = 6.02214e26  # Avogadro's number [molecule kmol-1]
 MW_DA = 28.966  # Molecular weight of dry air [kg kmol-1]
+MW_WV = 18.016  # Molecular weight of water vapor [J K-1 kg-1]
 R_GAS = NA * κ  # Universal gas constant [J K-1 kmol-1]
 R_DA = R_GAS / MW_DA  # dry air gas constant [J K-1 kg-1]
+R_WV = R_GAS / MW_WV  # water vapor gas constant [J K-1 kg-1]
 C_P = 1.00464e3  # Specific heat capacity of dry air [J kg-1 K-1]
 λ_VAP = 2.501e6  # latent heat of vaporization [J kg-1]
 
