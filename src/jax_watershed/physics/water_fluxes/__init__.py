@@ -4,4 +4,5 @@ from .water_temp_pressure_relation import (
     esat_from_temp,  # noqa: F401
     q_from_e_pres,  # noqa: F401
     qsat_from_temp_pres,  # noqa: F401
+    calculate_ground_specific_humidity,  # noqa: F401
 )

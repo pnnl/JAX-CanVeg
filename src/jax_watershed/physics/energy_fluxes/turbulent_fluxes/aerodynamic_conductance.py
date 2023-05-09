@@ -56,7 +56,7 @@ def calculate_scalar_conduct_surf_atmos(
     ψcs: Float_0D,
 ) -> Float_0D:
     """Calculating the aerodynamic conductance for scalar between the ground and the
-       atmosphere based on Eq(5.55) in CLM5
+       atmosphere based on Eq(5.56) in CLM5
 
     Args:
         uref (Float_0D)  : The velocity at the reference height zref [m s-1]

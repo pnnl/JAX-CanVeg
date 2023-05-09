@@ -6,10 +6,13 @@ Date: 2023.03.23
 
 """  # noqa: E501
 
+# import jax
 import jax.numpy as jnp
 from ...shared_utilities.types import Float_0D
 from ...shared_utilities.constants import C_TO_K as c2k
 from ...shared_utilities.constants import R_DA as Rda
+from ...shared_utilities.constants import G as g
+from ...shared_utilities.constants import R_WV as Rwv
 
 
 def ρ_from_e_pres_temp(pres: Float_0D, e: Float_0D, T: Float_0D) -> Float_0D:
@@ -87,3 +90,23 @@ def q_from_e_pres(pres: Float_0D, e: Float_0D) -> Float_0D:
     """
     q = (0.622 * e) / (pres - 0.378 * e)  # [kg kg-1]
     return q
+
+
+def calculate_ground_specific_humidity(
+    Tg: Float_0D,
+    pres: Float_0D,
+    θg: Float_0D = 0.01,
+) -> Float_0D:
+    # Eqs(5.73)-(5.75) in CLM5
+    q_g_sat = qsat_from_temp_pres(T=Tg, pres=pres)
+
+    # TODO: revise the calculation of s1 based on Eq(5.75) in CLM5
+    # TODO: revise the calculation of B1 and ψsat1 based on Section 7.3 in CLM5
+    # s1, ψsat1, B1 = 0.5, -10., 3.
+    # ψ1 = ψsat1 * s1 ** (-B1)
+    ψ1 = -1.0e8
+    α = jnp.exp(ψ1 * g / (1e3 * Rwv * Tg))
+    # jax.debug.print('alpha coefficient: {}', jnp.array([α]))
+    q_g = α * q_g_sat
+
+    return q_g
