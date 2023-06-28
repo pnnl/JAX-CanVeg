@@ -1,0 +1,12 @@
+name: jax-watershed
+channels:
+  - conda-forge
+dependencies:
+  - python==3.10
+  - numpy
+  - pandas
+  - matplotlib
+  - h5py
+  - pip
+  - seaborn
+  - pybind11
