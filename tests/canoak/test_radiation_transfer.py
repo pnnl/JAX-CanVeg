@@ -10,14 +10,13 @@ config.update("jax_enable_x64", True)
 import canoak  # noqa: E402
 from jax_canoak.physics.energy_fluxes import rnet  # noqa: E402
 from jax_canoak.physics.energy_fluxes import par  # noqa: E402
+from jax_canoak.physics.energy_fluxes import nir  # noqa: E402
 from jax_canoak.physics.energy_fluxes import diffuse_direct_radiation  # noqa: E402
 
-# jtot = 300
-# jtot3 = 1500
-jtot = 30
-jtot3 = 150
-# jtot = 3
-# jtot3 = 5
+# jtot = 30
+# jtot3 = 150
+jtot = 3
+jtot3 = 5
 sze = jtot + 2
 sze3 = jtot3 + 2
 met_zl = 1.5
@@ -29,14 +28,14 @@ factor = 4.5
 ustar_ref = 0.5
 ustar = 1.8
 
-parin = 1.2
+parin = -1.2
 par_beam = 0.4
 par_reflect = 0.3
 par_trans = 0.6
 par_soil_refl = 0.3
 par_absorbed = 0.8
 
-nir_beam, nir_diffuse, nir_reflect = 1.5, 0.3, 0.3
+nir_beam, nir_diffuse, nir_reflect = 2.0, 0.3, 0.3
 nir_trans, nir_soil_refl, nir_absorbed = 0.5, 0.9, 0.1
 
 
@@ -177,9 +176,9 @@ class TestRadiationTransfer(unittest.TestCase):
             par_trans,
             par_soil_refl,
             par_absorbed,
-            dLAIdz_np,
-            exxpdir_np,
-            Gfunc_solar_np,
+            jnp.array(dLAIdz_np),
+            jnp.array(exxpdir_np),
+            jnp.array(Gfunc_solar_np),
         )
 
         # print(sun_lai_jnp)
@@ -267,9 +266,9 @@ class TestRadiationTransfer(unittest.TestCase):
             par_trans,
             par_soil_refl,
             par_absorbed,
-            dLAIdz_np,
-            exxpdir_np,
-            Gfunc_solar_np,
+            jnp.array(dLAIdz_np),
+            jnp.array(exxpdir_np),
+            jnp.array(Gfunc_solar_np),
         )
 
         # print(prob_sh_jnp)
@@ -355,11 +354,31 @@ class TestRadiationTransfer(unittest.TestCase):
         )
 
         # JAX
+        nir_dn_jnp, nir_up_jnp, beam_flux_nir_jnp, nir_sh_jnp, nir_sun_jnp = nir(
+            solar_sine_beta,
+            nir_beam,
+            nir_diffuse,
+            nir_reflect,
+            nir_trans,
+            nir_soil_refl,
+            nir_absorbed,
+            jnp.array(dLAIdz_np),
+            jnp.array(exxpdir_np),
+            jnp.array(Gfunc_solar_np),
+        )
 
-        # print(nir_up_np)
+        # print(nir_dn_jnp, nir_dn_np)
+        # print(nir_up_jnp, nir_up_np)
+        # print(beam_flux_nir_jnp, beam_flux_nir_np)
+        # print(nir_sh_jnp, nir_sh_np)
+        # print(nir_sun_jnp, nir_sun_np)
         print("")
-        # self.assertTrue(np.allclose(rnet_sun_np, rnet_sun_jnp))
-        self.assertTrue(1 == 1)
+        self.assertTrue(np.allclose(nir_dn_jnp, nir_dn_np))
+        self.assertTrue(np.allclose(nir_up_jnp, nir_up_np))
+        self.assertTrue(np.allclose(beam_flux_nir_jnp, beam_flux_nir_np))
+        self.assertTrue(np.allclose(nir_sh_jnp, nir_sh_np))
+        self.assertTrue(np.allclose(nir_sun_jnp, nir_sun_np))
+        # self.assertTrue(1 == 1)
 
     def test_nir_night(self):
         solar_sine_beta = 0.0
@@ -396,8 +415,23 @@ class TestRadiationTransfer(unittest.TestCase):
         )
 
         # JAX
+        nir_dn_jnp, nir_up_jnp, beam_flux_nir_jnp, nir_sh_jnp, nir_sun_jnp = nir(
+            solar_sine_beta,
+            nir_beam,
+            nir_diffuse,
+            nir_reflect,
+            nir_trans,
+            nir_soil_refl,
+            nir_absorbed,
+            jnp.array(dLAIdz_np),
+            jnp.array(exxpdir_np),
+            jnp.array(Gfunc_solar_np),
+        )
 
         # print(nir_up_np)
         print("")
-        # self.assertTrue(np.allclose(rnet_sun_np, rnet_sun_jnp))
-        self.assertTrue(1 == 1)
+        self.assertTrue(np.allclose(nir_dn_jnp, nir_dn_np))
+        self.assertTrue(np.allclose(nir_up_jnp, nir_up_np))
+        self.assertTrue(np.allclose(beam_flux_nir_jnp, beam_flux_nir_np))
+        self.assertTrue(np.allclose(nir_sh_jnp, nir_sh_np))
+        self.assertTrue(np.allclose(nir_sun_jnp, nir_sun_np))

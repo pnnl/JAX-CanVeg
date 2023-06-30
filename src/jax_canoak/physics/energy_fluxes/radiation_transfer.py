@@ -494,3 +494,227 @@ def diffuse_direct_radiation_day(
     nir_beam = nirx - nir_diffuse
 
     return ratrad, par_beam, par_diffuse, nir_beam, nir_diffuse
+
+
+def nir(
+    solar_sine_beta: Float_0D,
+    nir_beam: Float_0D,
+    nir_diffuse: Float_0D,
+    nir_reflect: Float_0D,
+    nir_trans: Float_0D,
+    nir_soil_refl: Float_0D,
+    nir_absorbed: Float_0D,
+    dLAIdz: Float_1D,
+    exxpdir: Float_1D,
+    Gfunc_solar: Float_1D,
+) -> Tuple[Float_0D, Float_0D, Float_0D, Float_0D, Float_0D,]:
+    nir_total = nir_beam + nir_diffuse
+    (nir_dn, nir_up, beam_flux_nir, nir_sh, nir_sun,) = jax.lax.cond(
+        (nir_total > 1.0) and (solar_sine_beta != 0.0),
+        nir_day,
+        nir_night,
+        solar_sine_beta,
+        nir_beam,
+        nir_diffuse,
+        nir_reflect,
+        nir_trans,
+        nir_soil_refl,
+        nir_absorbed,
+        dLAIdz,
+        exxpdir,
+        Gfunc_solar,
+    )
+    return (
+        nir_dn,
+        nir_up,
+        beam_flux_nir,
+        nir_sh,
+        nir_sun,
+    )
+
+
+def nir_day(
+    solar_sine_beta: Float_0D,
+    nir_beam: Float_0D,
+    nir_diffuse: Float_0D,
+    nir_reflect: Float_0D,
+    nir_trans: Float_0D,
+    nir_soil_refl: Float_0D,
+    nir_absorbed: Float_0D,
+    dLAIdz: Float_1D,
+    exxpdir: Float_1D,
+    Gfunc_solar: Float_1D,
+) -> Tuple[Float_0D, Float_0D, Float_0D, Float_0D, Float_0D,]:
+    # Level 1 is the soil surface and level jktot is the
+    # top of the canopy.  layer 1 is the layer above
+    # the soil and layer jtot is the top layer.
+    sze = dLAIdz.size
+    jtot = sze - 2
+    jktot = jtot + 1
+
+    sup, sdn, adum = jnp.zeros(sze), jnp.zeros(sze), jnp.zeros(sze)
+    nir_dn, nir_up = jnp.zeros(sze), jnp.zeros(sze)
+    nir_sh, nir_sun = jnp.zeros(sze), jnp.zeros(sze)
+    beam_flux_nir = jnp.zeros(sze)
+
+    fraction_beam = nir_beam / (nir_beam + nir_diffuse)
+    beam = jnp.zeros(jktot) + fraction_beam
+    # tbeam = jnp.zeros(jktot) + fraction_beam
+    sumlai = jnp.zeros(sze)
+    sumlai = sumlai.at[:jtot].set(jnp.cumsum(dLAIdz[::-1][2:])[::-1])
+
+    # Compute probability of penetration for direct and
+    # diffuse radiation for each layer in the canopy
+
+    # Diffuse radiation reflected by layer
+    reflectance_layer = (1.0 - exxpdir) * nir_reflect
+
+    # Diffuse radiation transmitted through layer
+    transmission_layer = (1.0 - exxpdir) * nir_trans + exxpdir
+
+    # Compute the probability of beam penetration
+    exp_direct = jnp.exp(-dLAIdz * markov * Gfunc_solar / solar_sine_beta)
+
+    # probability of beam
+    def update_beam(carry, i):
+        # carry_new = carry * jnp.power(exp_direct[jtot-1-i], i)
+        carry_new = carry * exp_direct[jtot - 1 - i]
+        return carry_new, carry_new
+
+    _, beam_update = jax.lax.scan(
+        f=update_beam, init=beam[jktot - 1], xs=jnp.arange(jtot)
+    )
+    beam = beam.at[:-1].set(beam_update[::-1])
+    tbeam = beam
+
+    # beam PAR that is reflected upward by a layer
+    sup = sup.at[1:-1].set(tbeam[1:] - tbeam[:-1]) * nir_reflect
+
+    # beam PAR that is transmitted downward
+    sdn = sdn.at[:-2].set(tbeam[1:] - tbeam[:-1]) * nir_trans
+
+    # Initiate scattering using the technique of NORMAN (1979).
+    # scattering is computed using an iterative technique.
+    # Here Adum is the ratio up/down diffuse radiation.
+    sup = sup.at[0].set(tbeam[0] * nir_soil_refl)
+    nir_dn = nir_dn.at[jktot - 1].set(1.0 - fraction_beam)
+    adum = adum.at[0].set(nir_soil_refl)
+    tlay2 = transmission_layer * transmission_layer
+
+    def update_adum(carry, i):
+        carry_new = (
+            carry * tlay2[i] / (1 - carry * reflectance_layer[i]) + reflectance_layer[i]
+        )
+        return carry_new, carry_new
+
+    _, adum_update = jax.lax.scan(update_adum, adum[0], jnp.arange(jtot))
+    adum = adum.at[1:-1].set(adum_update)
+
+    def update_nird(carry, i):
+        carry_new = (
+            carry
+            * transmission_layer[i - 1]
+            / (1.0 - adum[i] * reflectance_layer[i - 1])
+            + sdn[i - 1]
+        )
+        return carry_new, carry_new
+
+    _, nird_update = jax.lax.scan(
+        update_nird, nir_dn[jktot - 1], jnp.arange(1, jktot)[::-1]
+    )
+    nir_dn = nir_dn.at[:-2].set(nird_update[::-1])
+    nir_up = adum * nir_dn + sup
+    nir_up = nir_up.at[0].set(nir_soil_refl * nir_dn[0] + sup[0])
+
+    # Iterative calculation of upward diffuse and downward beam +
+    # diffuse PAR.
+    def update_nirupdown(carry, i):
+        nir_up, nir_dn = carry[0], carry[1]
+        # downward --
+        def calculate_down(c, j):
+            c_new = (
+                transmission_layer[j] * c + nir_up[j] * reflectance_layer[j] + sdn[j]
+            )
+            return c_new, c_new
+
+        _, down = jax.lax.scan(
+            f=calculate_down, init=nir_dn[jktot - 1], xs=jnp.arange(jtot)[::-1]
+        )
+        nir_dn = nir_dn.at[:jtot].set(down[::-1])
+        # upward --
+        nir_up = nir_up.at[0].set((nir_dn[0] + tbeam[0]) * nir_soil_refl)
+
+        def calculate_up(c, j):
+            c_new = (
+                reflectance_layer[j] * nir_dn[j + 1]
+                + c * transmission_layer[j]
+                + sup[j + 1]
+            )
+            return c_new, c_new
+
+        _, up = jax.lax.scan(f=calculate_up, init=nir_up[0], xs=jnp.arange(jtot))
+        nir_up = nir_up.at[1:jktot].set(up)
+        carry_new = [nir_up, nir_dn]
+        return carry_new, carry_new
+
+    carry_new, _ = jax.lax.scan(update_nirupdown, [nir_up, nir_dn], jnp.arange(5))
+    nir_up, nir_dn = carry_new[0], carry_new[1]
+
+    # Compute flux density of PAR
+    nir_total = nir_beam + nir_diffuse
+    nir_up = nir_up * nir_total
+    nir_up = jnp.clip(nir_up, a_min=0.001)
+    nir_up = nir_up.at[jktot:].set(0)
+    beam_flux_nir = beam_flux_nir.at[:-1].set(beam * nir_total)
+    beam_flux_nir = jnp.clip(beam_flux_nir, a_min=0.001)
+    beam_flux_nir = beam_flux_nir.at[jktot:].set(0)
+    nir_dn = nir_dn * nir_total
+    nir_dn = jnp.clip(nir_dn, a_min=0.001)
+    nir_dn = nir_dn.at[jktot:].set(0)
+
+    # PSUN is the radiation incident on the mean leaf normal
+    nir_normal = nir_beam * Gfunc_solar / solar_sine_beta
+    nsunen = nir_normal * nir_absorbed
+    nir_sh = nir_dn + nir_up
+    nir_sh = nir_sh * nir_absorbed
+    nir_sun = nsunen + nir_sh
+
+    # jax.debug.print('nir_normal: {x}', x=nir_normal)
+    # jax.debug.print('nir_beam: {x}', x=nir_beam)
+
+    nir_sh = nir_sh.at[jtot:].set(0)
+    nir_sun = nir_sun.at[jtot:].set(0)
+
+    return (
+        nir_dn,
+        nir_up,
+        beam_flux_nir,
+        nir_sh,
+        nir_sun,
+    )
+
+
+def nir_night(
+    solar_sine_beta: Float_0D,
+    nir_beam: Float_0D,
+    nir_diffuse: Float_0D,
+    nir_reflect: Float_0D,
+    nir_trans: Float_0D,
+    nir_soil_refl: Float_0D,
+    nir_absorbed: Float_0D,
+    dLAIdz: Float_1D,
+    exxpdir: Float_1D,
+    Gfunc_solar: Float_1D,
+) -> Tuple[Float_0D, Float_0D, Float_0D, Float_0D, Float_0D,]:
+    sze = dLAIdz.size
+    nir_dn, nir_up = jnp.zeros(sze), jnp.zeros(sze)
+    nir_sh, nir_sun = jnp.zeros(sze), jnp.zeros(sze)
+    beam_flux_nir = jnp.zeros(sze)
+
+    return (
+        nir_dn,
+        nir_up,
+        beam_flux_nir,
+        nir_sh,
+        nir_sun,
+    )

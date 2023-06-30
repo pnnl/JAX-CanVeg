@@ -850,7 +850,8 @@ void NIR(
                biomass
         */
 
-        sumlai += dLAIdz[JJ];  // + prof.dPAIdz[JJ]
+        // sumlai += dLAIdz[JJ];  // + prof.dPAIdz[JJ]
+        sumlai += dLAIdz(JJ-1);  // + prof.dPAIdz[JJ]
 
         /*
              'Itegrated probability of diffuse sky radiation penetration
@@ -859,12 +860,14 @@ void NIR(
             EXPDIF[JJ] is computed in PAR and can be used in NIR and IRFLUX
         */
 
-        reflectance_layer[JJ] = (1. - exxpdir[JJ]) * nir_reflect;
+        // reflectance_layer[JJ] = (1. - exxpdir[JJ]) * nir_reflect;
+        reflectance_layer[JJ] = (1. - exxpdir(JJ-1)) * nir_reflect;
 
 
         //       DIFFUSE RADIATION TRANSMITTED THROUGH LAYER
 
-        transmission_layer[JJ] = (1. - exxpdir[JJ]) * nir_trans + exxpdir[JJ];
+        // transmission_layer[JJ] = (1. - exxpdir[JJ]) * nir_trans + exxpdir[JJ];
+        transmission_layer[JJ] = (1. - exxpdir(JJ-1)) * nir_trans + exxpdir(JJ-1);
     } // next J
 
 
@@ -881,11 +884,14 @@ void NIR(
         // Probability of beam penetration.
 
 
-        dff = dLAIdz[JJ]; /* '+ prof.dPAIdz[JJ] */
-        sumlai += dLAIdz[JJ];
+        // dff = dLAIdz[JJ]; /* '+ prof.dPAIdz[JJ] */
+        // sumlai += dLAIdz[JJ];
+        dff = dLAIdz(JJ-1); /* '+ prof.dPAIdz[JJ] */
+        sumlai += dLAIdz(JJ-1);
 
 
-        exp_direct = exp(-dff * markov*Gfunc_solar[JJ] / solar_sine_beta);
+        // exp_direct = exp(-dff * markov*Gfunc_solar[JJ] / solar_sine_beta);
+        exp_direct = exp(-dff * markov*Gfunc_solar(JJ-1) / solar_sine_beta);
 
         // PEN1 = exp(-llai * prof.Gfunc_solar[JJ] / solar.sine_beta)
         // exp_direct = exp(-DFF * prof.Gfunc_solar[JJ] / solar.sine_beta)
@@ -908,7 +914,8 @@ void NIR(
     */
 
     SUP[1] = TBEAM[1] * nir_soil_refl;
-    nir_dn[jktot] = 1. - fraction_beam;
+    // nir_dn[jktot] = 1. - fraction_beam;
+    nir_dn(jktot-1) = 1. - fraction_beam;
     ADUM[1] = nir_soil_refl;
 
     for(J = 2; J<=jktot; J++)
@@ -923,14 +930,16 @@ void NIR(
         JJ = jtot - J + 1;
         JJP1 = JJ + 1;
 
-        nir_dn[JJ] = nir_dn[JJP1] * transmission_layer[JJ] / (1. - ADUM[JJP1] * reflectance_layer[JJ]) + SDN[JJ];
-        nir_up[JJP1] = ADUM[JJP1] * nir_dn[JJP1] + SUP[JJP1];
+        // nir_dn[JJ] = nir_dn[JJP1] * transmission_layer[JJ] / (1. - ADUM[JJP1] * reflectance_layer[JJ]) + SDN[JJ];
+        // nir_up[JJP1] = ADUM[JJP1] * nir_dn[JJP1] + SUP[JJP1];
+        nir_dn(JJ-1) = nir_dn(JJP1-1) * transmission_layer[JJ] / (1. - ADUM[JJP1] * reflectance_layer[JJ]) + SDN[JJ];
+        nir_up(JJP1-1) = ADUM[JJP1] * nir_dn(JJP1-1) + SUP[JJP1];
     }
 
     // lower boundary: upward radiation from soil
 
-
-    nir_up[1] = nir_soil_refl * nir_dn[1] + SUP[1];
+    // nir_up[1] = nir_soil_refl * nir_dn[1] + SUP[1];
+    nir_up(0) = nir_soil_refl * nir_dn(0) + SUP[1];
 
     /*
         Iterative calculation of upward diffuse and downward beam +
@@ -940,42 +949,51 @@ void NIR(
     ITER = 0;
     IREP = 1;
 
-    ITER += 1;
+    // ITER += 1;
 
-    while (IREP==1)
+    // while (IREP==1)
+    while (ITER<5) // TODO: Peishi
     {
 
         IREP=0;
+        ITER += 1;
+
         for (J = 2; J<=jktot; J++)
         {
             JJ = jktot - J + 1;
             JJP1 = JJ + 1;
-            DOWN = transmission_layer[JJ] * nir_dn[JJP1] + nir_up[JJ] * reflectance_layer[JJ] + SDN[JJ];
+            // DOWN = transmission_layer[JJ] * nir_dn[JJP1] + nir_up[JJ] * reflectance_layer[JJ] + SDN[JJ];
+            DOWN = transmission_layer[JJ] * nir_dn(JJP1-1) + nir_up(JJ-1) * reflectance_layer[JJ] + SDN[JJ];
 
-            if ((fabs(DOWN - nir_dn[JJ])) > .01)
+            // if ((fabs(DOWN - nir_dn[JJ])) > .01)
+            if ((fabs(DOWN - nir_dn(JJ-1))) > .01)
                 IREP = 1;
 
-            nir_dn[JJ] = DOWN;
+            // nir_dn[JJ] = DOWN;
+            nir_dn(JJ-1) = DOWN;
         }
 
         // upward radiation at soil is reflected beam and downward diffuse
 
-        nir_up[1] = (nir_dn[1] + TBEAM[1]) * nir_soil_refl;
+        // nir_up[1] = (nir_dn[1] + TBEAM[1]) * nir_soil_refl;
+        nir_up(0) = (nir_dn(0) + TBEAM[1]) * nir_soil_refl;
 
         for (JJ = 2; JJ <=jktot; JJ++)
         {
             JM1 = JJ - 1;
 
-            UP = reflectance_layer[JM1] * nir_dn[JJ] + nir_up[JM1] * transmission_layer[JM1] + SUP[JJ];
+            // UP = reflectance_layer[JM1] * nir_dn[JJ] + nir_up[JM1] * transmission_layer[JM1] + SUP[JJ];
+            UP = reflectance_layer[JM1] * nir_dn(JJ-1) + nir_up(JM1-1) * transmission_layer[JM1] + SUP[JJ];
 
-            if ((fabs(UP - nir_up[JJ])) > .01)
+            // if ((fabs(UP - nir_up[JJ])) > .01)
+            if ((fabs(UP - nir_up(JJ-1))) > .01)
                 IREP = 1;
 
-            nir_up[JJ] = UP;
+            // nir_up[JJ] = UP;
+            nir_up(JJ-1) = UP;
         }
 
     }
-
 
     // Compute NIR flux densities
 
@@ -985,38 +1003,49 @@ void NIR(
 
     for(J = 1; J<=jktot; J++)
     {
-        llai -= dLAIdz[J];   // decrement LAI
+        // llai -= dLAIdz[J];   // decrement LAI
+        llai -= dLAIdz(J-1);   // decrement LAI
 
 
         // upward diffuse NIR flux density, on the horizontal
 
-        nir_up[J] *= nir_total;
+        // nir_up[J] *= nir_total;
+        nir_up(J-1) *= nir_total;
 
-        if(nir_up[J] <= 0.)
-            nir_up[J] = .1;
+        // if(nir_up[J] <= 0.)
+            // nir_up[J] = .1;
+        if(nir_up(J-1) <= 0.001) // TODO: Peishi
+            nir_up(J-1) = .001;
 
 
         // downward beam NIR flux density, incident on the horizontal
 
 
-        beam_flux_nir[J] = beam[J] * nir_total;
+        // beam_flux_nir[J] = beam[J] * nir_total;
+        beam_flux_nir(J-1) = beam[J] * nir_total;
 
-        if(beam_flux_nir[J] <= 0.)
-            beam_flux_nir[J] = .1;
+        // if(beam_flux_nir[J] <= 0.)
+        //     beam_flux_nir[J] = .1;
+        if(beam_flux_nir(J-1) <= 0.001) // TODO: Peishi
+            beam_flux_nir(J-1) = .001;
 
 
         // downward diffuse radiaiton flux density on the horizontal
 
-        nir_dn[J] *= nir_total;
+        // nir_dn[J] *= nir_total;
+        nir_dn(J-1) *= nir_total;
 
-        if(nir_dn[J] <= 0.)
-            nir_dn[J] = .1;
+        // if(nir_dn[J] <= 0.)
+        //     nir_dn[J] = .1;
+        if(nir_dn(J-1) <= 0.001) // TODO: Peishi
+            nir_dn(J-1) = .001;
 
 
         // total downward NIR, incident on the horizontal
 
 
-        NIRTT = beam_flux_nir[J] + nir_dn[J];
+        // NIRTT = beam_flux_nir[J] + nir_dn[J];
+        NIRTT = beam_flux_nir(J-1) + nir_dn(J-1);
 
     } // next J
 
@@ -1028,7 +1057,8 @@ void NIR(
         // normal radiation on sunlit leaves
 
         if(solar_sine_beta > 0.1)
-            nir_normal = nir_beam * Gfunc_solar[J] / solar_sine_beta;
+            // nir_normal = nir_beam * Gfunc_solar[J] / solar_sine_beta;
+            nir_normal = nir_beam * Gfunc_solar(J-1) / solar_sine_beta;
         else
             nir_normal=0;
 
@@ -1039,18 +1069,21 @@ void NIR(
                  ' drive photosynthesis and energy exchanges
         */
 
-        nir_sh[J] = (nir_dn[J] + nir_up[J]);
+        // nir_sh[J] = (nir_dn[J] + nir_up[J]);
+        nir_sh(J-1) = (nir_dn(J-1) + nir_up(J-1));
 
 
         // absorbed radiation, shaded
 
-        nir_sh[J] *= nir_absorbed;
+        // nir_sh[J] *= nir_absorbed;
+        nir_sh(J-1) *= nir_absorbed;
 
 
         // plus diffuse component
 
 
-        nir_sun[J] = NSUNEN + nir_sh[J];  // absorbed NIR on sun leaves
+        // nir_sun[J] = NSUNEN + nir_sh[J];  // absorbed NIR on sun leaves
+        nir_sun(J-1) = NSUNEN + nir_sh(J-1);  // absorbed NIR on sun leaves
     } // next J
 
 NIRNIGHT:  // jump to here at night since fluxes are zero
