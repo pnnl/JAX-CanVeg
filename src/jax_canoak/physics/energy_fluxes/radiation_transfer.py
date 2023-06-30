@@ -5,6 +5,8 @@ Radiation transfer functions, including:
 - par_day()
 - par_night()
 - diffuse_direct_radiation()
+- diffuse_direct_radiation_day()
+- diffuse_direct_radiation_night()
 - nir()
 - sky_ir()
 - irflux()
@@ -69,7 +71,19 @@ def par(
     dLAIdz: Float_1D,
     exxpdir: Float_1D,
     Gfunc_solar: Float_1D,
-):
+) -> Tuple[
+    Float_0D,
+    Float_0D,
+    Float_0D,
+    Float_0D,
+    Float_0D,
+    Float_0D,
+    Float_0D,
+    Float_0D,
+    Float_0D,
+    Float_0D,
+    Float_0D,
+]:
     (
         sun_lai,
         shd_lai,
@@ -123,7 +137,19 @@ def par_day(
     dLAIdz: Float_1D,
     exxpdir: Float_1D,
     Gfunc_solar: Float_1D,
-):
+) -> Tuple[
+    Float_0D,
+    Float_0D,
+    Float_0D,
+    Float_0D,
+    Float_0D,
+    Float_0D,
+    Float_0D,
+    Float_0D,
+    Float_0D,
+    Float_0D,
+    Float_0D,
+]:
     # Level 1 is the soil surface and level jktot is the
     # top of the canopy.  layer 1 is the layer above
     # the soil and layer jtot is the top layer.
@@ -319,7 +345,19 @@ def par_night(
     dLAIdz: Float_1D,
     exxpdir: Float_1D,
     Gfunc_solar: Float_1D,
-):
+) -> Tuple[
+    Float_0D,
+    Float_0D,
+    Float_0D,
+    Float_0D,
+    Float_0D,
+    Float_0D,
+    Float_0D,
+    Float_0D,
+    Float_0D,
+    Float_0D,
+    Float_0D,
+]:
     sze = dLAIdz.size
     jtot = sze - 2
     prob_sh, prob_beam = jnp.zeros(sze), jnp.zeros(sze)
@@ -344,3 +382,115 @@ def par_night(
         par_shade,
         par_sun,
     )
+
+
+def diffuse_direct_radiation(
+    solar_sine_beta: Float_0D, rglobal: Float_0D, parin: Float_0D, press_kpa: Float_0D
+) -> Tuple[Float_0D, Float_0D, Float_0D, Float_0D, Float_0D]:
+    """This subroutine uses the Weiss-Norman (1985, Agric. forest Meteorol. 34: 205-213)
+       routine tocompute direct and diffuse PAR from total par
+
+    Args:
+        solar_sine_beta (Float_0D): _description_
+        rglobal (Float_0D): _description_
+        parin (Float_0D): _description_
+        press_kpa (Float_0D): _description_
+
+    Returns:
+        Tuple[Float_0D, Float_0D, Float_0D, Float_0D, Float_0D]: _description_
+    """
+    ratrad, par_beam, par_diffuse, nir_beam, nir_diffuse = jax.lax.cond(
+        parin != 0.0,
+        diffuse_direct_radiation_day,
+        diffuse_direct_radiation_night,
+        solar_sine_beta,
+        rglobal,
+        parin,
+        press_kpa,
+    )
+    return ratrad, par_beam, par_diffuse, nir_beam, nir_diffuse
+
+
+def diffuse_direct_radiation_night(
+    solar_sine_beta: Float_0D, rglobal: Float_0D, parin: Float_0D, press_kpa: Float_0D
+) -> Tuple[Float_0D, Float_0D, Float_0D, Float_0D, Float_0D]:
+    ratrad, par_beam, par_diffuse = 0.0, 0.0, 0.0
+    nir_beam, nir_diffuse = 0.0, 0.0
+    return ratrad, par_beam, par_diffuse, nir_beam, nir_diffuse
+
+
+def diffuse_direct_radiation_day(
+    solar_sine_beta: Float_0D, rglobal: Float_0D, parin: Float_0D, press_kpa: Float_0D
+) -> Tuple[Float_0D, Float_0D, Float_0D, Float_0D, Float_0D]:
+    # visible direct and potential diffuse PAR
+    ru = press_kpa / (101.3 * solar_sine_beta)
+    rdvis = 624.0 * jnp.exp(-0.185 * ru) * solar_sine_beta
+    rsvis = 0.4 * (624.0 * solar_sine_beta - rdvis)
+
+    # water absorption in NIR for 10 mm precip water
+    wa = 1373.0 * 0.077 * jnp.power((2.0 * ru), 0.3)
+
+    # direct beam and potential diffuse NIR
+    rdir = (748.0 * jnp.exp(-0.06 * ru) - wa) * solar_sine_beta
+    rdir = jnp.maximum(0.0, rdir)
+    rsdir = 0.6 * (748.0 - rdvis / solar_sine_beta - wa) * solar_sine_beta
+    rsdir = jnp.maximum(0.0, rsdir)
+
+    rvt = rdvis + rsvis
+    rit = rdir + rsdir
+    rvt = jnp.maximum(0.1, rvt)
+    rit = jnp.maximum(0.1, rit)
+
+    ratrad = rglobal / (rvt + rit)
+    ratrad = jnp.maximum(0.22, ratrad)
+    ratrad = jnp.minimum(0.89, ratrad)
+
+    # ratio is the ratio between observed and potential radiation
+    # NIR flux density as a function of PAR
+    # since NIR is used in energy balance calculations
+    # convert it to W m-2: divide PAR by 4.6
+    nirx = rglobal - (parin / 4.6)
+
+    # fraction PAR direct and diffuse
+    xvalue = (0.9 - ratrad) / 0.70
+    fvsb = rdvis / rvt * (1.0 - jnp.power(xvalue, 0.67))
+    fvsb = jnp.maximum(0.0, fvsb)
+    fvsb = jnp.minimum(1.0, fvsb)
+    # fvd = 1. - fvsb
+    # note PAR has been entered in units of uE m-2 s-1
+    def cond1_par():
+        return fvsb * parin
+
+    def cond2_par():
+        return 0.001
+
+    par_beam = jax.lax.cond(
+        parin != 0,
+        cond1_par,
+        cond2_par,
+    )
+    par_beam = jnp.maximum(0.0, par_beam)
+    par_diffuse = parin - par_beam
+
+    # NIR beam and diffuse flux densities
+    xvalue = (0.9 - ratrad) / 0.68
+    fansb = rdir / rit * (1.0 - jnp.power(xvalue, 0.67))
+    fansb = jnp.maximum(0.0, fansb)
+    fansb = jnp.minimum(1.0, fansb)
+    # fand = 1. - fansb
+    def cond1_nir():
+        return fansb * nirx
+
+    def cond2_nir():
+        return 0.1
+
+    nir_beam = jax.lax.cond(
+        nirx != 0,
+        cond1_nir,
+        cond2_nir,
+    )
+    nir_beam = jnp.maximum(0.0, nir_beam)
+    nir_diffuse = nirx - nir_beam
+    nir_beam = nirx - nir_diffuse
+
+    return ratrad, par_beam, par_diffuse, nir_beam, nir_diffuse
