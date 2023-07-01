@@ -510,7 +510,8 @@ def nir(
 ) -> Tuple[Float_0D, Float_0D, Float_0D, Float_0D, Float_0D,]:
     nir_total = nir_beam + nir_diffuse
     (nir_dn, nir_up, beam_flux_nir, nir_sh, nir_sun,) = jax.lax.cond(
-        (nir_total > 1.0) and (solar_sine_beta != 0.0),
+        (nir_total > 1.0) & (solar_sine_beta != 0.0),
+        # solar_sine_beta != 0.0,
         nir_day,
         nir_night,
         solar_sine_beta,

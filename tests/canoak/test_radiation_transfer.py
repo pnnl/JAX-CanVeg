@@ -298,13 +298,14 @@ class TestRadiationTransfer(unittest.TestCase):
         )
 
         # JAX-CANOAK
+        diffuse_direct_radiation_jit = jax.jit(diffuse_direct_radiation)
         (
             ratrad_jnp,
             par_beam_jnp,
             par_diffuse_jnp,
             nir_beam_jnp,
             nir_diffuse_jnp,
-        ) = diffuse_direct_radiation(
+        ) = diffuse_direct_radiation_jit(
             solar_sine_beta,
             rglobal,
             parin,
@@ -354,7 +355,8 @@ class TestRadiationTransfer(unittest.TestCase):
         )
 
         # JAX
-        nir_dn_jnp, nir_up_jnp, beam_flux_nir_jnp, nir_sh_jnp, nir_sun_jnp = nir(
+        nir_jit = jax.jit(nir)
+        nir_dn_jnp, nir_up_jnp, beam_flux_nir_jnp, nir_sh_jnp, nir_sun_jnp = nir_jit(
             solar_sine_beta,
             nir_beam,
             nir_diffuse,
@@ -415,7 +417,8 @@ class TestRadiationTransfer(unittest.TestCase):
         )
 
         # JAX
-        nir_dn_jnp, nir_up_jnp, beam_flux_nir_jnp, nir_sh_jnp, nir_sun_jnp = nir(
+        nir_jit = jax.jit(nir)
+        nir_dn_jnp, nir_up_jnp, beam_flux_nir_jnp, nir_sh_jnp, nir_sun_jnp = nir_jit(
             solar_sine_beta,
             nir_beam,
             nir_diffuse,
