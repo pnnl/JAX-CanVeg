@@ -27,7 +27,26 @@ const double ht = 1;             //   0.55 Canopy height, m
 const double pai = .0;            //    Plant area index
 const double lai = 4;      //  1.65 Leaf area index data are from clip plots and correspond with broadband NDVI estimates
 
+// Constants for leaf energy balance
+
+const double sigma = 5.67e-08;   // Stefan-Boltzmann constant W M-2 K-4
+const double cp = 1005.;         // Specific heat of air, J KG-1 K-1
+const double mass_air = 29.;     // Molecular weight of air, g mole-1
+const double mass_CO2=44.;               // molecular weight of CO2, g mole-1
+const double dldt = -2370.;      // Derivative of the latent heat of vaporization
+
 const double ep = .98;                    // emissivity of leaves
+const double epm1=0.02;                   // 1- ep
+const double epsoil = .98;                // Emissivity of soil
+const double epsigma=5.5566e-8;           // ep*sigma
+const double epsigma2 = 11.1132e-8;       // 2*ep*sigma
+const double epsigma4 = 22.2264e-8;       //  4.0 * ep * sigma
+const double epsigma6 = 33.3396e-8;       //  6.0 * ep * sigma
+const double epsigma8 = 44.448e-8;        //  8.0 * ep * sigma
+const double epsigma12= 66.6792e-8;       // 12.0 * ep * sigma
+
+const double betfact=1.5;                 // multiplication factor for aerodynamic
+// sheltering, based on work by Grace and Wilson
 
 //  leaf clumping factor
 
@@ -1090,6 +1109,507 @@ NIRNIGHT:  // jump to here at night since fluxes are zero
     return;
 }
 
+
+double SKY_IR (double T, double ratrad)
+{
+
+    // Infrared radiation from sky, W m-2, using algorithm from Norman
+
+    double y;
+
+    y = sigma * pow(T,4.) * ((1. - .261 * exp(-.000777 * pow((273.16 - T), 2.))) * ratrad + 1 - ratrad);
+
+    return y;
+}
+
+
+void IRFLUX(
+    int jtot, int sze, double T_Kelvin, double ratrad, double sfc_temperature,
+    py::array_t<double, py::array::c_style> exxpdir_np,
+    py::array_t<double, py::array::c_style> sun_T_filter_np,
+    py::array_t<double, py::array::c_style> shd_T_filter_np,
+    py::array_t<double, py::array::c_style> prob_beam_np,
+    py::array_t<double, py::array::c_style> prob_sh_np,
+    py::array_t<double, py::array::c_style> ir_dn_np,
+    py::array_t<double, py::array::c_style> ir_up_np
+)
+{
+    int J, JJ,JJP1,jktot1,JM1,K;
+    double ir_in, abs_IR,reflc_lay_IR;
+    double Tk_sun_filt,Tk_shade_filt, IR_source_sun,IR_source_shade,IR_source;
+    double SDN[sze], SUP[sze];
+    double emiss_IR_soil;
+
+    long int jktot = jtot+1;
+
+    auto exxpdir = exxpdir_np.unchecked<1>();
+    auto sun_T_filter = sun_T_filter_np.unchecked<1>();
+    auto shd_T_filter = shd_T_filter_np.unchecked<1>();
+    auto prob_beam = prob_beam_np.unchecked<1>();
+    auto prob_sh = prob_sh_np.unchecked<1>();
+    auto ir_dn = ir_dn_np.mutable_unchecked<1>();
+    auto ir_up = ir_up_np.mutable_unchecked<1>();
+
+    ir_in = SKY_IR(T_Kelvin, ratrad);
+
+
+    /*  This subroutine is adapted from:
+
+    Norman, J.M. 1979. Modeling the complete crop canopy.
+    Modification of the Aerial Environment of Crops.
+    B. Barfield and J. Gerber, Eds. American Society of Agricultural Engineers, 249-280.
+
+
+    Compute probability of penetration for diffuse
+    radiation for each layer in the canopy .
+    IR radiation is isotropic.
+
+    Level 1 is the soil surface and level jtot+1 is the
+    top of the canopy.  LAYER 1 is the layer above
+    the soil and LAYER jtot is the top layer.
+
+    IR down flux at top of canopy
+    */
+
+
+    abs_IR = 1.;
+    // ir_dn[jktot] = ir_in;
+    ir_dn(jktot-1) = ir_in;
+
+    for(J = 1; J<= jtot; J++)
+    {
+        JJ = jktot - J;
+        JJP1 = JJ + 1;
+        /*
+                  Loop from layers jtot to 1
+
+                Integrated probability of diffuse sky radiation penetration
+                EXPDIF[JJ] is computed in RAD
+
+                compute IR radiative source flux as a function of
+                leaf temperature weighted according to
+                sunlit and shaded fractions
+
+                source=ep*sigma*(laisun*tksun^4 + laish*tksh^4)
+                 remember energy balance is done on layers not levels.
+                 so level jtot+1 must use tl from layer jtot
+        */
+
+
+
+        // Tk_sun_filt = sun_T_filter[JJ]+273.16;
+        // Tk_shade_filt = shd_T_filter[JJ]+273.16;
+        Tk_sun_filt = sun_T_filter(JJ-1)+273.16;
+        Tk_shade_filt = shd_T_filter(JJ-1)+273.16;
+
+        // IR_source_sun = prob_beam[JJ] *pow(Tk_sun_filt,4.);
+        // IR_source_shade = prob_sh[JJ] * pow(Tk_shade_filt,4.);
+        IR_source_sun = prob_beam(JJ-1) *pow(Tk_sun_filt,4.);
+        IR_source_shade = prob_sh(JJ-1) * pow(Tk_shade_filt,4.);
+
+        IR_source = epsigma * (IR_source_sun + IR_source_shade);
+
+        /*
+                ' Intercepted IR that is radiated up
+        */
+
+        // SUP[JJP1] = IR_source * (1. - exxpdir[JJ]);
+        SUP[JJP1] = IR_source * (1. - exxpdir(JJ-1));
+
+        /*
+                'Intercepted IR that is radiated downward
+        */
+
+        // SDN[JJ] = IR_source * (1. - exxpdir[JJ]);
+        SDN[JJ] = IR_source * (1. - exxpdir(JJ-1));
+
+    }  /* NEXT J  */
+
+    jktot1 = jktot + 1;
+
+    for(J = 2; J <= jktot; J++)
+    {
+        JJ = jktot1 - J;
+        JJP1 = JJ + 1;
+        /*
+
+                Downward IR radiation, sum of that from upper layer that is transmitted
+                and the downward source generated in the upper layer.
+
+                 REMEMBER LEVEL JJ IS AFFECTED BY temperature OF LAYER
+                 ABOVE WHICH IS JJ
+        */
+
+        // ir_dn[JJ] = exxpdir[JJ] * ir_dn[JJP1] + SDN[JJ];
+        ir_dn(JJ-1) = exxpdir(JJ-1) * ir_dn(JJP1-1) + SDN[JJ];
+
+    } // next J
+
+    emiss_IR_soil = epsigma * pow((sfc_temperature + 273.16),4.);
+
+    // SUP[1] = ir_dn[1] * (1. - epsoil);
+    // ir_up[1] = emiss_IR_soil + SUP[1];
+    SUP[1] = ir_dn(0) * (1. - epsoil);
+    ir_up(0) = emiss_IR_soil + SUP[1];
+
+    for(J = 2; J<=jktot ; J++)
+    {
+        JM1 = J - 1;
+        /*
+                 '
+                 ' REMEMBER THE IR UP IS FROM THE LAYER BELOW
+        */
+
+        // solar.ir_up[J] = solar.exxpdir[JM1] * solar.ir_up[JM1] + SUP[J];
+        ir_up(J-1) = exxpdir(JM1-1) * ir_up(JM1-1) + SUP[J];
+
+    } /* NEXT J  */
+
+    // // Printing by looping through the array elements
+    // for (J = 1; J <= sze; J++) {
+    //     std::cout << ir_up(J-1) << ' ';
+    //     // std::cout << ir_up(J-1) << ' ';
+    // }
+    // std::cout << '\n';
+
+    for (K = 1; K<=2; K++)
+    {
+
+        for (J = 2; J<=jktot; J++)
+        {
+            JJ = jktot - J + 1;
+            JJP1 = JJ + 1;
+
+            // reflc_lay_IR = (1 - solar.exxpdir[JJ]) * (epm1);
+            // ir_dn[JJ] = solar.exxpdir[JJ] * ir_dn[JJP1] + solar.ir_up[JJ] * reflc_lay_IR + SDN[JJ];
+            reflc_lay_IR = (1 - exxpdir(JJ-1)) * (epm1);
+            ir_dn(JJ-1) = exxpdir(JJ-1) * ir_dn(JJP1-1) + ir_up(JJ-1) * reflc_lay_IR + SDN[JJ];
+        }        // next J
+
+        // SUP[1] = ir_dn[1] * (1 - epsoil);
+        // solar.ir_up[1] = emiss_IR_soil + SUP[1];
+        SUP[1] = ir_dn(0) * (1 - epsoil);
+        ir_up(0) = emiss_IR_soil + SUP[1];
+
+        for (J = 2; J<= jktot; J++)
+        {
+            JM1 = J - 1;
+            // reflc_lay_IR = (1 - solar.exxpdir[JM1]) * (epm1);
+            // solar.ir_up[J] = reflc_lay_IR * ir_dn[J] + solar.ir_up[JM1] * solar.exxpdir[JM1] + SUP[J];
+            reflc_lay_IR = (1 - exxpdir(JM1-1)) * (epm1);
+            ir_up(J-1) = reflc_lay_IR * ir_dn(J-1) + ir_up(JM1-1) * exxpdir(JM1-1) + SUP[J];
+        }   // next J
+
+    } // next K
+
+
+    return;
+}
+
+
+double GAMMAF(double x)
+{
+
+    //  gamma function
+
+    double y,gam;
+
+    gam= (1.0 / (12.0 * x)) + (1.0 / (288.0 * x*x)) - (139.0 / (51840.0 * pow(x,3.0)));
+    gam = gam + 1.0;
+
+
+    if (x > 0)
+        y = sqrt(2.0 * PI / x) * pow(x,x) * exp(-x) * gam;
+    else
+        printf("gamma/n");
+
+    return y;
+}
+
+
+void FREQ (double lflai, py::array_t<double, py::array::c_style> bdens_np)
+{
+    int I;
+
+    double STD, MEAN, CONS;
+    double VAR,nuu,SUM,MU,FL1,MU1,nu1;
+    double ANG,FL2,FL3;
+
+    auto bdens = bdens_np.mutable_unchecked<1>();
+
+    /*
+            THIS PROGRAM USES THE BETA DISTRIBUTION
+            TO COMPUTE THE PROBABILITY FREQUENCY
+            DISTRIBUTION FOR A KNOWN MEAN LEAF INCLINATION ANGLE
+            STARTING FROM THE TOP OF THE CANOPY, WHERE llai=0
+
+            AFTER GOEL AND STREBEL (1984)
+
+    */
+
+    MEAN=57.4;  // spherical leaf angle
+
+    STD = 26;
+
+    MEAN = MEAN;
+    STD = STD;
+    VAR = STD * STD + MEAN * MEAN;
+    nuu = (1. - VAR / (90. * MEAN)) / (VAR / (MEAN * MEAN) - 1.);
+    MU = nuu * ((90. / MEAN) - 1.);
+    SUM = nuu + MU;
+
+
+    FL1 = GAMMAF(SUM) / (GAMMAF(nuu) * GAMMAF(MU));
+    MU1 = MU - 1.;
+    nu1 = nuu - 1.;
+
+    CONS = 1. / 9.;
+
+    /*
+
+            COMPUTE PROBABILITY DISTRIBUTION FOR 9 ANGLE CLASSES
+            BETWEEN 5 AND 85 DEGREES, WITH INCREMENTS OF 10 DEGREES
+    */
+    for (I=1; I <= 9; I++)
+    {
+        ANG = (10. * I - 5.);
+        FL2 =pow((1. - ANG / 90.),MU1);
+
+        FL3 = pow((ANG / 90.), nu1);
+        // canopy.bdens[I] = CONS * FL1 * FL2 * FL3;
+        bdens(I-1) = CONS * FL1 * FL2 * FL3;
+    }
+    return;
+}
+
+
+void G_FUNC_DIFFUSE(
+    int jtot,
+    py::array_t<double, py::array::c_style> dLAIdz_np,
+    py::array_t<double, py::array::c_style> bdens_np,
+    py::array_t<double, py::array::c_style> Gfunc_sky_np
+)
+{
+
+
+    /*
+    ------------------------------------------------------------
+            This subroutine computes the G Function according to
+                    the algorithms of Lemeur (1973, Agric. Meteorol. 12: 229-247).
+
+                    The original code was in Fortran and was converted to C
+
+            This program computs G for each sky sector, as
+                    needed to compute the transmission of diffuse light
+
+            G varies with height to account for vertical variations
+                    in leaf angles
+
+    -------------------------------------------------------
+    */
+
+
+    int IJ,IN, J, K, KK,I,II, IN1;
+
+    double aden[18], TT[18], PGF[18], sin_TT[18], del_TT[18], del_sin[18];
+    double PPP;
+    double ang,dang, aang;
+    double cos_A,cos_B,sin_A,sin_B,X,Y;
+    double T0,TII,TT0,TT1;
+    double R,S, PP,bang;
+    double sin_TT1, sin_TT0, square;
+    double llai;
+
+    auto dLAIdz = dLAIdz_np.unchecked<1>();
+    auto Gfunc_sky = Gfunc_sky_np.mutable_unchecked<2>();
+
+
+    llai = 0.0;
+
+    ang = 5.0* PI180;
+    dang =2.0*ang;
+
+    // Midpoints for azimuth intervals
+
+
+    for (I = 1; I <= 16; I++)
+        aden[I] = .0625;
+
+
+    /* 3.1415/16 =0.1963  */
+
+    for(IN = 1; IN <= 17; IN++)
+    {
+        K = 2 * IN - 3;
+        TT[IN] = .1963* K;
+        sin_TT[IN] = sin(TT[IN]);
+    }
+
+    for (IN = 1,IN1=2; IN <= 16; IN++,IN1++)
+    {
+        del_TT[IN] = TT[IN1] - TT[IN];
+        del_sin[IN] = sin_TT[IN1] - sin_TT[IN];
+    }
+
+    for(KK = 1; KK <= 9; KK++)
+    {
+        bang = ang;
+
+        // COMPUTE G FUNCTION FOR EACH LAYER IN THE CANOPY
+
+
+        llai = 0.0;
+
+        for(IJ = 1; IJ <= jtot; IJ++)
+        {
+            II = jtot - IJ + 1;
+
+            /*
+            'top of the canopy is jtot.  Its cumulative LAI starts with 0.
+            */
+
+            // llai += prof.dLAIdz[II];
+            llai += dLAIdz(II-1);
+
+
+            // CALCULATE PROBABILITY FREQUENCY DISTRIBUTION, BDENS
+
+
+            FREQ(llai, bdens_np);
+            auto bdens = bdens_np.mutable_unchecked<1>();
+
+            // LEMEUR DEFINES BDENS AS DELTA F/(PI/N), WHERE HERE N=9
+
+            PPP = 0.0;
+            for(I = 1; I <= 9; I++)
+            {
+                aang = ((I - 1) * 10.0 + 5.0) * PI180;
+                cos_B = cos(bang);
+                sin_B = sin(bang);
+                cos_A=cos(aang);
+                sin_A=sin(aang);
+                X = cos_A * sin_B;
+                Y = sin_A * cos_B;
+
+                if((aang - bang) <= 0.0)
+                {   /* if ab  { */
+                    // printf("-- %5.6f %5.6f %5.6f \n", bang, aang, aang-bang);
+                    for(IN = 1; IN <= 16; IN++)
+                    {   /* for IN { */
+                        PGF[IN] = X * del_TT[IN] + Y * del_sin[IN];
+                    }                            /* for IN } */
+                    goto LOOPOUT;
+                }                               /* if ab   } */
+                else
+                {   /* else ab { */
+                    T0 = 1.0 + X /Y;
+                    TII = 1.0 - X / Y;
+
+                    if(T0/TII > 0)
+                        square= sqrt(T0/TII);
+                    else
+                        printf("bad sqrt in ggfun\n");
+
+
+
+                    TT0 = 2.0 * atan(square);
+                    sin_TT0 = sin(TT0);
+                    TT1 = PI2 - TT0;
+                    sin_TT1 = sin(TT1);
+                    // printf("-- %5.6f %5.6f %5.6f \n", bang, aang, aang-bang);
+                    // printf("%5.6f %5.6f %5.6f %5.6f \n", TT0, sin_TT0, TT1, sin_TT1);
+
+                    for(IN = 1,IN1=2; IN <= 16; IN1++, IN++)                /* for IN { */
+                    {
+                        if((TT[IN1] - TT0) <= 0)
+                        {   /* if 1a { */
+                            PGF[IN] = X * del_TT[IN] + Y * del_sin[IN];
+                            continue;
+                        }                                           /* if 1a  } */
+                        else
+                        {   /* else 1a { */
+
+
+                            if((TT[IN1] - TT1) <= 0)                 /* if 1 { */
+                            {
+                                if((TT0 - TT[IN]) <= 0)                     /* if 2 { */
+                                {
+                                    PGF[IN] = -X * del_TT[IN] - Y * del_sin[IN];
+                                    continue;
+                                }                                           /* if 2  } */
+                                else                                       /* else 2 { */
+                                {
+                                    R = X * (TT0 - TT[IN]) + Y * (sin_TT0 - sin_TT[IN]);
+                                    S = X * (TT[IN1] - TT0) + Y * (sin_TT[IN1] - sin_TT0);
+                                    PGF[IN] = R - S;
+                                    continue;
+                                }                                          /* else 2 } */
+                            }                                             /* if 1 } */
+
+                            else
+                            {   /* else 1 { */
+                                if((TT1 - TT[IN]) <= 0.0)
+                                {   /* if 3  { */
+                                    PGF[IN] = X * del_TT[IN] + Y * del_sin[IN];
+                                    continue;
+                                }                                         /* if 3  } */
+                                else                                      /* else 3 { */
+                                {
+                                    R = X * (TT1 - TT[IN]) + Y * (sin_TT1 - sin_TT[IN]);
+                                    S = X * (TT[IN1] - TT1) + Y * (sin_TT[IN1] - sin_TT1);
+                                    PGF[IN] = S - R;
+                                }                                         /* else 3 } */
+                            }                                           /* else 1 } */
+                        }                                             /* else 1a } */
+                    }                                               /* else ab } */
+
+                    // for (J = 1; J <= 18; J++) {
+                    //     std::cout << PGF[J] << ' ';
+                    // }
+                    // std::cout << '\n';
+                }                                                 /*  next IN } */
+
+LOOPOUT:
+
+
+//       Compute the integrated leaf orientation function, Gfun
+
+
+
+                PP = 0.0;
+
+                for(IN = 1; IN <= 16; IN++)
+                    PP += (PGF[IN] * aden[IN]);
+
+                // for (J = 1; J <= 16; J++) {
+                //     // std::cout << PGF[J] << ' ';
+                //     std::cout << PGF[J] * aden[J] << ' ';
+                // }
+                // std::cout << '\n';
+                // printf("%5.4f \n", PP);
+
+                // PPP += (PP * canopy.bdens[I] * PI9);
+                PPP += (PP * bdens(I-1) * PI9);
+                // printf("%d %5.6f %5.6f \n", (aang-bang)<=0.0, bang, aang);
+                // printf("%d %5.6f %5.6f \n", aang-bang<=0.0, aang, bang);
+                // printf("%5.4f ", PP);
+
+            }  // next I
+
+            // prof.Gfunc_sky[II][KK] = PPP;
+            // printf("%5.4f ", PPP);
+            Gfunc_sky(II-1,KK-1) = PPP;
+
+        }  // next IJ
+
+        ang += dang;
+
+    }  // NEXT KK
+
+    return;
+}
+
+
 void CONC(
         double cref, double soilflux, double factor,
         int sze3, int jtot, int jtot3, double met_zl, double delz, int izref,
@@ -1214,6 +1734,7 @@ void CONC(
         return;
 }
 
+
 PYBIND11_MODULE(canoak, m) {
     m.doc() = "pybind11 plugins for CANOAK"; // optional module docstring
 
@@ -1242,6 +1763,23 @@ PYBIND11_MODULE(canoak, m) {
     py::arg("dLAIdz_np"), py::arg("exxpdir_np"), py::arg("Gfunc_solar_np"),
     py::arg("nir_dn_np"), py::arg("nir_up_np"), py::arg("beam_flux_nir_np"),
     py::arg("nir_sh_np"), py::arg("nir_sun_np"));
+
+    m.def("sky_ir", &SKY_IR, "Subroutine to compute infrared radiation from sky using algorithm from Norman",
+    py::arg("T"), py::arg("ratrad")); 
+
+    m.def("irflux", &IRFLUX, "Subroutine to compute probability of penetration for diffuse radiation for each layer in the canopy",
+    py::arg("jtot"), py::arg("sze"), py::arg("T_Kelvin"), py::arg("radtad"), py::arg("sfc_temperature"), 
+    py::arg("exxpdir_np"), py::arg("sun_T_filter_np"), py::arg("shd_T_filter_np"), 
+    py::arg("prob_beam_np"), py::arg("prob_sh_np"), py::arg("ir_dn_np"), py::arg("ir_up_np")); 
+
+    m.def("g_func_diffuse", &G_FUNC_DIFFUSE, "Subroutine to compute the G Function according to the algorithms of Lemeur (1973, Agric. Meteorol. 12: 229-247).",
+    py::arg("jtot"), py::arg("dLAIdz_np"), py::arg("bdens_np"), py::arg("Gfunc_sky_np")); 
+
+    m.def("gammaf", &GAMMAF, "Subroutine to compute gamma function",
+    py::arg("x")); 
+
+    m.def("freq", &FREQ, "Subroutine to compute the probability frequency distribution for a known mean leaf inclination angle",
+    py::arg("lflai"), py::arg("bdens_np")); 
 
     m.def("conc", &CONC, "Subroutine to compute scalar concentrations from source estimates and the Lagrangian dispersion matrix",
     py::arg("cref"), py::arg("soilflux"), py::arg("factor"),

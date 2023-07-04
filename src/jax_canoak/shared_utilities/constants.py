@@ -1,3 +1,8 @@
+PI = 3.14159
+PI180 = 0.017453292  # pi divided by 180, radians per degree
+PI9 = 2.864788976
+PI2 = 6.283185307  # 2 time pi
+
 # Canopy structure variables
 ht = 1.0  # Canopy height, m
 pai = 0.0  # Plant area index

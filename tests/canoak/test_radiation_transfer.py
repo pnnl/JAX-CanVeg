@@ -11,14 +11,20 @@ import canoak  # noqa: E402
 from jax_canoak.physics.energy_fluxes import rnet  # noqa: E402
 from jax_canoak.physics.energy_fluxes import par  # noqa: E402
 from jax_canoak.physics.energy_fluxes import nir  # noqa: E402
+from jax_canoak.physics.energy_fluxes import sky_ir  # noqa: E402
+from jax_canoak.physics.energy_fluxes import irflux  # noqa: E402
 from jax_canoak.physics.energy_fluxes import diffuse_direct_radiation  # noqa: E402
+from jax_canoak.physics.energy_fluxes import g_func_diffuse  # noqa: E402
 
-# jtot = 30
-# jtot3 = 150
-jtot = 3
-jtot3 = 5
+# jtot = 300
+# jtot3 = 1500
+# jtot = 3
+# jtot3 = 5
+jtot = 1
+jtot3 = 3
 sze = jtot + 2
 sze3 = jtot3 + 2
+szeang = 19
 met_zl = 1.5
 delz = 0.5
 izref = 1
@@ -438,3 +444,84 @@ class TestRadiationTransfer(unittest.TestCase):
         self.assertTrue(np.allclose(beam_flux_nir_jnp, beam_flux_nir_np))
         self.assertTrue(np.allclose(nir_sh_jnp, nir_sh_np))
         self.assertTrue(np.allclose(nir_sun_jnp, nir_sun_np))
+
+    def test_sky_ir(self):
+        print("Performing test_sky_ir()...")
+        # Inputs
+        T, ratrad = 285.0, 3.4
+
+        # CANOAK
+        radiation = canoak.sky_ir(T, ratrad)  # type: ignore
+
+        # JAX
+        sky_ir_jit = jax.jit(sky_ir)
+        radiation_jax = sky_ir_jit(T, ratrad)
+
+        print("")
+        self.assertTrue(np.allclose(radiation, radiation_jax))
+
+    def test_irflux(self):
+        print("Performing test_irflux()...")
+        # Inputs
+        T_Kelvin, ratrad = 285.0, 3.4
+        sfc_temperature = 296.0
+        exxpdir_np = np.random.random(sze)
+        sun_T_filter_np = np.random.random(sze)
+        shd_T_filter_np = np.random.random(sze)
+        prob_beam_np = np.random.random(sze)
+        prob_sh_np = np.random.random(sze)
+        ir_dn_np, ir_up_np = np.zeros(sze), np.zeros(sze)
+
+        # CANOAK
+        canoak.irflux(  # type: ignore
+            jtot,
+            sze,
+            T_Kelvin,
+            ratrad,
+            sfc_temperature,
+            exxpdir_np,
+            sun_T_filter_np,
+            shd_T_filter_np,
+            prob_beam_np,
+            prob_sh_np,
+            ir_dn_np,
+            ir_up_np,
+        )
+
+        # JAX
+        irflux_jit = jax.jit(irflux)
+        ir_up_jnp, ir_dn_jnp = irflux_jit(
+            T_Kelvin,
+            ratrad,
+            sfc_temperature,
+            jnp.array(exxpdir_np),
+            jnp.array(sun_T_filter_np),
+            jnp.array(shd_T_filter_np),
+            jnp.array(prob_beam_np),
+            jnp.array(prob_sh_np),
+        )
+
+        # print(ir_dn_np, ir_dn_jnp)
+        # print(ir_up_np, ir_up_jnp)
+        print("")
+        self.assertTrue(np.allclose(ir_up_jnp, ir_up_np))
+        self.assertTrue(np.allclose(ir_dn_jnp, ir_dn_np))
+
+    def test_g_func_diffuse(self):
+        print("Performing test_g_func_diffuse()...")
+        # Inputs
+        dLAIdz_np = np.random.random(sze)
+        bdens_np = np.zeros(9)
+        Gfunc_sky_np = np.zeros([sze, szeang])
+
+        # CANOAK
+        canoak.g_func_diffuse(jtot, dLAIdz_np, bdens_np, Gfunc_sky_np)  # type: ignore
+
+        # JAX
+        g_func_diffuse_jit = jax.jit(g_func_diffuse)
+        Gfunc_sky_jnp = g_func_diffuse_jit(jnp.array(dLAIdz_np))
+        # bdens_jnp = freq(lflai)
+
+        # print(Gfunc_sky_np, Gfunc_sky_jnp)
+        print("")
+        self.assertTrue(np.allclose(Gfunc_sky_jnp, Gfunc_sky_np, atol=1e-04))
