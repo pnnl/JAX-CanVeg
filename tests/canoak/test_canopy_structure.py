@@ -50,6 +50,6 @@ class TestCanopyStructure(unittest.TestCase):
         freq_jit = jax.jit(freq)
         bdens_jnp = freq_jit(lflai)
 
-        # print(bdens_np, bdens_jnp)
+        print(bdens_np, bdens_jnp)
         print("")
         self.assertTrue(np.allclose(bdens_np, bdens_jnp))

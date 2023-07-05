@@ -1610,6 +1610,197 @@ LOOPOUT:
 }
 
 
+void GFUNC(
+    int jtot, double solar_beta_rad,
+    py::array_t<double, py::array::c_style> dLAIdz_np,
+    py::array_t<double, py::array::c_style> bdens_np,
+    py::array_t<double, py::array::c_style> Gfunc_solar_np
+)
+{
+
+
+    /*
+    ------------------------------------------------------------
+            This subroutine computes the G function according to the
+            algorithms of:
+
+                      Lemeur, R. 1973.  A method for simulating the direct solar
+                      radiaiton regime of sunflower, Jerusalem artichoke, corn and soybean
+                      canopies using actual stand structure data. Agricultural Meteorology. 12, 229-247
+
+                    This progrom computes G for a given
+            sun angle.  G changes with height due to change leaf angles
+    ------------------------------------------------------------
+    */
+
+    int IJ,IN, J, K, I,II, IN1;
+
+    double aden[19], TT[19], pgg[19];
+    double sin_TT[19], del_TT[19],del_sin[19];
+    double PPP, PP, aang;
+    double cos_A,cos_B,sin_A,sin_B,X,Y, sin_TT0, sin_TT1;
+    double T0,TII,TT0,TT1;
+    double R,S,square;
+
+    double llai = 0.0;
+
+    auto dLAIdz = dLAIdz_np.unchecked<1>();
+    auto Gfunc_solar = Gfunc_solar_np.mutable_unchecked<1>();
+
+
+    // Midpoint of azimuthal intervals
+
+
+    for(IN=1; IN <= 17; IN++)
+    {
+        K = 2 * IN - 3;
+        TT[IN] = 3.14159265 / 16.0 * K;
+        sin_TT[IN] = sin(TT[IN]);
+    }
+
+    for(IN=1,IN1=2; IN <= 16; IN++,IN1++)
+    {
+        del_TT[IN] = TT[IN1] - TT[IN];
+        del_sin[IN]=sin_TT[IN1]-sin_TT[IN];
+    }
+
+    for(I=1; I <= 16; I++)
+        aden[I] = .0625;
+
+
+    // Compute the G function for each layer
+
+
+    for(IJ = 1; IJ <= jtot; IJ++)
+    {
+        II = jtot - IJ + 1;
+
+        /* need LAI from LAIZ */
+
+        // llai += prof.dLAIdz[II];
+        llai += dLAIdz(II-1);
+
+
+        // Calculate the leaf angle probabilty distribution, bdens
+
+
+        // FREQ(llai);
+        FREQ(llai, bdens_np);
+        auto bdens = bdens_np.mutable_unchecked<1>();
+        // // Printing by looping through the array elements
+        // for (J = 1; J <= 9; J++) {
+        //     // std::cout << transmission_layer[J] << ' ';
+        //     std::cout << bdens(J-1) << ' ';
+        // }
+        // std::cout << '\n';
+
+        // Lemeur defines bdens as delta F/(PI/N), WHERE HERE N=9
+
+        PPP = 0.0;
+
+        for(I = 1; I <= 9; I++)
+        {
+            aang = ((I - 1.0) * 10.0 + 5.0) * PI180;
+
+            cos_A = cos(aang);
+            cos_B = cos(solar_beta_rad);
+            sin_A = sin(aang);
+            sin_B = sin(solar_beta_rad);
+
+            X = cos_A * sin_B;
+            Y = sin_A * cos_B;
+
+            if((aang - solar_beta_rad) <= 0.0)
+            {
+                for(IN = 1; IN <= 16; IN++)
+                {
+                    pgg[IN] = X * del_TT[IN] + Y * del_sin[IN];
+                }
+                goto OUTGF;
+            }
+            else
+            {
+                T0 = (1.0 + X/Y);
+                TII = (1.0 - X/Y);
+
+                if(T0/TII > 0)
+                    square=sqrt(T0/TII);
+                else
+                    printf("bad T0/TII \n");
+
+
+                TT0 = 2.0 * atan(square);
+                TT1 = 2.0 * 3.14159 - TT0;
+                sin_TT0=sin(TT0);
+                sin_TT1=sin(TT1);
+
+                for(IN = 1,IN1=2; IN <= 16; IN++,IN1++)
+                {
+                    if ((TT[IN1] - TT0) <= 0.0)
+                    {
+                        pgg[IN] = X * del_TT[IN] + Y *del_sin[IN];
+                    }
+                    else
+                    {
+                        if ((TT[IN1] - TT1) <= 0.0)
+                        {
+                            if((TT0 - TT[IN]) <= 0.0)
+                            {
+                                pgg[IN] = -X * del_TT[IN] - Y * del_sin[IN];
+                            }
+                            else
+                            {
+                                R = X * (TT0 - TT[IN]) + Y * (sin_TT0 - sin_TT[IN]);
+                                S = X * (TT[IN + 1] - TT0) + Y * (sin_TT[IN + 1] - sin_TT0);
+                                pgg[IN] = R - S;
+                            }
+                        }
+                        else
+                        {
+                            if((TT1 - TT[IN]) <= 0.0)
+                            {
+
+                                pgg[IN] = X * del_TT[IN] + Y * del_sin[IN];
+                            }
+                            else
+                            {
+                                R = X * (TT1 - TT[IN]) + Y * (sin_TT1 - sin_TT[IN]);
+                                S = X * (TT[IN1] - TT1) + Y * (sin_TT[IN1] - sin_TT1);
+                                pgg[IN] = S - R;
+                            }
+                        }
+                    }
+                }
+            }                                     // next IN
+
+OUTGF:
+
+            // Compute the integrated leaf orientation function
+
+            PP = 0.0;
+            for(IN = 1; IN <= 16; IN++)
+                PP += (pgg[IN] * aden[IN]);
+
+
+            // PPP += (PP * canopy.bdens[I] * 9. / PI);
+            PPP += (PP * bdens(I-1) * 9. / PI);
+
+        } // next I
+
+        // prof.Gfunc_solar[II] = PPP;
+        // if(prof.Gfunc_solar[II] <= 0.0)
+        //     prof.Gfunc_solar[II] = .01;
+        Gfunc_solar(II-1) = PPP;
+        // if(Gfunc_solar(II-1) <= 0.0)
+        if(Gfunc_solar(II-1) <= 0.01) // TODO: Peishi
+            Gfunc_solar(II-1) = .01;
+    }                           // next IJ
+
+
+    return;
+}
+
+
 void CONC(
         double cref, double soilflux, double factor,
         int sze3, int jtot, int jtot3, double met_zl, double delz, int izref,
@@ -1774,6 +1965,9 @@ PYBIND11_MODULE(canoak, m) {
 
     m.def("g_func_diffuse", &G_FUNC_DIFFUSE, "Subroutine to compute the G Function according to the algorithms of Lemeur (1973, Agric. Meteorol. 12: 229-247).",
     py::arg("jtot"), py::arg("dLAIdz_np"), py::arg("bdens_np"), py::arg("Gfunc_sky_np")); 
+
+    m.def("gfunc", &GFUNC, "Subroutine to computes G for a given sun angle.",
+    py::arg("jtot"), py::arg("solar_beta_rad"), py::arg("dLAIdz_np"), py::arg("bdens_np"), py::arg("Gfunc_solar_np")); 
 
     m.def("gammaf", &GAMMAF, "Subroutine to compute gamma function",
     py::arg("x")); 

@@ -6,4 +6,5 @@ from .radiation_transfer import (
     irflux,  # noqa: F401
     diffuse_direct_radiation,  # noqa: F401
     g_func_diffuse,  # noqa: F401
+    gfunc,  # noqa: F401
 )

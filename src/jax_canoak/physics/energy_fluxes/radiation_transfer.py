@@ -1025,3 +1025,138 @@ def g_func_diffuse(dLAIdz: Float_1D) -> Float_1D:
     Gfunc_sky = Gfunc_sky.at[:jtot, :9].set(Gfunc_sky_update.T)
 
     return Gfunc_sky
+
+
+def gfunc(solar_beta_rad: Float_0D, dLAIdz: Float_1D) -> Float_1D:
+    """This subroutine computes the G function according to the algorithms of:
+
+        Lemeur, R. 1973.  A method for simulating the direct solar
+        radiaiton regime of sunflower, Jerusalem artichoke, corn and soybean
+        canopies using actual stand structure data. Agricultural Meteorology. 12,229-247
+
+        This progrom computes G for a given sun angle.  G changes with height due
+        to change leaf angles.
+
+    Args:
+        solar_beta_rad (Float_0D): _description_
+        dLAIdz (Float_1D): _description_
+
+    Returns:
+        Float_1D: _description_
+    """
+    sze = dLAIdz.size
+    jtot = sze - 2
+    nsize = 18
+    aden, TT = jnp.zeros(nsize), jnp.zeros(nsize)
+    pgg, sin_TT = jnp.zeros(nsize), jnp.zeros(nsize)
+    del_TT, del_sin = jnp.zeros(nsize), jnp.zeros(nsize)
+
+    Gfunc_solar = jnp.zeros(sze)
+
+    llai = jnp.zeros(sze)
+    llai = llai.at[:jtot].set(jnp.cumsum(dLAIdz[::-1][2:])[::-1])
+
+    # Midpoint of azimuthal intervals
+    aden = aden.at[:16].set(0.0625)
+    K = 2 * jnp.arange(1, nsize) - 3
+    TT = TT.at[:-1].set(3.14159265 / 16.0 * K)
+    sin_TT = sin_TT.at[:-1].set(jnp.sin(TT[:-1]))
+    del_TT = del_TT.at[: nsize - 2].set(TT[1 : nsize - 1] - TT[: nsize - 2])
+    del_sin = del_sin.at[: nsize - 2].set(sin_TT[1 : nsize - 1] - sin_TT[: nsize - 2])
+
+    # Compute the G function for each layer
+    def calculate_g_each(c1, j):
+        ii = jtot - j - 1
+        bdens = freq(llai[ii])
+        PPP = 0.0
+
+        def calculate_ppp(c2, k):
+            PPP, pgg = c2[0], c2[1]
+            aang = (k * 10.0 + 5.0) * PI180
+            cos_B, sin_B = jnp.cos(solar_beta_rad), jnp.sin(solar_beta_rad)
+            cos_A, sin_A = jnp.cos(aang), jnp.sin(aang)
+            X, Y = cos_A * sin_B, sin_A * cos_B
+
+            def calculate_pgf_1(pgg):
+                # jax.debug.print("-- {x} {y} {z}", z=aang-bang, y=aang, x=bang)
+                pgg = pgg.at[: nsize - 2].set(
+                    X * del_TT[: nsize - 2] + Y * del_sin[: nsize - 2]
+                )
+                return pgg
+
+            def calculate_pgf_2(pgg):
+                # jax.debug.print("aang-bang: {x}.", x=aang-bang)
+                T0, TII = 1.0 + X / Y, 1.0 - X / Y
+                square = jax.lax.cond(
+                    T0 / TII > 0.0, lambda x: jnp.sqrt(x), lambda x: 0.0, T0 / TII
+                )
+                TT0 = 2.0 * jnp.arctan(square)
+                sin_TT0 = jnp.sin(TT0)
+                TT1 = PI2 - TT0
+                sin_TT1 = jnp.sin(TT1)
+                # jax.debug.print("-- {x} {y} {z}", z=aang-bang, y=aang, x=bang)
+
+                def calculate_pgf_2a(c, h):
+                    h1 = h + 1
+                    conds = jnp.array(
+                        [
+                            TT[h1] - TT0 <= 0,
+                            (TT[h1] - TT0 > 0)
+                            & (TT[h1] - TT1 <= 0)
+                            & (TT0 - TT[h] <= 0),
+                            (TT[h1] - TT0 > 0)
+                            & (TT[h1] - TT1 <= 0)
+                            & (TT0 - TT[h] > 0),
+                            (TT[h1] - TT0 > 0)
+                            & (TT[h1] - TT1 > 0)
+                            & (TT1 - TT[h] <= 0),
+                            (TT[h1] - TT0 > 0) & (TT[h1] - TT1 > 0) & (TT1 - TT[h] > 0),
+                        ]
+                    )
+                    index = jnp.where(conds, size=1)[0][0]
+                    pgg_each = jax.lax.switch(
+                        index,
+                        [
+                            lambda: X * del_TT[h] + Y * del_sin[h],
+                            lambda: -X * del_TT[h] - Y * del_sin[h],
+                            lambda: (X * (TT0 - TT[h]) + Y * (sin_TT0 - sin_TT[h]))
+                            - (X * (TT[h1] - TT0) + Y * (sin_TT[h1] - sin_TT0)),
+                            lambda: X * del_TT[h] + Y * del_sin[h],
+                            lambda: -(X * (TT1 - TT[h]) + Y * (sin_TT1 - sin_TT[h]))
+                            + (X * (TT[h1] - TT1) + Y * (sin_TT[h1] - sin_TT1)),
+                        ],
+                    )
+                    return c, pgg_each
+
+                _, pgg_update = jax.lax.scan(
+                    calculate_pgf_2a, None, jnp.arange(nsize - 2)
+                )
+                pgg = pgg.at[: nsize - 2].set(pgg_update)
+                # jax.debug.print("PGF_update: {x}.", x=PGF_update)
+                return pgg
+
+            pgg = jax.lax.cond(
+                (aang - solar_beta_rad < 0) | (jnp.isclose(aang, solar_beta_rad)),
+                calculate_pgf_1,
+                calculate_pgf_2,
+                pgg,
+            )
+
+            # Compute the integrated leaf orientation function, G
+            PP = jnp.sum(pgg[: nsize - 2] * aden[: nsize - 2])  # type: ignore
+            PPP += PP * bdens[k] * PI9  # type: ignore
+
+            return [PPP, pgg], None
+
+        c2_new, _ = jax.lax.scan(calculate_ppp, [PPP, pgg], jnp.arange(9))
+        PPP = c2_new[0]
+
+        G = jnp.maximum(PPP, 0.001)
+        return c1, G
+
+    # _, G_row = jax.lax.scan(calculate_g_each, PPP, jnp.arange(9))
+    _, Gfunc_solar_update = jax.lax.scan(calculate_g_each, None, jnp.arange(jtot))
+
+    Gfunc_solar = Gfunc_solar.at[:jtot].set(Gfunc_solar_update)
+
+    return Gfunc_solar

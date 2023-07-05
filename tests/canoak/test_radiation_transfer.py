@@ -15,13 +15,14 @@ from jax_canoak.physics.energy_fluxes import sky_ir  # noqa: E402
 from jax_canoak.physics.energy_fluxes import irflux  # noqa: E402
 from jax_canoak.physics.energy_fluxes import diffuse_direct_radiation  # noqa: E402
 from jax_canoak.physics.energy_fluxes import g_func_diffuse  # noqa: E402
+from jax_canoak.physics.energy_fluxes import gfunc  # noqa: E402
 
-# jtot = 300
-# jtot3 = 1500
+jtot = 300
+jtot3 = 1500
 # jtot = 3
 # jtot3 = 5
-jtot = 1
-jtot3 = 3
+# jtot = 1
+# jtot3 = 3
 sze = jtot + 2
 sze3 = jtot3 + 2
 szeang = 19
@@ -524,4 +525,29 @@ class TestRadiationTransfer(unittest.TestCase):
 
         # print(Gfunc_sky_np, Gfunc_sky_jnp)
         print("")
-        self.assertTrue(np.allclose(Gfunc_sky_jnp, Gfunc_sky_np, atol=1e-04))
+        self.assertTrue(np.allclose(Gfunc_sky_jnp, Gfunc_sky_np, atol=1e-4))
+
+    def test_gfunc(self):
+        print("Performing test_gfunc()...")
+        # Inputs
+        dLAIdz_np = np.random.random(sze)
+        bdens_np = np.zeros(9)
+        solar_beta_rad = 0.5
+        Gfunc_solar_np = np.zeros(sze)
+
+        # CANOAK
+        canoak.gfunc(  # type: ignore
+            jtot, solar_beta_rad, dLAIdz_np, bdens_np, Gfunc_solar_np
+        )
+
+        # JAX
+        gfunc_jit = jax.jit(gfunc)
+        Gfunc_solar_jnp = gfunc_jit(solar_beta_rad, jnp.array(dLAIdz_np))
+        # bdens_jnp = freq(lflai)
+
+        # print(Gfunc_sky_np, Gfunc_sky_jnp)
+        # print(Gfunc_solar_np)
+        print("")
+        # self.assertTrue(np.allclose(Gfunc_solar_jnp, Gfunc_solar_np))
+        self.assertTrue(np.allclose(Gfunc_solar_jnp, Gfunc_solar_np, atol=1e-5))
+        # self.assertTrue(1==1)
