@@ -12,13 +12,70 @@ Date: 2023.06.28.
 import jax
 import jax.numpy as jnp
 
-# from typing import Tuple
+from typing import Tuple
 
 from ...shared_utilities.types import Float_0D
+from ...shared_utilities.constants import PI
 
 
-def angle():
-    pass
+def angle(
+    latitude: Float_0D,
+    longitude: Float_0D,
+    zone: int,
+    year: int,
+    day: int,
+    hour: Float_0D,
+) -> Tuple[Float_0D, Float_0D, Float_0D]:
+    RADD = PI / 180.0
+    lat_rad = latitude * RADD  # latitude, radians
+    # long_rad = longitude*RADD # longitude, radians
+
+    # delta_hours = delta_long * 12. / PI
+    #
+    # Calculate declination angle
+    declin = -23.45 * PI / 180 * jnp.cos(2 * PI * (day + 10) / 365)
+    # print(declin)
+
+    # Calculate hours of day length
+    # -jnp.tan(lat_rad) * jnp.tan(declin)
+    # sunrise = 12 - 12*jnp.arccos(cos_hour) / PI
+    # sunset  = 12 + 12*jnp.arccos(cos_hour) / PI
+    # daylength = sunset - sunrise
+    f = PI * (279.5 + 0.9856 * day) / 180
+    # print(sunrise, sunset)
+
+    # Calcuate equation of time in hours
+    Et = (
+        -104.7 * jnp.sin(f)
+        + 596.2 * jnp.sin(2 * f)
+        + 4.3 * jnp.sin(3 * f)
+        - 12.7 * jnp.sin(4 * f)
+        - 429.3 * jnp.cos(f)
+        - 2.0 * jnp.cos(2 * f)
+        + 19.3 * jnp.cos(3 * f)
+    ) / 3600
+    # print(Et*60)
+
+    # Perform longitudinal correction
+    # Lc_deg = longitude + zone * 15  # degrees from local meridian
+    Lc_deg = longitude - zone * 15  # degrees from local meridian
+    Lc_hr = Lc_deg * 4.0 / 60.0  # hours, 4 minutes/per degree
+    T0 = 12 - Lc_hr - Et
+    hour_rad = PI * (hour - T0) / 12.0  # hour angle, radians
+
+    # Calculate sine of solar elevation ,beta
+    # print(lat_rad, declin, hour_rad, hour, T0)
+    sin_beta = jnp.sin(lat_rad) * jnp.sin(declin) + jnp.cos(lat_rad) * jnp.cos(
+        declin
+    ) * jnp.cos(hour_rad)
+
+    # Calculate solar elevation, radians
+    beta_rad = jnp.arcsin(sin_beta)
+
+    # Calculate solar elevation, degrees
+    beta_deg = beta_rad * 180 / PI
+
+    return beta_rad, sin_beta, beta_deg
 
 
 def gammaf(x: Float_0D) -> Float_0D:

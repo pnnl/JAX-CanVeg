@@ -9,6 +9,7 @@ from jax import config
 config.update("jax_enable_x64", True)
 
 import canoak  # noqa: E402
+from jax_canoak.physics.carbon_fluxes import angle  # noqa: E402
 from jax_canoak.physics.carbon_fluxes import freq  # noqa: E402
 from jax_canoak.physics.carbon_fluxes import gammaf  # noqa: E402
 
@@ -20,6 +21,34 @@ soilsze = 12
 
 
 class TestCanopyStructure(unittest.TestCase):
+    def test_angle(self):
+        print("Performing test_angle()...")
+        # Inputs
+        latitude, longitude, zone = 38.1, -121.65, -8.0
+        year, day_local, hour_local = (
+            2019,
+            194,
+            12.0,
+        )
+
+        # CANOAK
+        beta_rad, sin_beta, beta_deg = canoak.angle(  # type: ignore
+            latitude, longitude, zone, year, day_local, hour_local
+        )
+
+        # JAX
+        angle_jit = jax.jit(angle)
+        beta_rad_j, sin_beta_j, beta_deg_j = angle_jit(  # type: ignore
+            latitude, longitude, zone, year, day_local, hour_local
+        )
+
+        # print(beta_rad, sin_beta, beta_deg)
+        print("")
+        self.assertTrue(np.allclose(beta_rad, beta_rad_j))
+        self.assertTrue(np.allclose(sin_beta, sin_beta_j))
+        self.assertTrue(np.allclose(beta_deg, beta_deg_j))
+        # self.assertTrue(1==1)
+
     def test_gammaf(self):
         print("Performing test_irflux()...")
         # Inputs
@@ -50,6 +79,6 @@ class TestCanopyStructure(unittest.TestCase):
         freq_jit = jax.jit(freq)
         bdens_jnp = freq_jit(lflai)
 
-        print(bdens_np, bdens_jnp)
+        # print(bdens_np, bdens_jnp)
         print("")
         self.assertTrue(np.allclose(bdens_np, bdens_jnp))

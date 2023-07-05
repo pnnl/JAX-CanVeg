@@ -1801,6 +1801,231 @@ OUTGF:
 }
 
 
+std::tuple<double, double, double> ANGLE(
+    double latitude, double longitude, double zone,
+    int year, int day_local, double hour_local
+)
+{
+
+//       ANGLE computes solar elevation angles,
+
+//       This subroutine is based on algorithms in Walraven. 1978. Solar Energy. 20: 393-397
+
+
+
+    double theta_angle,G,EL,EPS,sin_el,A1,A2,RA;
+    double delyr,leap_yr,T_local,time_1980,leaf_yr_4, delyr4;
+    // double day_savings_time, day_local;
+    double day_savings_time;
+    double S,HS,phi_lat_radians,value,declination_ang,ST,SSAS;
+    double E_ang, zenith, elev_ang_deg, cos_zenith;
+
+    double radd = .017453293;
+    double twopi = 6.28318;
+
+    // matlab code
+
+    double lat_rad, long_rad, std_meridian, delta_long, delta_hours, declin;
+    double cos_hour, sunrise, sunset, daylength, f, Et, Lc_deg, Lc_hr, T0, hour;
+    double sin_beta, beta_deg, beta_rad, day, time_zone, lat_deg, long_deg;
+
+    // // Twitchell Island, CA
+    // double latitude = 38.1;     // latitude
+    // double longitude= 121.65;    // longitude
+
+    // // Eastern Standard TIME
+    // double zone = 8.0;          // Five hour delay from GMT
+
+
+    // delyr = time_var.year - 1980.0;
+    delyr = year - 1980.0;
+    delyr4=delyr/4.0;
+    leap_yr=fmod(delyr4,4.0);
+    day_savings_time=0.0;
+
+    // Daylight Savings Time, Dasvtm =1
+    // Standard time, Dasvtm= 0
+
+
+    // T_local = time_var.local_time;
+    T_local = hour_local;
+
+    // day_local = time_var.days;
+    // day_local = day;
+    time_1980 = delyr * 365.0 + leap_yr + (day_local - 1) + T_local / 24.0;
+
+    leaf_yr_4=leap_yr*4.0;
+
+    if(delyr == leaf_yr_4)
+        time_1980 -= 1.0;
+
+    if(delyr < 0.0)
+    {
+        if (delyr < leaf_yr_4 || delyr > leaf_yr_4)
+            time_1980 -= 1.0;
+    }
+
+    theta_angle = (360.0 * time_1980 / 365.25) * radd;
+    G = -.031272 - 4.53963E-7 * time_1980 + theta_angle;
+    EL = 4.900968 + 3.6747E-7 * time_1980 + (.033434 - 2.3E-9 * time_1980) * sin(G) + .000349 * sin(2. * G) + theta_angle;
+    EPS = .40914 - 6.2149E-9 * time_1980;
+    sin_el = sin(EL);
+    A1 = sin_el * cos(EPS);
+    A2 = cos(EL);
+
+    RA = atan(A1/A2);
+
+    /* for ATAN2
+
+    RA = atan2(A1,A2);
+    if(RA < 0)
+    RA=RA+twopi;
+
+    */
+
+    /*
+             The original program was in FORTRAN. It used the ATAN2 function.
+
+             In C we must find the correct quadrant and evaluate the arctan
+             correctly.
+
+             Note ATAN2 is -PI TO PI, while ATN is from PI/2 TO -PI/2
+
+    */
+
+    //     QUAD II, TAN theta_angle < 0
+
+    if(A1 > 0)
+    {
+        if(A2 <= 0)
+            RA += 3.1415;
+    }
+
+    //  QUAD III, TAN theta_angle > 0  /
+
+    if(A1 <= 0)
+    {
+        if(A2 <= 0)
+            RA += 3.14159;
+    }
+
+    value = sin_el * sin(EPS);
+
+    if (1.-value * value >= 0)
+        declination_ang = atan(value/ sqrt(1. - value * value));
+    else
+        printf(" bad declination_ang\n");
+
+
+//         declination_ang=asin(value)
+
+
+    ST = 1.759335 + twopi * (time_1980 / 365.25 - delyr) + 3.694E-7 * time_1980;
+
+    if(ST >= twopi)
+        ST = ST - twopi;
+
+    S = ST - longitude * radd + 1.0027379 * (zone - day_savings_time + T_local) * 15. * radd;
+
+    if(S >= twopi)
+        S = S - twopi;
+
+    HS = RA - S;
+    phi_lat_radians = latitude * radd;
+
+
+    // DIRECTION COSINE
+
+    SSAS = (sin(phi_lat_radians) * sin(declination_ang) + cos(phi_lat_radians) * cos(declination_ang) * cos(HS));
+
+
+    if(1. - SSAS * SSAS >=0)
+        E_ang = atan(sqrt(1. - (SSAS * SSAS))/ SSAS);
+    else
+        printf(" bad SSAS \n");
+
+    if(SSAS < 0)
+        E_ang=E_ang+3.1415;
+
+
+    //      E=asin(SSAS);
+
+    if(E_ang < 0)
+        E_ang=3.1415/2.;
+
+    zenith = E_ang / radd;
+    elev_ang_deg = 90. - zenith;
+    // solar.beta_rad = elev_ang_deg * radd;
+    // solar.sine_beta = sin(solar.beta_rad);
+    cos_zenith = cos(E_ang);
+    // solar.beta_deg = solar.beta_rad / PI180;
+
+    // enter Matlab version
+
+    time_zone=zone;
+    lat_deg=latitude;
+    long_deg=longitude;
+
+    lat_rad=lat_deg*PI/180;  // latitude, radians
+    long_rad=long_deg*PI/180; // longitude, radians
+
+    std_meridian = 0;
+    delta_long=(long_deg - std_meridian)*PI/180;
+
+    delta_hours=delta_long*12/PI;
+
+    day=day_local;
+    declin = -23.45*3.1415/180*cos(2*3.1415*(day+10)/365); // declination angle
+
+    cos_hour=-tan(lat_rad)*tan(declin);
+
+    sunrise=12- 12* acos(cos_hour)/PI; // time of sunrise
+
+    sunset=12 + 12* acos(cos_hour)/PI; // time of sunset
+
+    daylength=sunset-sunrise;  // hours of day length
+
+    f=PI*(279.5+0.9856*day)/180;
+
+
+    // equation of time, hours
+
+    Et=(-104.7*sin(f)+596.2*sin(2*f)+4.3*sin(3*f)-12.7*sin(4*f)-429.3*cos(f)-2.0*cos(2*f)+19.3*cos(3*f))/3600;
+
+    // longitudinal correction
+
+    Lc_deg = long_deg - time_zone*15; // degrees from local meridian
+
+    Lc_hr=Lc_deg*4/60;  // hours, 4 minutes/per degree
+
+    T0 = 12-Lc_hr-Et;
+
+    hour=PI*(T_local-T0)/12;  // hour angle, radians
+
+    // sine of solar elevation, beta
+
+    // printf("%5.4f %5.4f %5.4f %5.4f %5.4f \n", lat_rad, declin, hour, T_local, T0);
+    sin_beta=sin(lat_rad)*sin(declin)+cos(lat_rad)*cos(declin)* cos(hour);
+
+    // solar elevation, radians
+
+    beta_rad=asin(sin_beta);
+
+    // solar elevation, degrees
+
+    beta_deg=beta_rad*180/PI;
+
+    // printf("%5.4f %5.4f %5.4f \n", sin_beta, beta_rad, beta_deg);
+    // printf("%5.4f %5.4f %5.4f \n", lat_rad, declin, hour);
+
+    return std::make_tuple(beta_rad, sin_beta, beta_deg);
+
+    // solar.beta_rad = beta_rad;
+    // solar.sine_beta = sin(solar.beta_rad);
+    // solar.beta_deg = solar.beta_rad / PI180;
+    // return;
+}
+
 void CONC(
         double cref, double soilflux, double factor,
         int sze3, int jtot, int jtot3, double met_zl, double delz, int izref,
@@ -1974,6 +2199,10 @@ PYBIND11_MODULE(canoak, m) {
 
     m.def("freq", &FREQ, "Subroutine to compute the probability frequency distribution for a known mean leaf inclination angle",
     py::arg("lflai"), py::arg("bdens_np")); 
+
+    m.def("angle", &ANGLE, "Subroutine to compute solar elevation angles",
+    py::arg("latitude"), py::arg("longitude"), py::arg("zone"),
+    py::arg("year"), py::arg("day_local"), py::arg("hour_local")); 
 
     m.def("conc", &CONC, "Subroutine to compute scalar concentrations from source estimates and the Lagrangian dispersion matrix",
     py::arg("cref"), py::arg("soilflux"), py::arg("factor"),
