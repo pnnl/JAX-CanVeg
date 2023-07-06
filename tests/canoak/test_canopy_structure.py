@@ -3,21 +3,26 @@ import unittest
 import jax
 import numpy as np
 
-# import jax.numpy as jnp
+import jax.numpy as jnp
 from jax import config
 
 config.update("jax_enable_x64", True)
 
 import canoak  # noqa: E402
+
+# from jax_canoak.physics.carbon_fluxes import angle  # noqa: E402
+# from jax_canoak.physics.carbon_fluxes import freq  # noqa: E402
 from jax_canoak.physics.carbon_fluxes import angle  # noqa: E402
-from jax_canoak.physics.carbon_fluxes import freq  # noqa: E402
-from jax_canoak.physics.carbon_fluxes import gammaf  # noqa: E402
+from jax_canoak.physics.carbon_fluxes import lai_time  # noqa: E402
+from jax_canoak.physics.energy_fluxes import freq  # noqa: E402
+from jax_canoak.physics.energy_fluxes import gammaf  # noqa: E402
 
 jtot = 3
 jtot3 = 5
 sze = jtot + 2
 sze3 = jtot3 + 2
 soilsze = 12
+szeang = 19
 
 
 class TestCanopyStructure(unittest.TestCase):
@@ -64,6 +69,59 @@ class TestCanopyStructure(unittest.TestCase):
         # print(y_jnp, y_np)
         print("")
         self.assertTrue(np.allclose(y_np, y_jnp))
+
+    def test_lai_time(self):
+        print("Performing test_lai_time()...")
+        # Inputs
+        tsoil, lai, ht = 285.0, 4.0, 1.0
+        par_reflect, par_trans, par_soil_refl = 0.0377, 0.072, 0.0
+        par_absorbed = 1 - par_reflect - par_trans - par_soil_refl
+        nir_reflect, nir_trans, nir_soil_refl = 0.60, 0.26, 0.0
+        nir_absorbed = 1 - nir_reflect - nir_trans - nir_soil_refl
+        ht_midpt_np = np.array([0.5, 1.0, 1.5, 2.0, 2.5])
+        # lai_freq_np = np.array([0.05, .3,.3, .3, .05]) * lai
+        lai_freq_np = np.array([0.6, 0.6, 0.6, 0.6, 0.6]) * lai
+        dLAIdz_np, exxpdir_np = np.zeros(5), np.zeros(5)
+        bdens_np = np.zeros(9)
+        Gfunc_sky_np = np.zeros([sze, szeang])
+
+        # CANOAK
+        canoak.lai_time(  # type: ignore
+            jtot,
+            sze,
+            tsoil,
+            lai,
+            ht,
+            par_reflect,
+            par_trans,
+            par_soil_refl,
+            par_absorbed,
+            nir_reflect,
+            nir_trans,
+            nir_soil_refl,
+            nir_absorbed,
+            ht_midpt_np,
+            lai_freq_np,
+            bdens_np,
+            Gfunc_sky_np,
+            dLAIdz_np,
+            exxpdir_np,
+        )
+
+        # JAX
+        # lai_time_jit = jax.jit(lai_time)
+        exxpdir_jnp, dLAIdz_jnp, Gfunc_sky_jnp = lai_time(
+            sze, lai, ht, jnp.array(ht_midpt_np), jnp.array(lai_freq_np)
+        )
+
+        # print(dLAIdz_np)
+        # print(dLAIdz_jnp, dLAIdz_np)
+        # print(Gfunc_sky_jnp, Gfunc_sky_np)
+        # print(exxpdir_jnp, exxpdir_np)
+        print("")
+        self.assertTrue(np.allclose(exxpdir_jnp, exxpdir_np, atol=1e-4))
+        self.assertTrue(np.allclose(dLAIdz_jnp, dLAIdz_np))
+        self.assertTrue(np.allclose(Gfunc_sky_jnp, Gfunc_sky_np, atol=1e-4))
 
     def test_freq(self):
         print("Performing test_freq()...")

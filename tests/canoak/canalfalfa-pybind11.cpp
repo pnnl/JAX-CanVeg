@@ -2026,6 +2026,363 @@ std::tuple<double, double, double> ANGLE(
     // return;
 }
 
+
+void LAI_TIME(
+    int jtot, int sze, double tsoil, double lai, double ht,
+    double par_reflect, double par_trans, double par_soil_refl, double par_absorbed,
+    double nir_reflect, double nir_trans, double nir_soil_refl, double nir_absorbed,
+    py::array_t<double, py::array::c_style> ht_midpt_np,
+    py::array_t<double, py::array::c_style> lai_freq_np,
+    py::array_t<double, py::array::c_style> bdens_np,
+    py::array_t<double, py::array::c_style> Gfunc_sky_np,
+    py::array_t<double, py::array::c_style> dLAIdz_np,
+    py::array_t<double, py::array::c_style> exxpdir_np
+)
+{
+
+
+    // Evaluate how LAI and other canopy structural variables vary
+    // with time
+
+    long int J,I, II, JM1;
+    double lai_z[sze];
+    double TF,MU1,MU2,integr_beta;
+    double dx,DX2,DX4,X,P_beta,Q_beta,F1,F2,F3;
+    double beta_fnc[sze];
+    // double beta_fnc[sze],ht_midpt[6],lai_freq[6];
+    double cum_lai,sumlai,dff,XX;
+    double cum_ht;
+    double AA,DA,dff_Markov;
+    double cos_AA,sin_AA,exp_diffuse;
+    double lagtsoil;
+    double delz = ht/jtot;
+
+    auto ht_midpt = ht_midpt_np.mutable_unchecked<1>();
+    auto lai_freq = lai_freq_np.unchecked<1>();
+    auto dLAIdz = dLAIdz_np.mutable_unchecked<1>();
+    auto exxpdir = exxpdir_np.mutable_unchecked<1>();
+
+    // lag is 100 days or 1.721 radians
+
+    //  soil.T_base= 14.5 + 9. * sin((time_var.days * 6.283 / 365.) - 1.721);   */
+
+    // compute seasonal trend of Tsoil Base at 85 cm, level 10 of the soil model
+
+
+
+
+    // amplitude of the soil temperature at a reference depth
+
+    // On average the mean annual temperature occurs around day 100 or 1.721 radians
+
+
+
+    // soil.T_base= input.tsoil; // seasonal variation in reference soil temperature at 32 cm
+    // soil.T_base= tsoil; // seasonal variation in reference soil temperature at 32 cm
+
+
+    // full leaf
+
+
+    // time_var.lai = lai;
+
+
+    // optical properties PAR wave band
+    // after Norman (1979) and NASA report
+
+    // solar.par_reflect = .0377;  // spectrometer and from alfalfa, NASA report 1139, Bowker
+    // solar.par_trans = .072;
+    // solar.par_soil_refl = 0;    // black soil .3;
+    // solar.par_absorbed = (1. - solar.par_reflect - solar.par_trans);
+
+
+    // optical properties NIR wave band
+    // after Norman (1979) and NASA report
+
+    // solar.nir_reflect = .60;  // Strub et al IEEE...spectrometer from Alfalfa
+    // solar.nir_trans = .26;
+    // solar.nir_soil_refl = 0;    //  black soils 0.6;  // updated
+
+
+    // value for variable reflectance
+
+    //solar.nir_reflect = (15 * leaf.N + 5)/100;
+
+    //leaf.Vcmax = 26.87 + 15.8 * leaf.N;
+
+
+    // Absorbed NIR
+
+    // solar.nir_absorbed = (1. - solar.nir_reflect - solar.nir_trans);
+
+
+    // height of mid point of layer scaled to 0.55m tall alfalfa
+
+    //ht_midpt[1] = 0.1;
+    //ht_midpt[2]= 0.2;
+    //ht_midpt[3]= 0.3;
+    //ht_midpt[4] = 0.4;
+    //ht_midpt[5] = 0.5;
+
+    // // 3 m tule
+    // ht_midpt[1] = 0.5;
+    // ht_midpt[2] = 1.0;
+    // ht_midpt[3] = 1.5;
+    // ht_midpt[4] = 2.0;
+    // ht_midpt[5] = 2.5;
+
+
+
+    // lai of the layers at the midpoint of height, scaled to 1.65 LAI
+
+
+    // lai_freq[1] = 0.05 * lai;
+    // lai_freq[2] = 0.30 * lai;
+    // lai_freq[3] = 0.30 * lai;
+    //  lai_freq[4] = 0.30 * lai;
+    //  lai_freq[5] = 0.05 * lai;
+
+    // lai_freq[1] = 0.6 * lai;
+    // lai_freq[2] = 0.60 * lai;
+    // lai_freq[3] = 0.60 * lai;
+    // lai_freq[4] = 0.60 * lai;
+    // lai_freq[5] = 0.6 * lai;
+
+    /*
+       Beta distribution
+
+       f(x) = x^(p-1) (1-x)^(q-1) / B(v,w)
+
+       B(v,w) = int from 0 to 1 x^(p-1) (1-x)^(q-1) dx
+
+      p = mean{[mean(1-mean)/var]-1}
+
+      q =(1-mean){[mean(1-mean)/var]-1}
+
+      *****************************************************************
+    */
+    TF = 0.;
+    MU1 = 0.;
+    MU2 = 0.;
+    integr_beta = 0.;
+
+
+//  Height at the midpoint
+
+
+    for(I = 1; I<= 5; I++)
+    {
+
+        // Normalize height
+
+
+        // ht_midpt[I] /= ht;   // was ht, but then it would divide by 24 or so
+        ht_midpt(I-1) /= ht;   // was ht, but then it would divide by 24 or so
+
+
+        // Total F in each layer. Should sum to LAI
+
+
+        // TF += lai_freq[I];
+        TF += lai_freq(I-1);
+
+
+        // weighted mean lai
+
+        // MU1 += (ht_midpt[I] * lai_freq[I]);
+        MU1 += (ht_midpt(I-1) * lai_freq(I-1));
+
+
+        // weighted variance
+
+        // MU2 +=  (ht_midpt[I] * ht_midpt[I] * lai_freq[I]);
+        MU2 +=  (ht_midpt(I-1) * ht_midpt(I-1) * lai_freq(I-1));
+    }  // next I
+
+
+    // normalize mu by lai
+
+    MU1 /= TF;
+    MU2 /= TF;
+
+
+    // compute Beta parameters
+
+
+    P_beta = MU1 * (MU1 - MU2) / (MU2 - MU1 * MU1);
+    Q_beta = (1. - MU1) * (MU1 - MU2) / (MU2 - MU1 * MU1);
+    P_beta -= 1.;
+    Q_beta -= 1.;
+
+    /*
+    '  integrate Beta function, with Simpson's Approx.
+    '
+    '  The boundary conditions are level 1 is height of ground
+    '  and level jtot+1 is height of canopy.  Layer 1 is between
+    '  height levels 1 and 2.  Layer jtot is between levels
+    '  jtot and jtot+1
+    '
+    '  Thickness of layer
+    */
+
+    dx = 1. / jtot;
+
+    DX2 = dx / 2.;
+    DX4 = dx / 4.;
+    X = DX4;
+
+    F2 = (pow(X,P_beta)) *pow((1. - X), Q_beta);
+    X += DX4;
+    F3 = pow(X, P_beta) *pow((1. - X),Q_beta);
+
+
+    // start integration at lowest boundary
+
+
+    beta_fnc[1] = DX4 * (4. * F2 + F3) / 3.;
+    integr_beta += beta_fnc[1];
+
+    JM1=jtot-1;
+
+    for(I = 2; I <=JM1; I++)
+    {
+        F1 = F3;
+        X += DX2;
+        F2 = pow(X, P_beta) * pow((1. - X), Q_beta);
+        X += DX2;
+        F3 = pow(X, P_beta) * pow((1. - X), Q_beta);
+        beta_fnc[I] = DX2 * (F1 + 4. * F2 + F3) / 3.;
+        integr_beta += beta_fnc[I];
+    }
+
+    F1 = F3;
+    X += DX4;
+    F2 = pow(X, P_beta) * pow((1. - X),Q_beta);
+
+
+    //  compute integrand at highest boundary
+
+
+    beta_fnc[jtot] = DX4 * (F1 + 4. * F2) / 3.;
+    integr_beta += beta_fnc[jtot];
+    /*
+            '   lai_z IS THE LEAF AREA AS A FUNCTION OF Z
+            '
+            '   beta_fnc is the pdf for the interval dx
+    */
+
+    lai_z[1] = beta_fnc[1] * lai / integr_beta;
+
+    for(I = 2; I <= JM1; I++)
+        lai_z[I] = beta_fnc[I] * lai / integr_beta;
+
+
+    lai_z[jtot] = beta_fnc[jtot] * lai / integr_beta;
+
+    cum_ht = 0;
+    cum_lai = 0;
+
+
+    for(I = 1; I <= jtot; I++)
+    {
+        /*
+        ' re-index layers of lai_z.
+        ' layer 1 is between ground and 1st level
+        ' layer jtot is between level jtot and top of canopy (jtot+1)
+        */
+
+        cum_ht += delz;
+        cum_lai += lai_z[I];
+
+
+        // use prof.dLAIdz for radiative transfer model
+
+
+        // prof.dLAIdz[I] = lai_z[I];
+        dLAIdz(I-1) = lai_z[I];
+    } // next I
+
+
+
+    G_FUNC_DIFFUSE(jtot, dLAIdz_np, bdens_np, Gfunc_sky_np);   // Direction cosine for the normal between the mean
+    auto Gfunc_sky = Gfunc_sky_np.mutable_unchecked<2>();
+    // leaf normal projection and the sky sector.
+
+    sumlai = 0;
+
+    for(J = 1; J <= jtot; J++)
+    {
+        /*
+        '
+        '       compute the probability of diffuse radiation penetration through the
+        '       hemisphere.  This computation is not affected by penubra
+        '       since we are dealing only with diffuse radiation from a sky
+        '       sector.
+        '
+        '       The probability of beam penetration is computed with a
+        '       Markov distribution.
+        */
+
+        // dff = prof.dLAIdz[J];  //  + prof.dPAIdz[J]
+        // sumlai += prof.dLAIdz[J];
+        dff = dLAIdz(J-1);  //  + prof.dPAIdz[J]
+        sumlai += dLAIdz(J-1);
+
+        XX = 0;
+        AA = .087;
+        DA = .1745;
+
+        // The leaf clumping coefficient. From Chason et al. 1990 and
+        // studies on WBW
+
+
+        dff_Markov = dff*markov;
+
+        for(II = 1; II <= 9; II++)
+        {
+            cos_AA = cos(AA);
+            sin_AA = sin(AA);
+
+            // probability of photon transfer through a sky section
+            // for clumped foliage and Markov model
+
+            // exp_diffuse = exp(-dff_Markov * prof.Gfunc_sky[J][II] / cos_AA);
+            exp_diffuse = exp(-dff_Markov * Gfunc_sky(J-1,II-1) / cos_AA);
+            // printf("c++ %5.4f %5.4f %5.4f %5.4f\n", XX, AA, Gfunc_sky(J-1,II-1), dff_Markov);
+            // printf("c++ %5.4f %5.4f %5.4f %5.4f %5.4f\n", cos_AA * sin_AA * exp_diffuse, exp_diffuse, dff_Markov, Gfunc_sky(J-1,II-1), cos_AA);
+
+            // for spherical distribution
+            // exp_diffuse = exp(-DFF * prof.Gfunc_sky(J, II) / cos_AA)
+
+            // printf("c++ %5.4f %5.4f \n", XX, cos_AA * sin_AA * exp_diffuse);
+            XX += (cos_AA * sin_AA * exp_diffuse);
+            AA += DA;
+            // printf("c++ %5.4f %5.4f %5.4f %5.4f %5.4f\n", cos_AA * sin_AA * exp_diffuse, exp_diffuse, dff_Markov, Gfunc_sky(J-1,II-1), cos_AA);
+            // printf("c++ %5.4f %5.4f %5.4f %5.4f\n", XX, AA, Gfunc_sky(J-1,II-1), dff_Markov);
+        }  // next II
+
+        /*
+        'Itegrated probability of diffuse sky radiation penetration
+        'for each layer
+        */
+
+        // solar.exxpdir[J] = 2. * XX * DA;
+        // if(solar.exxpdir[J] > 1.)
+        //     solar.exxpdir[J] = .9999;
+        exxpdir(J-1) = 2. * XX * DA;
+        if(exxpdir(J-1) > 1.)
+            exxpdir(J-1) = .9999;
+
+    } // next J
+
+
+    // printf("lai  day  time_var.lai\n");
+    // printf("%5.2f  %4i  %5.2f\n", lai,time_var.days,time_var.lai);
+
+    return;
+}
+
+
 void CONC(
         double cref, double soilflux, double factor,
         int sze3, int jtot, int jtot3, double met_zl, double delz, int izref,
@@ -2203,6 +2560,13 @@ PYBIND11_MODULE(canoak, m) {
     m.def("angle", &ANGLE, "Subroutine to compute solar elevation angles",
     py::arg("latitude"), py::arg("longitude"), py::arg("zone"),
     py::arg("year"), py::arg("day_local"), py::arg("hour_local")); 
+
+    m.def("lai_time", &LAI_TIME, "Subroutine to compute how LAI and other canopy structural variables vary with time",
+    py::arg("jtot"), py::arg("sze"), py::arg("tsoil"), py::arg("lai"), py::arg("ht"),
+    py::arg("par_reflect"), py::arg("par_trans"), py::arg("par_soil_refl"), py::arg("par_absorbed"),
+    py::arg("nir_reflect"), py::arg("nir_trans"), py::arg("nir_soil_refl"), py::arg("nir_absorbed"),
+    py::arg("ht_midpt_np"), py::arg("lai_freq_np"), py::arg("bdens_np"), py::arg("Gfunc_sky_np"),
+    py::arg("dLAIdz_np"), py::arg("exxpdir_np")); 
 
     m.def("conc", &CONC, "Subroutine to compute scalar concentrations from source estimates and the Lagrangian dispersion matrix",
     py::arg("cref"), py::arg("soilflux"), py::arg("factor"),

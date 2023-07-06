@@ -7,4 +7,6 @@ from .radiation_transfer import (
     diffuse_direct_radiation,  # noqa: F401
     g_func_diffuse,  # noqa: F401
     gfunc,  # noqa: F401
+    gammaf,  # noqa: F401
+    freq,  # noqa: F401
 )

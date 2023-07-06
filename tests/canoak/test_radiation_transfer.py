@@ -17,10 +17,10 @@ from jax_canoak.physics.energy_fluxes import diffuse_direct_radiation  # noqa: E
 from jax_canoak.physics.energy_fluxes import g_func_diffuse  # noqa: E402
 from jax_canoak.physics.energy_fluxes import gfunc  # noqa: E402
 
-jtot = 300
-jtot3 = 1500
-# jtot = 3
-# jtot3 = 5
+# jtot = 300
+# jtot3 = 1500
+jtot = 3
+jtot3 = 5
 # jtot = 1
 # jtot3 = 3
 sze = jtot + 2
@@ -512,6 +512,9 @@ class TestRadiationTransfer(unittest.TestCase):
         print("Performing test_g_func_diffuse()...")
         # Inputs
         dLAIdz_np = np.random.random(sze)
+        # dLAIdz_np = np.array([
+        #     3.91881829e+00, 8.07051638e-02, 4.76547330e-04,
+        #     0.00000000e+00, 0.00000000e+00])
         bdens_np = np.zeros(9)
         Gfunc_sky_np = np.zeros([sze, szeang])
 
