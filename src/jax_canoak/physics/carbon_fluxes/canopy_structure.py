@@ -100,7 +100,7 @@ def lai_time(
     # par_reflect: Float_0D, par_trans: Float_0D, par_soil_refl: Float_0D,
     # par_absorbed: Float_0D, nir_reflect: Float_0D, nir_trans: Float_0D,
     # nir_soil_refl: Float_0D, nir_absorbed: Float_0D,
-    ht_midpt_scaled: Float_1D,
+    ht_midpt: Float_1D,
     lai_freq: Float_1D,
 ):
     jtot = sze - 2
@@ -111,7 +111,8 @@ def lai_time(
     # q =(1-mean){[mean(1-mean)/var]-1}
 
     # Height at the midpoint
-    ht_midpt = ht_midpt_scaled / ht
+    # ht_midpt = ht_midpt_scaled / ht
+    ht_midpt = ht_midpt / ht
     TF = jnp.sum(lai_freq)
     MU1 = jnp.sum(ht_midpt * lai_freq)
     MU2 = jnp.sum(ht_midpt * ht_midpt * lai_freq)

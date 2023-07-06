@@ -27,6 +27,57 @@ const double ht = 1;             //   0.55 Canopy height, m
 const double pai = .0;            //    Plant area index
 const double lai = 4;      //  1.65 Leaf area index data are from clip plots and correspond with broadband NDVI estimates
 
+//  Universal gas constant
+
+const double rugc = 8.314;              // J mole-1 K-1
+const double rgc1000 = 8314;                    // gas constant times 1000.
+
+
+// Consts for Photosynthesis model and kinetic equations.
+// for Vcmax and Jmax.  Taken from Harley and Baldocchi (1995, PCE)
+
+
+const double hkin = 200000.0;    // enthalpy term, J mol-1
+const double skin = 710.0;       // entropy term, J K-1 mol-1
+const double ejm = 55000.0;      // activation energy for electron transport, J mol-1
+const double evc = 55000.0;      // activation energy for carboxylation, J mol-1
+
+
+//  Enzyme constants & partial pressure of O2 and CO2
+//  Michaelis-Menten K values. From survey of literature.
+
+
+const double kc25 = 274.6;   // kinetic coef for CO2 at 25 C, microbars
+const double ko25 = 419.8;   // kinetic coef for O2 at 25C,  millibars
+
+
+const double o2 = 210.0;     // 210.0  oxygen concentration  mmol mol-1
+
+// tau is computed on the basis of the Specificity factor (102.33)
+// times Kco2/Kh2o (28.38) to convert for value in solution
+// to that based in air/
+// The old value was 2321.1.
+
+// New value for Quercus robor from Balaguer et al. 1996
+// Similar number from Dreyer et al. 2001, Tree Physiol, tau= 2710
+
+const double tau25 = 2904.12;    //  tau coefficient
+
+
+//  Arrhenius constants
+//  Eact for Michaelis-Menten const. for KC, KO and dark respiration
+//  These values are from Harley
+
+
+const double ekc = 80500.0;     // Activation energy for K of CO2; J mol-1
+const double eko = 14500.0;     // Activation energy for K of O2, J mol-1
+const double erd = 38000.0;     // activation energy for dark respiration, eg Q10=2
+const double ektau = -29000.0;  // J mol-1 (Jordan and Ogren, 1984)
+const double tk_25 = 298.16;    // absolute temperature at 25 C
+const double toptvc = 298.0;    // optimum temperature for maximum carboxylation, was 311
+const double toptjm = 298.0;    // optimum temperature for maximum electron transport, was 311
+const double eabole=45162;      // activation energy for bole respiration for Q10 = 2.02
+
 // Constants for leaf energy balance
 
 const double sigma = 5.67e-08;   // Stefan-Boltzmann constant W M-2 K-4
@@ -47,6 +98,35 @@ const double epsigma12= 66.6792e-8;       // 12.0 * ep * sigma
 
 const double betfact=1.5;                 // multiplication factor for aerodynamic
 // sheltering, based on work by Grace and Wilson
+
+//  constants for the polynomial equation for saturation vapor pressure-T function, es=f(t)
+
+const double a1en=617.4;
+const double a2en=42.22;
+const double a3en=1.675;
+const double a4en=0.01408;
+const double a5en=0.0005818;
+
+
+//  Ball-Berry stomatal coefficient for stomatal conductance
+
+const double kball = 9.5;
+
+// intercept of Ball-Berry model, mol m-2 s-1 
+
+const double bprime = .0175;           // intercept for H2O
+
+const double bprime16 = 0.0109375;      // intercept for CO2, bprime16 = bprime / 1.6;
+
+// Minimum stomatal resistance, s m-1.  
+
+const double rsm = 145.0;
+const double brs=60.0;      // curvature coeffient for light response
+
+//   leaf quantum yield, electrons  
+
+const double qalpha = .22;
+const double qalpha2 = 0.0484;   // qalpha squared, qalpha2 = pow(qalpha, 2.0);
 
 //  leaf clumping factor
 
@@ -2383,6 +2463,140 @@ void LAI_TIME(
 }
 
 
+void STOMATA(
+    int jtot, double lai, double pai, double rcuticle,
+    py::array_t<double, py::array::c_style> par_sun_np,
+    py::array_t<double, py::array::c_style> par_shade_np,
+    py::array_t<double, py::array::c_style> sun_rs_np,
+    py::array_t<double, py::array::c_style> shd_rs_np
+)
+{
+
+    /* ----------------------------------------------
+
+            SUBROUTINE STOMATA
+
+            First guess of rstom to run the energy balance model.
+                    It is later updated with the Ball-Berry model.
+    -------------------------------------------------
+    */
+
+    int JJ;
+
+    double rsfact;
+
+    auto par_sun = par_sun_np.unchecked<1>();
+    auto par_shade = par_shade_np.unchecked<1>();
+    auto sun_rs = sun_rs_np.mutable_unchecked<1>();
+    auto shd_rs = shd_rs_np.mutable_unchecked<1>();
+
+    rsfact=brs*rsm;
+
+    for(JJ = 1; JJ <=jtot; JJ++)
+    {
+
+
+        // compute stomatal conductance
+        // based on radiation on sunlit and shaded leaves
+        //  m/s.
+
+        //  PAR in units of W m-2
+
+        // if(time_var.lai == pai)
+        if(lai == pai)
+        {
+            // prof.sun_rs[JJ] = sfc_res.rcuticle;
+            // prof.shd_rs[JJ] = sfc_res.rcuticle;
+            sun_rs(JJ-1) = rcuticle;
+            shd_rs(JJ-1) = rcuticle;
+        }
+        else
+        {
+            // if(solar.par_sun[JJ] > 5.0)
+            //     prof.sun_rs[JJ] = rsm + (rsfact) / solar.par_sun[JJ];
+            // else
+            //     prof.sun_rs[JJ] = sfc_res.rcuticle;
+            if(par_sun(JJ-1) > 5.0)
+                sun_rs(JJ-1) = rsm + (rsfact) / par_sun(JJ-1);
+            else
+                sun_rs(JJ-1) = rcuticle;
+
+            // if(solar.par_shade[JJ] > 5.0)
+            //     prof.shd_rs[JJ] = rsm + (rsfact) / solar.par_shade[JJ];
+            // else
+            //     prof.shd_rs[JJ] = sfc_res.rcuticle;
+            if(par_shade(JJ-1) > 5.0)
+                shd_rs(JJ-1) = rsm + (rsfact) / par_shade(JJ-1);
+            else
+                shd_rs(JJ-1) = rcuticle;
+        }
+    }
+    return;
+}
+
+
+double TBOLTZ (double rate, double eakin, double topt, double tl)
+{
+
+    // Boltzmann temperature distribution for photosynthesis
+
+    double y, dtlopt,prodt,numm,denom;
+
+    dtlopt = tl - topt;
+    prodt = rugc * topt * tl;
+    numm = rate * hkin * exp(eakin * (dtlopt) / (prodt));
+    denom = hkin - eakin * (1.0 - exp(hkin * (dtlopt) / (prodt)));
+    y = numm / denom;
+    return y;
+}
+
+
+double TEMP_FUNC(double rate,double eact,double tprime,double tref, double t_lk)
+{
+
+    //  Arhennius temperature function
+
+    double y;
+    y = rate * exp(tprime * eact / (tref * rugc*t_lk));
+    return y;
+}
+
+
+std::tuple<double, double> SOIL_RESPIRATION(double Ts, double base_respiration)
+{
+
+
+    // Computes soil respiration
+
+    /*
+
+    After Hanson et al. 1993. Tree Physiol. 13, 1-15
+
+    reference soil respiration at 20 C, with value of about 5 umol m-2 s-1 from field studies
+    */
+    double respiration_mole, respiration_mg;
+
+    // soil.base_respiration=8.0;  // at base temp of 22 c, night values, minus plant respiration
+
+    // assume Q10 of 1.4 based on Mahecha et al Science 2010, Ea = 25169
+
+    // soil.respiration_mole = soil.base_respiration * exp((25169. / 8.314) * ((1. / 295.) - 1. / (soil.T_15cm + 273.16)));
+    respiration_mole = base_respiration * exp((25169. / 8.314) * ((1. / 295.) - 1. / (Ts + 273.16)));
+
+    // soil wetness factor from the Hanson model, assuming constant and wet soils
+
+    respiration_mole *= 0.86;
+
+
+    //  convert soilresp to mg m-2 s-1 from umol m-2 s-1
+
+    respiration_mg = respiration_mole * .044;
+
+    return std::make_tuple(respiration_mole, respiration_mg);
+    // return;
+}
+
+
 void CONC(
         double cref, double soilflux, double factor,
         int sze3, int jtot, int jtot3, double met_zl, double delz, int izref,
@@ -2567,6 +2781,19 @@ PYBIND11_MODULE(canoak, m) {
     py::arg("nir_reflect"), py::arg("nir_trans"), py::arg("nir_soil_refl"), py::arg("nir_absorbed"),
     py::arg("ht_midpt_np"), py::arg("lai_freq_np"), py::arg("bdens_np"), py::arg("Gfunc_sky_np"),
     py::arg("dLAIdz_np"), py::arg("exxpdir_np")); 
+
+    m.def("stomata", &STOMATA, "Subroutine to provide first guess of rstom to run the energy balance model.",
+    py::arg("jtot"), py::arg("lai"), py::arg("pai"), py::arg("rcuticle"),
+    py::arg("par_sun_np"), py::arg("par_shade_np"), py::arg("sun_rs_np"), py::arg("shd_rs_np")); 
+
+    m.def("tboltz", &TBOLTZ, "Subroutine to calculate Boltzmann temperature distribution for photosynthesis.",
+    py::arg("rate"), py::arg("eakin"), py::arg("topt"), py::arg("tl")); 
+
+    m.def("temp_func", &TEMP_FUNC, "Subroutine to perform Arhennius temperature function.",
+    py::arg("rate"), py::arg("eact"), py::arg("tprime"), py::arg("tref"), py::arg("t_lk")); 
+
+    m.def("soil_respiration", &SOIL_RESPIRATION, "Subroutine to compute soil respiration.",
+    py::arg("Ts"), py::arg("base_respiration")); 
 
     m.def("conc", &CONC, "Subroutine to compute scalar concentrations from source estimates and the Lagrangian dispersion matrix",
     py::arg("cref"), py::arg("soilflux"), py::arg("factor"),
