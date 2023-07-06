@@ -1,12 +1,14 @@
+from math import pow
+
 PI = 3.14159
 PI180 = 0.017453292  # pi divided by 180, radians per degree
 PI9 = 2.864788976
 PI2 = 6.283185307  # 2 time pi
 
-# Canopy structure variables
-ht = 1.0  # Canopy height, m
-pai = 0.0  # Plant area index
-lai = 4.0  # Leaf area index
+# # Canopy structure variables
+# ht = 1.0  # Canopy height, m
+# pai = 0.0  # Plant area index
+# lai = 4.0  # Leaf area index
 
 vcopt = 170.0  # Carboxylation rate at optimal temperature, umol m-2 s-1
 jmopt = 278.0  # Electron transport rate at optimal temperature, umol m-2 s-1
@@ -140,3 +142,26 @@ Rpdb_CO2 = 0.011115  # Isotope ratio of PeeDee Belimdite standard (PDB) for CO2
 # Isotope ratio of PeeDee Belimdite standard (PDB)
 # defined as 13C/12C, from Farquhar
 Rpdb_12C = 0.01124  # Isotope ratio of PeeDee Belimdite standard (PDB) for 12C
+
+
+# --------------------- Some dimensionless constants ---------------------
+# Constants for leaf boundary layers
+lfddf = lleaf / ddh
+
+# Prandtl Number
+pr = nuvisc / dh
+pr33 = pow(pr, 0.33)
+
+# DIFFUSIVITY OF WATER VAPOR, m2 s-1
+lfddv = lleaf / ddv
+
+# SCHMIDT NUMBER FOR VAPOR
+sc = nuvisc / dv
+sc33 = pow(sc, 0.33)
+
+# SCHMIDT NUMBER FOR CO2
+scc = nuvisc / dc
+scc33 = pow(scc, 0.33)
+
+# Grasshof Number
+grasshof = 9.8 * pow(lleaf, 3) / pow(nnu, 2)
