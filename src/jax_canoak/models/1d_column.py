@@ -44,7 +44,7 @@ plotting = True
 #                     Model parameter/properties settings                      #
 # ---------------------------------------------------------------------------- #
 # Spatio-temporal information/discretizations
-t0, tn, dt = 182.0, 194.0, 1.0 / 48.0  # [day]
+t0, tn, dt = 181.0, 194.0, 1.0 / 48.0  # [day]
 latitude, longitude, zone = 38.1, -121.65, -8
 
 # Subsurface layers
@@ -125,7 +125,8 @@ angle, lai_time = jax.jit(angle), jax.jit(lai_time, static_argnames=["sze"])
 while t_now < tn:
     # ------------------------- Get the current time step ------------------------ #
     t_now_fmt = time.return_formatted_time(t_now)
-    year, day, hour = t_now_fmt.year, t_now_fmt.timetuple().tm_yday, t_now_fmt.hour
+    year, day = t_now_fmt.year, t_now_fmt.timetuple().tm_yday
+    hour = t_now_fmt.hour + t_now_fmt.minute / 60.0
 
     # Get the forcing data
     (
@@ -155,7 +156,9 @@ while t_now < tn:
     ) = get_input_t(forcings, t_now)
     # jax.debug.print("rglobal: {a}; parin: {b}", a=rglobal, b=parin)
 
-    print(f"Time: {t_now} day; Hour: {hour}")
+    print(f"Time: {day} day; Hour: {hour}.")
+    # if (day==182) and (hour>8):
+    #     exit()
 
     # ----------------------------- Evolve the model ----------------------------- #
     # Update LAI structure with new day
@@ -232,6 +235,11 @@ while t_now < tn:
     # Perform some initializations
 
     # jax.debug.print("nir_dn: {a}; nir_up: {b}", a=nir_dn, b=nir_up)
+    # jax.debug.print("nir_up: {a}", a=nir_up)
+    # jax.debug.print(
+    #     "nir_beam: {a}; solar_sine_beta: {b}", a=nir_beam,
+    #     b=solar_sine_beta
+    # )
 
     # Update the time step
     t_prev = t_now
