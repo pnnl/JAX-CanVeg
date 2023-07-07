@@ -23,9 +23,15 @@
 #define PI2 6.283185307     // 2 time pi
 
 // canopy structure variables
-const double ht = 1;             //   0.55 Canopy height, m
-const double pai = .0;            //    Plant area index
-const double lai = 4;      //  1.65 Leaf area index data are from clip plots and correspond with broadband NDVI estimates
+// const double ht = 1;             //   0.55 Canopy height, m
+// const double pai = .0;            //    Plant area index
+// const double lai = 4;      //  1.65 Leaf area index data are from clip plots and correspond with broadband NDVI estimates
+
+// Gaetan et al 2012 IEEE, vcmax 70, jmax 123
+// Erice et al physiologia planatar, 170, 278, alfalfa A-Ci, Vcmax and Jmax
+const double vcopt = 170.0 ;   // carboxylation rate at optimal temperature, umol m-2 s-1; from lit
+const double jmopt = 278.0;  // electron transport rate at optimal temperature, umol m-2 s-1
+const double rd25 = .22;     // dark respiration at 25 C, rd25= 0.34 umol m-2 s-1
 
 //  Universal gas constant
 
@@ -1098,12 +1104,12 @@ void NIR(
 
 
     nir_total = nir_beam + nir_diffuse;
-    llai = lai;
+    // llai = lai;
 
     for(J = 1; J<=jktot; J++)
     {
         // llai -= dLAIdz[J];   // decrement LAI
-        llai -= dLAIdz(J-1);   // decrement LAI
+        // llai -= dLAIdz(J-1);   // decrement LAI
 
 
         // upward diffuse NIR flux density, on the horizontal
@@ -2597,6 +2603,758 @@ std::tuple<double, double> SOIL_RESPIRATION(double Ts, double base_respiration)
 }
 
 
+double ES(double tk)
+{
+
+    double y, y1, tc;
+
+    tc=tk-273.15;
+
+    // from Jones, es Pa, T oC
+
+    y=613*exp(17.502 * tc/(240.97+tc));
+
+
+
+    /*
+    // saturation vapor pressure function (mb)
+    // T is temperature in Kelvin
+    if(t > 0)
+    {
+    y1 = (54.8781919 - 6790.4985 / t - 5.02808 * log(t));
+    y = exp(y1);
+    }
+    else
+    printf("bad es calc");
+
+    */
+
+
+    return y;
+}
+
+
+double SFC_VPD (
+    double delz, double tlk, double Z, double leleafpt, double latent, double vapor, 
+    py::array_t<double, py::array::c_style> rhov_air_np
+)
+{
+
+    // this function computes the relative humidity at the leaf surface for
+    // application in the Ball Berry Equation
+
+    //  latent heat flux, LE, is passed through the function, mol m-2 s-1
+    //  and it solves for the humidity at leaf surface
+
+    int J;
+    double y, rhov_sfc,e_sfc,vpd_sfc,rhum_leaf;
+    double es_leaf;
+
+    auto rhov_air = rhov_air_np.unchecked<1>();
+
+    es_leaf = ES(tlk);    // saturation vapor pressure at leaf temperature
+
+    J = (int)(Z / delz);  // layer number
+    // for (J = 1; J <= 7; J++) {
+    //     std::cout << rhov_air(J-1) << ' ';
+    // }
+    // std::cout << '\n';
+    // printf("%d %5.4f %5.4f %5.4f %5.4f", J, Z, delz, Z/delz, rhov_air(J-1));
+
+    // rhov_sfc = (leleafpt / (fact.latent)) * vapor + rhov_air[J];  /* kg m-3 */
+    rhov_sfc = (leleafpt / (latent)) * vapor + rhov_air(J-1);  /* kg m-3 */
+
+    e_sfc = 1000* rhov_sfc * tlk / 2.165;    // Pa
+    vpd_sfc = es_leaf - e_sfc;              // Pa
+    rhum_leaf = 1. - vpd_sfc / es_leaf;     // 0 to 1.0
+    y = rhum_leaf;
+
+    return y;
+}
+
+
+// void PHOTOSYNTHESIS_AMPHI(double Iphoton,double *rstompt, double zzz,double cca,double tlk,
+//                           double *leleaf, double *A_mgpt, double *resppt, double *cipnt,
+//                           double *wjpnt, double *wcpnt)
+std::tuple<double, double, double, double, double, double, double> PHOTOSYNTHESIS_AMPHI(
+    double Iphoton, double delz, double zzz, double ht, double cca,double tlk, double vapor,
+    double pstat273, double kballstr, double latent, double co2air, double co2bound_res,
+    py::array_t<double, py::array::c_style> rhov_air_np
+)
+{
+
+    /*
+
+             This program solves a cubic equation to calculate
+             leaf photosynthesis.  This cubic expression is derived from solving
+             five simultaneous equations for A, PG, cs, CI and GS.
+             Stomatal conductance is computed with the Ball-Berry model.
+             The cubic derivation assumes that b', the intercept of the Ball-Berry
+             stomatal conductance model, is non-zero.
+
+    		 amphistomatous leaf is assumed, computed A on both sides of the leaf
+
+              Gs = k A rh/cs + b'
+
+
+              We also found that the solution for A can be obtained by a quadratic equation
+              when Gs is constant or b' is zero.
+
+
+                The derivation is published in:
+
+                Baldocchi, D.D. 1994. An analytical solution for coupled leaf photosynthesis
+                and stomatal conductance models. Tree Physiology 14: 1069-1079.
+
+
+    -----------------------------------------------------------------------
+
+              A Biochemical Model of C3 Photosynthesis
+
+                After Farquhar, von Caemmerer and Berry (1980) Planta.
+                149: 78-90.
+
+            The original program was modified to incorporate functions and parameters
+            derived from gas exchange experiments of Harley, who paramertized Vc and J in
+            terms of optimal temperature, rather than some reference temperature, eg 25C.
+
+            Program calculates leaf photosynthesis from biochemical parameters
+
+            rd25 - Dark respiration at 25 degrees C (umol m-2 s-1)
+            tlk - leaf temperature, Kelvin
+            jmax - optimal rate of electron transport
+            vcopt - maximum rate of RuBP Carboxylase/oxygenase
+            iphoton - incident photosynthetically active photon flux (mmols m-2 s-1)
+
+                note: Harley parameterized the model on the basis of incident PAR
+
+            gs - stomatal conductance (mols m-2 s-1), typically 0.01-0.20
+            pstat-station pressure, bars
+            aphoto - net photosynthesis  (umol m-2 s-1)
+            ps - gross photosynthesis (umol m-2 s-1)
+            aps - net photosynthesis (mg m-2 s-1)
+            aphoto (umol m-2 s-1)
+
+    --------------------------------------------------
+
+            iphoton is radiation incident on leaves
+
+            The temperature dependency of the kinetic properties of
+            RUBISCO are compensated for using the Arrhenius and
+            Boltzmann equations.  From biochemistry, one observes that
+            at moderate temperatures enzyme kinetic rates increase
+            with temperature.  At extreme temperatures enzyme
+            denaturization occurs and rates must decrease.
+
+            Arrhenius Eq.
+
+            f(T)=f(tk_25) exp(tk -298)eact/(298 R tk)), where eact is the
+            activation energy.
+
+                Boltzmann distribution
+
+            F(T)=tboltz)
+
+
+            Define terms for calculation of gross photosynthesis, PG
+
+            PG is a function of the minimum of RuBP saturated rate of
+            carboxylation, Wc, and the RuBP limited rate of carboxylation, Wj.
+            Wj is limiting when light is low and electron transport, which
+            re-generates RuBP, is limiting.  Wc is limiting when plenty of RuBP is
+            available compared to the CO2 that is needed for carboxylation.
+
+            Both equations take the form:
+
+            PG-photorespiration= (a CI-a d)/(e CI + b)
+
+            PG-photorespiration=min[Wj,Wc] (1-gamma/Ci)
+
+            Wc=Vcmax Ci/(Ci + Kc(1+O2/Ko))
+
+            Wj=J Ci/(4 Ci + 8 gamma)
+
+            Ps kinetic coefficients from Harley at WBW.
+
+            Gamma is the CO2 compensation point
+
+
+            Jan 14, 1999 Updated the cubic solutions for photosynthesis.  There are
+            times when the restriction that R^2 < Q^3 is violated.  I therefore need
+            alternative algorithms to solve for the correct root.
+
+    ===============================================================
+    */
+
+    double rstompt, leleaf, A_mgpt, resppt, cipnt, wjpnt, wcpnt;
+
+    double tprime25, bc, ttemp, gammac;
+    double jmax, vcmax,jmaxz, vcmaxz, cs, ci;
+    double kct, ko, tau;
+    double rd, rdz;
+    double rb_mole,gb_mole,dd,b8_dd;
+    double rh_leaf, k_rh, gb_k_rh,ci_guess;
+    double j_photon,alpha_ps,bbeta,gamma;
+    double denom,Pcube,Qcube,Rcube;
+    double P2, P3, Q, R;
+    double root1, root2;
+    double root3, arg_U, ang_L;
+    double aphoto, j_sucrose, wj;
+    double gs_leaf_mole, gs_co2,gs_m_s;
+    double ps_1,delta_1,Aquad1,Bquad1,Cquad1;
+    double theta_ps, wc, B_ps, a_ps, E_ps, psguess;
+    double sqrprod, product;
+    double rt;
+
+    double a, b, c, wp1, wp2, wp, aa, bb,cc, Aps1, Aps2, Aps;
+
+    double rr,qqq, minroot, maxroot, midroot;
+
+    rt = rugc * tlk;                // product of universal gas constant and abs temperature
+
+    tprime25 = tlk - tk_25;       // temperature difference
+
+    ttemp = exp((skin * tlk - hkin) / rt) + 1.0;  // denominator term
+
+    // initialize min and max roots
+
+    minroot= 1e10;
+    maxroot=-1e10;
+    midroot=0;
+    root1=0;
+    root2=0;
+    root3=0;
+    aphoto=0;
+
+
+    // KC and KO are solely a function of the Arrhenius Eq.
+
+
+    kct = TEMP_FUNC(kc25, ekc, tprime25, tk_25, tlk);
+    ko = TEMP_FUNC(ko25, eko, tprime25, tk_25,tlk);
+    tau = TEMP_FUNC(tau25, ektau, tprime25, tk_25,tlk);
+
+    bc = kct * (1.0 + o2 / ko);
+
+    if(Iphoton < 1)
+        Iphoton = 0;
+
+    /*
+            gammac is the CO2 compensation point due to photorespiration, umol mol-1
+            Recalculate gammac with the new temperature dependent KO and KC
+            coefficients
+
+            gammac = .5 * O2*1000/TAU
+    */
+
+    gammac = 500.0 * o2 / tau;
+
+    /*
+            temperature corrections for Jmax and Vcmax
+
+            Scale jmopt and VCOPT with a surrogate for leaf nitrogen
+            specific leaf weight (Gutschick and Weigel).
+
+            normalized leaf wt is 1 at top of canopy and is 0.35
+            at forest floor.  Leaf weight scales linearly with height
+            and so does jmopt and vcmax
+            zoverh=0.65/HT=zh65
+
+    */
+
+
+    // The upper layer was in flower, so Ps should be nill..this is unique for alfalfa
+
+    if (zzz < 0.9 * ht)
+    {
+        jmaxz = jmopt ;
+        vcmaxz = vcopt ;
+        //vcmaxz = leaf.Vcmax;
+        //jmaxz = 29 + 1.64*vcmaxz;
+    }
+    else
+    {
+        jmaxz = 0.1 * jmopt ;
+        vcmaxz = 0.1 * vcopt ;
+
+        //vcmaxz = 0.1 * leaf.Vcmax;
+        //jmaxz = 29 + 1.64*vcmaxz;
+    }
+
+
+    // values for ideal alfalfa and changes in leaf N, Vcmax and reflected NIR
+
+    jmaxz = jmopt;
+    vcmaxz = vcopt;
+    //vcmaxz = leaf.Vcmax;
+    //jmaxz = 29 + 1.64*vcmaxz;
+
+    /*
+            Scale rd with height via vcmax and apply temperature
+            correction for dark respiration
+    */
+
+    rdz=vcmaxz * 0.004657;
+
+
+    // reduce respiration by 40% in light according to Kok effect, as reported in Amthor
+
+
+    if(Iphoton > 10)
+        rdz *= 0.4;
+
+    rd = TEMP_FUNC(rdz, erd, tprime25, tk_25, tlk);
+
+
+    // Apply temperature correction to JMAX and vcmax
+
+
+    jmax = TBOLTZ(jmaxz, ejm, toptjm, tlk);
+    vcmax = TBOLTZ(vcmaxz, evc, toptvc, tlk);
+
+    /*
+            Compute the leaf boundary layer resistance
+
+            gb_mole leaf boundary layer conductance for CO2 exchange,
+            mol m-2 s-1
+
+            RB has units of s/m, convert to mol-1 m2 s1 to be
+            consistant with R.
+
+            rb_mole = RBCO2 * .0224 * 1.01 * tlk / (met.pstat * 273.16)
+    */
+
+    // rb_mole = bound_layer_res.co2 * tlk * (pstat273);
+    rb_mole = co2bound_res * tlk * (pstat273);
+
+    gb_mole = 1. / rb_mole;
+
+    dd = gammac;
+    b8_dd = 8 * dd;
+
+
+    /***************************************
+
+            APHOTO = PG - rd, net photosynthesis is the difference
+            between gross photosynthesis and dark respiration. Note
+            photorespiration is already factored into PG.
+
+    ****************************************
+
+            coefficients for Ball-Berry stomatal conductance model
+
+            Gs = k A rh/cs + b'
+
+            rh is relative humidity, which comes from a coupled
+            leaf energy balance model
+    */
+
+    rh_leaf  = SFC_VPD(delz, tlk, zzz, leleaf, latent, vapor, rhov_air_np);
+
+    k_rh = rh_leaf * kballstr;  // combine product of rh and K ball-berry
+
+    /*
+            Gs from Ball-Berry is for water vapor.  It must be divided
+            by the ratio of the molecular diffusivities to be valid
+            for A
+    */
+    k_rh = k_rh / 1.6;      // adjust the coefficient for the diffusion of CO2 rather than H2O
+
+    gb_k_rh = gb_mole * k_rh;
+
+    ci_guess = cca * .7;    // initial guess of internal CO2 to estimate Wc and Wj
+
+
+    // cubic coefficients that are only dependent on CO2 levels
+
+    // factors of 2 are included
+
+    alpha_ps = 1.0 + (bprime16 / (gb_mole)) - k_rh;
+    bbeta = cca * (2*gb_k_rh - 3.0 * bprime16 - 2*gb_mole);
+    gamma = cca * cca * gb_mole * bprime16 * 4;
+    theta_ps = 2* gb_k_rh - 2 * bprime16;
+
+    /*
+            Test for the minimum of Wc and Wj.  Both have the form:
+
+            W = (a ci - ad)/(e ci + b)
+
+            after the minimum is chosen set a, b, e and d for the cubic solution.
+
+            estimate of J according to Farquhar and von Cammerer (1981)
+
+
+            J photon from Harley
+    */
+
+
+    if (jmax > 0)
+        j_photon = qalpha * Iphoton / sqrt(1. +(qalpha2 * Iphoton * Iphoton / (jmax * jmax)));
+    else
+        j_photon = 0;
+
+
+    wj = j_photon * (ci_guess - dd) / (4. * ci_guess + b8_dd);
+
+
+    wc = vcmax * (ci_guess - dd) / (ci_guess + bc);
+
+
+
+
+
+
+
+    if(wj < wc)
+    {
+
+        // for Harley and Farquhar type model for Wj
+
+        psguess=wj;
+
+        B_ps = b8_dd;
+        a_ps = j_photon;
+        E_ps = 4.0;
+    }
+    else
+    {
+        psguess=wc;
+
+        B_ps = bc;
+        a_ps = vcmax;
+        E_ps = 1.0;
+    }
+
+    /*
+            if wj or wc are less than rd then A would probably be less than zero.  This would yield a
+            negative stomatal conductance.  In this case, assume gs equals the cuticular value. This
+            assumptions yields a quadratic rather than cubic solution for A
+
+    */
+
+
+
+
+    if (wj <= rd)
+        goto quad;
+
+    if (wc <= rd)
+        goto quad;
+
+    /*
+    cubic solution:
+
+     A^3 + p A^2 + q A + r = 0
+    */
+
+    denom = E_ps * alpha_ps;
+
+    Pcube = (E_ps * bbeta + B_ps * theta_ps - a_ps * alpha_ps + E_ps * rd * alpha_ps);
+    Pcube /= denom;
+
+    Qcube = (E_ps * gamma + (B_ps * gamma / cca) - a_ps * bbeta + a_ps * dd * theta_ps + E_ps * rd * bbeta + rd * B_ps * theta_ps);
+    Qcube /= denom;
+
+    Rcube = (-a_ps * gamma + a_ps * dd * (gamma / cca) + E_ps * rd * gamma + rd * B_ps * gamma / cca);
+    Rcube /= denom;
+
+
+    // Use solution from Numerical Recipes from Press
+
+
+    P2 = Pcube * Pcube;
+    P3 = P2 * Pcube;
+    Q = (P2 - 3.0 * Qcube) / 9.0;
+    R = (2.0 * P3 - 9.0 * Pcube * Qcube + 27.0 * Rcube) / 54.0;
+
+
+    /*
+            Test = Q ^ 3 - R ^ 2
+            if test >= O then all roots are real
+    */
+
+    rr=R*R;
+    qqq=Q*Q*Q;
+
+    // real roots
+
+
+    arg_U = R / sqrt(qqq);
+
+    ang_L = acos(arg_U);
+
+    root1 = -2.0 * sqrt(Q) * cos(ang_L / 3.0) - Pcube / 3.0;
+    root2 = -2.0 * sqrt(Q) * cos((ang_L + PI2) / 3.0) - Pcube / 3.0;
+    root3 = -2.0 * sqrt(Q) * cos((ang_L -PI2) / 3.0) - Pcube / 3.0;
+
+    // rank roots #1,#2 and #3 according to the minimum, intermediate and maximum
+    // value
+
+
+    if(root1 <= root2 && root1 <= root3)
+    {   minroot=root1;
+        if (root2 <= root3)
+        {   midroot=root2;
+            maxroot=root3;
+        }
+        else
+        {   midroot=root3;
+            maxroot=root2;
+        }
+    }
+
+
+    if(root2 <= root1 && root2 <= root3)
+    {   minroot=root2;
+        if (root1 <= root3)
+        {   midroot=root1;
+            maxroot=root3;
+        }
+        else
+        {   midroot=root3;
+            maxroot=root1;
+        }
+    }
+
+
+    if(root3 <= root1 && root3 <= root2)
+    {   minroot=root3;
+        if (root1 < root2)
+        {   midroot=root1;
+            maxroot=root2;
+        }
+        else
+        {   midroot=root2;
+            maxroot=root1;
+        }
+
+    }  // end of the loop for real roots
+
+
+    // find out where roots plop down relative to the x-y axis
+
+
+    if (minroot > 0 && midroot > 0 && maxroot > 0)
+        aphoto=minroot;
+
+
+    if (minroot < 0 && midroot < 0 && maxroot > 0)
+        aphoto=maxroot;
+
+
+    if (minroot < 0 && midroot > 0 && maxroot > 0)
+        aphoto=midroot;
+
+    /*
+             Here A = x - p / 3, allowing the cubic expression to be expressed
+             as: x^3 + ax + b = 0
+    */
+
+    // aphoto=root3;  // back to original assumption
+
+    /*
+            also test for sucrose limitation of photosynthesis, as suggested by
+            Collatz.  Js=Vmax/2
+    */
+    j_sucrose = vcmax / 2. - rd;
+
+    if(j_sucrose < aphoto)
+        aphoto = j_sucrose;
+
+    cs = cca - aphoto / (2*gb_mole);
+
+    if(cs > 1000)
+        cs=co2air;
+
+    /*
+            Stomatal conductance for water vapor
+
+
+    		alfalfa is amphistomatous...be careful on where the factor of two is applied
+    		just did on LE on energy balance..dont want to double count
+
+    		this version should be for an amphistomatous leaf since A is considered on both sides
+
+    */
+
+    gs_leaf_mole = (kballstr * rh_leaf * aphoto / cs) + bprime;
+
+
+    // convert Gs from vapor to CO2 diffusion coefficient
+
+
+    gs_co2 = gs_leaf_mole / 1.6;
+
+    /*
+            stomatal conductance is mol m-2 s-1
+            convert back to resistance (s/m) for energy balance routine
+    */
+
+    gs_m_s = gs_leaf_mole * tlk * pstat273;
+
+    // need point to pass rstom out of subroutine
+
+    rstompt = 1.0 / gs_m_s;
+
+
+    // to compute ci, Gs must be in terms for CO2 transfer
+
+
+    ci = cs - aphoto / gs_co2;
+
+    /*
+             if A < 0 then gs should go to cuticular value and recalculate A
+             using quadratic solution
+    */
+
+
+    // recompute wj and wc with ci
+
+
+    wj = j_photon * (ci - dd) / (4. * ci + b8_dd);
+
+    wc = vcmax * (ci - dd) / (ci + bc);
+
+    /* Collatz uses a quadratic model to compute a dummy variable wp to allow
+     for the transition between wj and wc, when there is colimitation.  this
+     is important because if one looks at the light response curves of the
+     current code one see jumps in A at certain Par values
+
+      theta wp^2 - wp (wj + wc) + wj wc = 0
+      a x^2 + b x + c = 0
+      x = [-b +/- sqrt(b^2 - 4 a c)]/2a
+
+    */
+
+
+
+
+
+    a=0.98;
+    b= -(wj +wc);
+    c=wj*wc;
+
+    wp1=(-b + sqrt(b*b - 4*a*c))/(2*a);
+    wp2=(-b - sqrt(b*b - 4*a*c))/(2*a);
+
+    // wp = min (wp1,wp2);
+
+    if(wp1 < wp2)
+        wp=wp1;
+    else
+        wp=wp2;
+
+
+
+// beta A^2 - A (Jp+Js) + JpJs = 0
+
+    aa = 0.95;
+    bb= -(wp+ j_sucrose);
+    cc = wp* j_sucrose;
+
+
+    Aps1=(-bb + sqrt(bb*bb - 4*aa*cc))/(2*aa);
+    Aps2=(-bb - sqrt(bb*bb - 4*aa*cc))/(2*aa);
+
+    // Aps=min(Aps1,Aps2);
+
+    if(Aps1 < Aps2)
+        Aps=Aps1;
+    else
+        Aps = Aps2;
+
+    if(Aps < aphoto && Aps > 0)
+        aphoto=Aps - rd;
+
+
+
+
+    if(aphoto <= 0.0)
+        goto quad;
+
+    goto OUTDAT;
+
+
+
+    // if aphoto < 0  set stomatal conductance to cuticle value
+
+quad:
+
+
+    gs_leaf_mole = bprime;
+    gs_co2 = gs_leaf_mole / 1.6;
+
+    /*
+            stomatal conductance is mol m-2 s-1
+            convert back to resistance (s/m) for energy balance routine
+    */
+
+    gs_m_s = gs_leaf_mole * tlk * (pstat273);
+
+    // need pointer to pass rstom out of subroutine as a pointer
+
+    rstompt = 1.0 / gs_m_s;
+
+
+    /*
+            a quadratic solution of A is derived if gs=ax, but a cubic form occurs
+            if gs =ax + b.  Use quadratic case when A is less than zero because gs will be
+            negative, which is nonsense
+
+    */
+
+    ps_1 = cca * gb_mole * gs_co2;
+    delta_1 = gs_co2 + gb_mole;
+    denom = gb_mole * gs_co2;
+
+    Aquad1 = delta_1 * E_ps;
+    Bquad1 = -ps_1 * E_ps - a_ps * delta_1 + E_ps * rd * delta_1 - B_ps * denom;
+    Cquad1 = a_ps * ps_1 - a_ps * dd * denom - E_ps * rd * ps_1 - rd * B_ps * denom;
+
+    product=Bquad1 * Bquad1 - 4.0 * Aquad1 * Cquad1;
+
+    if (product >= 0)
+        sqrprod= sqrt(product);
+
+    aphoto = (-Bquad1 - sqrprod) / (2.0 * Aquad1);
+    /*
+             Tests suggest that APHOTO2 is the correct photosynthetic root when
+             light is zero because root 2, not root 1 yields the dark respiration
+             value rd.
+    */
+
+    cs = cca - aphoto / gb_mole;
+    ci = cs - aphoto / gs_co2;
+
+
+OUTDAT:
+
+    /*
+            compute photosynthesis with units of mg m-2 s-1 and pass out as pointers
+
+            A_mg = APHOTO * 44 / 1000
+    */
+    A_mgpt = aphoto * .044;
+
+    resppt=rd;
+
+    cipnt=ci;
+
+    wcpnt=wc;
+
+    wjpnt=wj;
+
+    /*
+
+         printf(" cs       ci      gs_leaf_mole      CA     ci/CA  APS  root1  root2  root3\n");
+         printf(" %5.1f   %5.1f   %6.3f    %5.1f %6.3f  %6.3f %6.3f %6.3f  %6.3f\n", cs, ci, gs_leaf_mole, cca, ci / cca,aphoto,root1, root2, root3 );
+
+    */
+
+    return std::make_tuple(rstompt, leleaf, A_mgpt, resppt, cipnt, wjpnt, wcpnt);
+}
+
+
 void CONC(
         double cref, double soilflux, double factor,
         int sze3, int jtot, int jtot3, double met_zl, double delz, int izref,
@@ -2794,6 +3552,17 @@ PYBIND11_MODULE(canoak, m) {
 
     m.def("soil_respiration", &SOIL_RESPIRATION, "Subroutine to compute soil respiration.",
     py::arg("Ts"), py::arg("base_respiration")); 
+
+    m.def("es", &ES, "Subroutine to compute saturation vapor pressure given temperature.", py::arg("tk")); 
+
+    m.def("sfc_vpd", &SFC_VPD, "Subroutine to compute the relative humidity at the leaf surface for application in the Ball Berry Equation.",
+    py::arg("delz"), py::arg("tlk"), py::arg("Z"), py::arg("leleafpt"),
+    py::arg("latent"), py::arg("vapor"), py::arg("rhov_air_np")); 
+
+    m.def("photosynthesis_amphi", &PHOTOSYNTHESIS_AMPHI, "Subroutine to compute leaf photosynthesis.",
+    py::arg("Iphoton"), py::arg("delz"), py::arg("zzz"), py::arg("ht"), py::arg("cca"),
+    py::arg("tlk"), py::arg("vapor"), py::arg("pstat273"), py::arg("kballstr"),
+    py::arg("latent"), py::arg("co2air"), py::arg("co2bound_res"), py::arg("rhov_air_np")); 
 
     m.def("conc", &CONC, "Subroutine to compute scalar concentrations from source estimates and the Lagrangian dispersion matrix",
     py::arg("cref"), py::arg("soilflux"), py::arg("factor"),

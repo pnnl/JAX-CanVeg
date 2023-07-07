@@ -26,9 +26,6 @@ import jax.numpy as jnp
 
 from typing import Tuple
 
-# from ..carbon_fluxes import freq
-# from ..carbon_fluxes import freq
-
 from ...shared_utilities.types import Float_0D, Float_1D
 from ...shared_utilities.constants import ep, markov, sigma
 from ...shared_utilities.constants import epsigma, epsoil, epm1
