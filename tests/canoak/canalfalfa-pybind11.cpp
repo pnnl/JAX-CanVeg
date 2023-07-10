@@ -2659,7 +2659,7 @@ double SFC_VPD (
     //     std::cout << rhov_air(J-1) << ' ';
     // }
     // std::cout << '\n';
-    // printf("%d %5.4f %5.4f %5.4f %5.4f", J, Z, delz, Z/delz, rhov_air(J-1));
+    // printf("%d %5.4f %5.4f %5.4f %5.4f \n", J, Z, delz, Z/delz, rhov_air(J-1));
 
     // rhov_sfc = (leleafpt / (fact.latent)) * vapor + rhov_air[J];  /* kg m-3 */
     rhov_sfc = (leleafpt / (latent)) * vapor + rhov_air(J-1);  /* kg m-3 */
@@ -2676,9 +2676,9 @@ double SFC_VPD (
 // void PHOTOSYNTHESIS_AMPHI(double Iphoton,double *rstompt, double zzz,double cca,double tlk,
 //                           double *leleaf, double *A_mgpt, double *resppt, double *cipnt,
 //                           double *wjpnt, double *wcpnt)
-std::tuple<double, double, double, double, double, double, double> PHOTOSYNTHESIS_AMPHI(
-    double Iphoton, double delz, double zzz, double ht, double cca,double tlk, double vapor,
-    double pstat273, double kballstr, double latent, double co2air, double co2bound_res,
+std::tuple<double, double, double, double, double, double> PHOTOSYNTHESIS_AMPHI(
+    double Iphoton, double delz, double zzz, double ht, double cca,double tlk, double leleaf,
+    double vapor, double pstat273, double kballstr, double latent, double co2air, double co2bound_res,
     py::array_t<double, py::array::c_style> rhov_air_np
 )
 {
@@ -2786,7 +2786,7 @@ std::tuple<double, double, double, double, double, double, double> PHOTOSYNTHESI
     ===============================================================
     */
 
-    double rstompt, leleaf, A_mgpt, resppt, cipnt, wjpnt, wcpnt;
+    double rstompt, A_mgpt, resppt, cipnt, wjpnt, wcpnt;
 
     double tprime25, bc, ttemp, gammac;
     double jmax, vcmax,jmaxz, vcmaxz, cs, ci;
@@ -2833,10 +2833,12 @@ std::tuple<double, double, double, double, double, double, double> PHOTOSYNTHESI
     kct = TEMP_FUNC(kc25, ekc, tprime25, tk_25, tlk);
     ko = TEMP_FUNC(ko25, eko, tprime25, tk_25,tlk);
     tau = TEMP_FUNC(tau25, ektau, tprime25, tk_25,tlk);
+    // printf("%5.4f %5.4f %5.4f %5.4f \n", kct, ko, tau, tlk);
 
     bc = kct * (1.0 + o2 / ko);
 
-    if(Iphoton < 1)
+    // if(Iphoton < 1)
+    if(Iphoton < 0) // TODO: Peishi
         Iphoton = 0;
 
     /*
@@ -2952,6 +2954,7 @@ std::tuple<double, double, double, double, double, double, double> PHOTOSYNTHESI
     rh_leaf  = SFC_VPD(delz, tlk, zzz, leleaf, latent, vapor, rhov_air_np);
 
     k_rh = rh_leaf * kballstr;  // combine product of rh and K ball-berry
+    // printf("%5.4f %5.4f %5.4f %5.4f \n", leleaf, vapor, o2, tau);
 
     /*
             Gs from Ball-Berry is for water vapor.  It must be divided
@@ -3184,6 +3187,8 @@ std::tuple<double, double, double, double, double, double, double> PHOTOSYNTHESI
 
 
     gs_co2 = gs_leaf_mole / 1.6;
+    // printf("%5.4f %5.4f %5.4f %5.4f \n", aphoto, gs_co2, cs, Pcube);
+
 
     /*
             stomatal conductance is mol m-2 s-1
@@ -3351,7 +3356,7 @@ OUTDAT:
 
     */
 
-    return std::make_tuple(rstompt, leleaf, A_mgpt, resppt, cipnt, wjpnt, wcpnt);
+    return std::make_tuple(rstompt, A_mgpt, resppt, cipnt, wjpnt, wcpnt);
 }
 
 
@@ -3561,7 +3566,7 @@ PYBIND11_MODULE(canoak, m) {
 
     m.def("photosynthesis_amphi", &PHOTOSYNTHESIS_AMPHI, "Subroutine to compute leaf photosynthesis.",
     py::arg("Iphoton"), py::arg("delz"), py::arg("zzz"), py::arg("ht"), py::arg("cca"),
-    py::arg("tlk"), py::arg("vapor"), py::arg("pstat273"), py::arg("kballstr"),
+    py::arg("leleaf"), py::arg("tlk"), py::arg("vapor"), py::arg("pstat273"), py::arg("kballstr"),
     py::arg("latent"), py::arg("co2air"), py::arg("co2bound_res"), py::arg("rhov_air_np")); 
 
     m.def("conc", &CONC, "Subroutine to compute scalar concentrations from source estimates and the Lagrangian dispersion matrix",

@@ -12,6 +12,7 @@ from jax_canoak.physics.carbon_fluxes import stomata  # type: ignore
 from jax_canoak.physics.carbon_fluxes import tboltz  # type: ignore
 from jax_canoak.physics.carbon_fluxes import temp_func  # type: ignore
 from jax_canoak.physics.carbon_fluxes import soil_respiration  # type: ignore
+from jax_canoak.physics.carbon_fluxes import photosynthesis_amphi  # type: ignore
 
 config.update("jax_enable_x64", True)
 
@@ -101,3 +102,71 @@ class TestPhotosynthesisStomata(unittest.TestCase):
         # print(r_np, r_jnp)
         print("")
         self.assertTrue(np.allclose(r_np, r_jnp))
+
+    def test_photosynthesis_amphi(self):
+        print("Performing test_photosynthesis_amphi()...")
+        # Inputs
+        Iphoton, pstat273, Z, hz = 50.0, 102.0, 1.5, 2.5
+        delz, cca, tlk, vapor = hz / jtot, 12.3, 252.0, 56.0
+        leleaf, kballstr, latent, co2air = 23.0, 4.0, 20.0, 760.0
+        co2bound_res, rhov_air_np = 101, np.random.random(sze3)
+
+        # CANOAK
+        (
+            rstompt,
+            A_mgpt,
+            resppt,
+            cipnt,
+            wjpnt,
+            wcpnt,
+        ) = canoak.photosynthesis_amphi(  # type: ignore
+            Iphoton,
+            delz,
+            Z,
+            hz,
+            cca,
+            tlk,
+            leleaf,
+            vapor,
+            pstat273,
+            kballstr,
+            latent,
+            co2air,
+            co2bound_res,
+            rhov_air_np,
+        )
+
+        # JAX
+        ind_z = int(Z / delz) - 1
+        rhov_air_z = rhov_air_np[ind_z]
+        (
+            rstompt_jnp,
+            A_mgpt_jnp,
+            resppt_jnp,
+            cipnt_jnp,
+            wjpnt_jnp,
+            wcpnt_jnp,
+        ) = photosynthesis_amphi(  # type: ignore
+            Iphoton,
+            cca,
+            tlk,
+            leleaf,
+            vapor,
+            pstat273,
+            kballstr,
+            latent,
+            co2air,
+            co2bound_res,
+            rhov_air_z,
+        )
+
+        # print(r_np, r_jnp)
+        print(rstompt, A_mgpt, resppt, cipnt, wjpnt, wcpnt)
+        print(rstompt_jnp, A_mgpt_jnp, resppt_jnp, cipnt_jnp, wjpnt_jnp, wcpnt_jnp)
+        print("")
+        self.assertTrue(np.allclose(rstompt, rstompt_jnp))
+        self.assertTrue(np.allclose(A_mgpt, A_mgpt_jnp))
+        self.assertTrue(np.allclose(resppt, resppt_jnp))
+        self.assertTrue(np.allclose(cipnt, cipnt_jnp))
+        self.assertTrue(np.allclose(wjpnt, wjpnt_jnp))
+        self.assertTrue(np.allclose(wcpnt, wcpnt_jnp))

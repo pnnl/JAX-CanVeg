@@ -23,8 +23,9 @@ from jax_canoak.physics.energy_fluxes import (
     nir,
     gfunc,
     diffuse_direct_radiation,
+    irflux,
 )
-from jax_canoak.physics.carbon_fluxes import angle, lai_time
+from jax_canoak.physics.carbon_fluxes import angle, lai_time, stomata
 
 from jax_canoak.shared_utilities.forcings import Alf_forcings_30min as forcings
 from jax_canoak.shared_utilities.forcings import Alf_divergence as divergence_matrix
@@ -56,6 +57,7 @@ jtot = 30  # number of canopy layers
 sze, jktot = jtot + 2, jtot + 1
 delz = ht / jtot  # height of each layer
 zh65 = 0.65 / ht
+pai = 0.0  # plant area index
 # height of mid point of layer scaled
 ht_midpt = jnp.array([0.5, 1.0, 1.5, 2.0, 2.5])
 lai_freq_scaled = jnp.array([0.6, 0.6, 0.6, 0.6, 0.6])
@@ -143,6 +145,7 @@ while t_now < tn:
         swc,
         T_Kelvin,
         rhova_g,
+        rhova_kg,
         relative_humidity,
         vpd,
         press_bars,
@@ -153,6 +156,7 @@ while t_now < tn:
         air_density,
         air_density_mole,
         soil_Tave_15cm,
+        heatcoef,
     ) = get_input_t(forcings, t_now)
     # jax.debug.print("rglobal: {a}; parin: {b}", a=rglobal, b=parin)
 
@@ -161,6 +165,14 @@ while t_now < tn:
     #     exit()
 
     # ----------------------------- Evolve the model ----------------------------- #
+    # Perform some initializations
+    sun_tleaf, shd_tleaf = jnp.ones(sze) * ta, jnp.ones(sze) * ta
+    sun_T_filter, shd_T_filter = jnp.ones(sze) * ta, jnp.ones(sze) * ta
+    tair, tair_filter = jnp.ones(sze3) * ta, jnp.ones(sze3) * ta
+    rhov_air, rhov_filter = jnp.ones(sze3) * rhova_kg, jnp.ones(sze3) * rhova_kg
+    co2_air = jnp.ones(sze3) * co2
+    sfc_temperature = ta
+
     # Update LAI structure with new day
     exxpdir, dLAIdz, Gfunc_sky = lai_time(sze, lai, ht, ht_midpt, lai_freq_scaled)
 
@@ -232,14 +244,39 @@ while t_now < tn:
         Gfunc_solar,
     )
 
-    # Perform some initializations
+    # Compute stomatal conductance for sunlit and
+    # shaded leaf fractions as a function of light
+    # on those leaves.
+    sun_rs_jnp, shd_rs_jnp = stomata(
+        lai,
+        pai,
+        rcuticle,
+        par_sun,
+        par_shade,
+    )
 
-    # jax.debug.print("nir_dn: {a}; nir_up: {b}", a=nir_dn, b=nir_up)
+    # Compute probability of penetration for diffuse
+    # radiation for each layer in the canopy
+    ir_up, ir_dn = irflux(
+        T_Kelvin,
+        ratrad,
+        sfc_temperature,
+        exxpdir,
+        sun_T_filter,
+        shd_T_filter,
+        prob_beam,
+        prob_sh,
+    )
+
+    jax.debug.print("ir_up: {a}; ir_dn: {b}", a=ir_up, b=ir_dn)
     # jax.debug.print("nir_up: {a}", a=nir_up)
     # jax.debug.print(
     #     "nir_beam: {a}; solar_sine_beta: {b}", a=nir_beam,
     #     b=solar_sine_beta
     # )
+
+    # Iteration looping for energy fluxes and scalar fields
+    # iterate until energy balance closure occurs or 75 iterations are reached
 
     # Update the time step
     t_prev = t_now

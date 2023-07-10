@@ -4,7 +4,7 @@ from typing import Tuple
 from .point_data import PointData
 from ..types import Float_0D
 
-from ..constants import bprime, mass_air, rugc
+from ..constants import bprime, mass_air, rugc, cp
 
 
 def get_input_t(forcings: PointData, t: Float_0D) -> Tuple:
@@ -112,6 +112,7 @@ def get_input_t(forcings: PointData, t: Float_0D) -> Tuple:
     # if humidity is bad, estimate it as some reasonable value, e.g. annual average
     if rhova_g > 30.0:
         rhova_g = 10.0
+    rhova_kg = rhova_g / 1000.0
 
     # air density, kg m-3
     air_density = press_kpa * mass_air / (rugc * T_Kelvin)
@@ -120,6 +121,9 @@ def get_input_t(forcings: PointData, t: Float_0D) -> Tuple:
     air_density_mole = press_kpa / (rugc * T_Kelvin) * 1000.0
 
     soil_Tave_15cm = ts
+
+    # Heat coefficient
+    heatcoef = air_density * cp
 
     return (
         rglobal,
@@ -135,6 +139,7 @@ def get_input_t(forcings: PointData, t: Float_0D) -> Tuple:
         swc,
         T_Kelvin,
         rhova_g,
+        rhova_kg,
         relative_humidity,
         vpd,
         press_bars,
@@ -145,4 +150,5 @@ def get_input_t(forcings: PointData, t: Float_0D) -> Tuple:
         air_density,
         air_density_mole,
         soil_Tave_15cm,
+        heatcoef,
     )
