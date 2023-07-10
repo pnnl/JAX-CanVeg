@@ -549,7 +549,7 @@ class TestRadiationTransfer(unittest.TestCase):
         # bdens_jnp = freq(lflai)
 
         # print(Gfunc_sky_np, Gfunc_sky_jnp)
-        # print(Gfunc_solar_np)
+        # print(Gfunc_solar_jnp, Gfunc_solar_np)
         print("")
         # self.assertTrue(np.allclose(Gfunc_solar_jnp, Gfunc_solar_np))
         self.assertTrue(np.allclose(Gfunc_solar_jnp, Gfunc_solar_np, atol=1e-5))

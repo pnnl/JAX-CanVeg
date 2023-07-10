@@ -102,7 +102,7 @@ def lai_time(
     # nir_soil_refl: Float_0D, nir_absorbed: Float_0D,
     ht_midpt: Float_1D,
     lai_freq: Float_1D,
-):
+) -> Tuple[Float_1D, Float_1D, Float_1D]:
     jtot = sze - 2
     # Beta distribution
     # f(x) = x^(p-1) (1-x)^(q-1) / B(v,w)
@@ -162,13 +162,21 @@ def lai_time(
         update_beta, [integr_beta, X, F3], jnp.arange(1, JM1)
     )
     integr_beta, X, F3 = carry
-    beta_fnc = beta_fnc.at[1:JM1].set(beta_fnc_update)
+    # beta_fnc = beta_fnc.at[1:JM1].set(beta_fnc_update)
+    beta_fnc = jnp.concatenate([beta_fnc[:1], beta_fnc_update, beta_fnc[JM1:]])
     F1 = F3
     X += DX4
     F2 = jnp.power(X, P_beta) * jnp.power((1.0 - X), Q_beta)
 
     # compute integrand at highest boundary
-    beta_fnc = beta_fnc.at[jtot - 1].set(DX4 * (F1 + 4.0 * F2) / 3.0)
+    # beta_fnc = beta_fnc.at[jtot - 1].set(DX4 * (F1 + 4.0 * F2) / 3.0)
+    beta_fnc = jnp.concatenate(
+        [
+            beta_fnc[: jtot - 1],
+            jnp.array([DX4 * (F1 + 4.0 * F2) / 3.0]),
+            beta_fnc[jtot:],
+        ]
+    )
     integr_beta += beta_fnc[jtot - 1]
 
     # lai_z IS THE LEAF AREA AS A FUNCTION OF Z
@@ -213,7 +221,8 @@ def lai_time(
     _, exxpdir_update = jax.lax.scan(update_exxpdir, None, jnp.arange(jtot))
     exxpdir_update = jnp.clip(exxpdir_update, a_max=0.9999)
     # jax.debug.print("exxpdir_update: {x}", x=exxpdir_update)
-    exxpdir = exxpdir.at[:jtot].set(exxpdir_update)
+    # exxpdir = exxpdir.at[:jtot].set(exxpdir_update)
+    exxpdir = jnp.concatenate([exxpdir_update, exxpdir[jtot:]])
 
     return exxpdir, lai_z, Gfunc_sky
 

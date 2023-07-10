@@ -66,8 +66,10 @@ def stomata(
 
     # jax.debug.print("rs_update: {x}", x=rs_update)
 
-    sun_rs = sun_rs.at[:jtot].set(rs_update[0])
-    shd_rs = shd_rs.at[:jtot].set(rs_update[1])
+    # sun_rs = sun_rs.at[:jtot].set(rs_update[0])
+    # shd_rs = shd_rs.at[:jtot].set(rs_update[1])
+    sun_rs = jnp.concatenate([rs_update[0], sun_rs[jtot:]])
+    shd_rs = jnp.concatenate([rs_update[1], shd_rs[jtot:]])
 
     return sun_rs, shd_rs
 
@@ -84,7 +86,7 @@ def photosynthesis_amphi(
     co2air: Float_0D,
     co2bound_res: Float_0D,
     rhov_air_z: Float_0D,
-):
+) -> Tuple[Float_0D, Float_0D, Float_0D, Float_0D, Float_0D, Float_0D]:
     # temperature difference
     tprime25 = tlk - tk_25
     # # product of universal gas constant and abs temperature

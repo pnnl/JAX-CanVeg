@@ -55,9 +55,9 @@ class TestCanopyStructure(unittest.TestCase):
         # self.assertTrue(1==1)
 
     def test_gammaf(self):
-        print("Performing test_irflux()...")
+        print("Performing test_gammaf()...")
         # Inputs
-        x = 2.0
+        x = 232.0
 
         # CANOAK
         y_np = canoak.gammaf(x)  # type: ignore
@@ -65,6 +65,7 @@ class TestCanopyStructure(unittest.TestCase):
         # JAX
         gammaf_jit = jax.jit(gammaf)
         y_jnp = gammaf_jit(x)
+        # y_jnp = jax.scipy.special.gamma(x)
 
         # print(y_jnp, y_np)
         print("")

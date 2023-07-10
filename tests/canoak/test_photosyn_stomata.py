@@ -139,6 +139,7 @@ class TestPhotosynthesisStomata(unittest.TestCase):
         # JAX
         ind_z = int(Z / delz) - 1
         rhov_air_z = rhov_air_np[ind_z]
+        photosynthesis_amphi_jit = jax.jit(photosynthesis_amphi)
         (
             rstompt_jnp,
             A_mgpt_jnp,
@@ -146,7 +147,7 @@ class TestPhotosynthesisStomata(unittest.TestCase):
             cipnt_jnp,
             wjpnt_jnp,
             wcpnt_jnp,
-        ) = photosynthesis_amphi(  # type: ignore
+        ) = photosynthesis_amphi_jit(  # type: ignore
             Iphoton,
             cca,
             tlk,

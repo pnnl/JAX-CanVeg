@@ -24,6 +24,8 @@ Date: 2023.06.28.
 import jax
 import jax.numpy as jnp
 
+# from jax.scipy.special import gamma
+
 from typing import Tuple
 
 from ...shared_utilities.types import Float_0D, Float_1D
@@ -173,8 +175,11 @@ def par_day(
     fraction_beam = par_beam / parin
     beam = jnp.zeros(jktot) + fraction_beam
     # tbeam = jnp.zeros(jktot) + fraction_beam
-    sumlai = jnp.zeros(sze)
-    sumlai = sumlai.at[:jtot].set(jnp.cumsum(dLAIdz[::-1][2:])[::-1])
+    # sumlai = jnp.zeros(sze)
+    # sumlai = sumlai.at[:jtot].set(jnp.cumsum(dLAIdz[::-1][2:])[::-1])
+    sumlai = jnp.concatenate(
+        [jax.lax.cumsum(dLAIdz[:jtot], reverse=True), jnp.zeros(sze - jtot)]
+    )
 
     # Compute probability of penetration for direct and
     # diffuse radiation for each layer in the canopy
@@ -188,13 +193,16 @@ def par_day(
     # Compute the probability of beam penetration
     exp_direct = jnp.exp(-dLAIdz * markov * Gfunc_solar / solar_sine_beta)
     pen2 = jnp.exp(-sumlai * markov * Gfunc_solar / solar_sine_beta)
-    pen2 = pen2.at[-2:].set(0)
+    # pen2 = pen2.at[-2:].set(0)
+    pen2 = jnp.concatenate([pen2[:-2], jnp.zeros(2)])
 
     # sunlit and shaded LAI
     sun_lai = solar_sine_beta * (1 - pen2) / (markov * Gfunc_solar)
     shd_lai = sumlai - sun_lai
-    sun_lai = sun_lai.at[-2:].set(0)
-    shd_lai = shd_lai.at[-2:].set(0)
+    sun_lai = jnp.concatenate([sun_lai[:-2], jnp.zeros(2)])
+    shd_lai = jnp.concatenate([shd_lai[:-2], jnp.zeros(2)])
+    # sun_lai = sun_lai.at[-2:].set(0)
+    # shd_lai = shd_lai.at[-2:].set(0)
 
     # probability of beam
     prob_beam = markov * pen2
@@ -207,28 +215,43 @@ def par_day(
     _, beam_update = jax.lax.scan(
         f=update_beam, init=beam[jktot - 1], xs=jnp.arange(jtot)
     )
-    beam = beam.at[:-1].set(beam_update[::-1])
+    # beam = beam.at[:-1].set(beam_update[::-1])
+    beam = jnp.concatenate([beam_update[::-1], beam[-1:]])
     qu = 1.0 - prob_beam
     qu = jnp.clip(qu, a_min=0.0, a_max=1.0)
-    qu = qu.at[-2:].set(0)
+    qu = jnp.concatenate([qu[:-2], jnp.zeros(2)])
+    # qu = qu.at[-2:].set(0)
 
     # probability of umbra
     prob_sh = qu
     tbeam = beam
 
     # beam PAR that is reflected upward by a layer
-    sup = sup.at[1:-1].set(tbeam[1:] - tbeam[:-1]) * par_reflect
-    # print(qu)
+    sup = jnp.concatenate(
+        [
+            jnp.array([tbeam[0] * par_soil_refl]),
+            (tbeam[1:] - tbeam[:-1]) * par_reflect,
+            sup[-1:] * par_reflect,
+        ]
+    )
+    # sup = jnp.concatenate([sup[:1], tbeam[1:] - tbeam[:-1], sup[-1:]]) * par_reflect
+    # sup = sup.at[1:-1].set(tbeam[1:] - tbeam[:-1]) * par_reflect
 
     # beam PAR that is transmitted downward
-    sdn = sdn.at[:-2].set(tbeam[1:] - tbeam[:-1]) * par_trans
+    sdn = jnp.concatenate([tbeam[1:] - tbeam[:-1], sdn[-2:]]) * par_trans
+    # sdn = sdn.at[:-2].set(tbeam[1:] - tbeam[:-1]) * par_trans
 
     # Initiate scattering using the technique of NORMAN (1979).
     # scattering is computed using an iterative technique.
     # Here Adum is the ratio up/down diffuse radiation.
-    sup = sup.at[0].set(tbeam[0] * par_soil_refl)
-    par_down = par_down.at[jktot - 1].set(1.0 - fraction_beam)
-    adum = adum.at[0].set(par_soil_refl)
+    # sup = sup.at[0].set(tbeam[0] * par_soil_refl)
+    # par_down = par_down.at[jktot - 1].set(1.0 - fraction_beam)
+    # adum = adum.at[0].set(par_soil_refl)
+    # sup = sup.at[0].set(tbeam[0] * par_soil_refl)
+    par_down = jnp.concatenate(
+        [par_down[:-2], jnp.array([1.0 - fraction_beam, par_down[-1]])]
+    )
+    adum = jnp.concatenate([jnp.array([par_soil_refl]), adum[1:]])
     tlay2 = transmission_layer * transmission_layer
     # adum = adum.at[1:].set(adum)
     def update_adum(carry, i):
@@ -238,7 +261,8 @@ def par_day(
         return carry_new, carry_new
 
     _, adum_update = jax.lax.scan(update_adum, adum[0], jnp.arange(jtot))
-    adum = adum.at[1:-1].set(adum_update)
+    adum = jnp.concatenate([adum[:1], adum_update, adum[-1:]])
+    # adum = adum.at[1:-1].set(adum_update)
 
     def update_pard(carry, i):
         carry_new = (
@@ -252,9 +276,13 @@ def par_day(
     _, pard_update = jax.lax.scan(
         update_pard, par_down[jktot - 1], jnp.arange(1, jktot)[::-1]
     )
-    par_down = par_down.at[:-2].set(pard_update[::-1])
+    # par_down = par_down.at[:-2].set(pard_update[::-1])
+    par_down = jnp.concatenate([pard_update[::-1], par_down[-2:]])
     par_up = adum * par_down + sup
-    par_up = par_up.at[0].set(par_soil_refl * par_down[0] + sup[0])
+    par_up = jnp.concatenate(
+        [jnp.array([par_soil_refl * par_down[0] + sup[0]]), par_up[1:]]
+    )
+    # par_up = par_up.at[0].set(par_soil_refl * par_down[0] + sup[0])
 
     # Iterative calculation of upward diffuse and downward beam +
     # diffuse PAR.
@@ -271,9 +299,13 @@ def par_day(
         _, down = jax.lax.scan(
             f=calculate_down, init=par_down[jktot - 1], xs=jnp.arange(jtot)[::-1]
         )
-        par_down = par_down.at[:jtot].set(down[::-1])
+        # par_down = par_down.at[:jtot].set(down[::-1])
+        par_down = jnp.concatenate([down[::-1], par_down[-2:]])
         # upward --
-        par_up = par_up.at[0].set((par_down[0] + tbeam[0]) * par_soil_refl)
+        # par_up = par_up.at[0].set((par_down[0] + tbeam[0]) * par_soil_refl)
+        par_up = jnp.concatenate(
+            [jnp.array([(par_down[0] + tbeam[0]) * par_soil_refl]), par_up[1:]]
+        )
 
         def calculate_up(c, j):
             # carry_new = carry * jnp.power(exp_direct[jtot-1-i], i)
@@ -285,7 +317,8 @@ def par_day(
             return c_new, c_new
 
         _, up = jax.lax.scan(f=calculate_up, init=par_up[0], xs=jnp.arange(jtot))
-        par_up = par_up.at[1:jktot].set(up)
+        # par_up = par_up.at[1:jktot].set(up)
+        par_up = jnp.concatenate([par_up[:1], up, par_up[-1:]])
         # up = reflectance_layer[:jtot]*par_down[:jtot]+ \
         #     par_up[:jtot]*transmission_layer[:jtot] + sup[1:jktot]
         # par_up = par_up.at[1:jktot].set(up)
@@ -300,13 +333,17 @@ def par_day(
     # Compute flux density of PAR
     par_up = par_up * parin
     par_up = jnp.clip(par_up, a_min=0.001)
-    par_up = par_up.at[jktot:].set(0)
-    beam_flux_par = beam_flux_par.at[:-1].set(beam * parin)
+    # par_up = par_up.at[jktot:].set(0)
+    # beam_flux_par = beam_flux_par.at[:-1].set(beam * parin)
+    par_up = jnp.concatenate([par_up[:jktot], jnp.array([0])])
+    beam_flux_par = jnp.concatenate([beam * parin, beam_flux_par[-1:]])
     beam_flux_par = jnp.clip(beam_flux_par, a_min=0.001)
-    beam_flux_par = beam_flux_par.at[jktot:].set(0)
+    # beam_flux_par = beam_flux_par.at[jktot:].set(0)
+    beam_flux_par = jnp.concatenate([beam_flux_par[:jktot], jnp.array([0])])
     par_down = par_down * parin
     par_down = jnp.clip(par_down, a_min=0.001)
-    par_down = par_down.at[jktot:].set(0)
+    par_down = jnp.concatenate([par_down[:jktot], jnp.array([0])])
+    # par_down = par_down.at[jktot:].set(0)
     # par_down = par_down.at[par_down<=0].set(0.001)
     # par_total = beam_flux_par[jktot-1]+par_down[jktot-1]
 
@@ -320,10 +357,14 @@ def par_day(
     par_shade = quantum_sh / 4.6  # W m-2
     par_sun = par_normal_abs_energy + par_shade
 
-    quantum_sh = quantum_sh.at[jtot:].set(0)
-    quantum_sun = quantum_sun.at[jtot:].set(0)
-    par_shade = par_shade.at[jtot:].set(0)
-    par_sun = par_sun.at[jtot:].set(0)
+    # quantum_sh = quantum_sh.at[jtot:].set(0)
+    # quantum_sun = quantum_sun.at[jtot:].set(0)
+    # par_shade = par_shade.at[jtot:].set(0)
+    # par_sun = par_sun.at[jtot:].set(0)
+    quantum_sh = jnp.concatenate([quantum_sh[:jtot], jnp.zeros(sze - jtot)])
+    quantum_sun = jnp.concatenate([quantum_sun[:jtot], jnp.zeros(sze - jtot)])
+    par_shade = jnp.concatenate([par_shade[:jtot], jnp.zeros(sze - jtot)])
+    par_sun = jnp.concatenate([par_sun[:jtot], jnp.zeros(sze - jtot)])
 
     return (
         sun_lai,
@@ -366,14 +407,16 @@ def par_night(
 ]:
     sze = dLAIdz.size
     jtot = sze - 2
-    prob_sh, prob_beam = jnp.zeros(sze), jnp.zeros(sze)
+    prob_beam = jnp.zeros(sze)
     sun_lai, shd_lai = jnp.zeros(sze), jnp.zeros(sze)
     par_up, par_down = jnp.zeros(sze), jnp.zeros(sze)
     quantum_sh, quantum_sun = jnp.zeros(sze), jnp.zeros(sze)
     par_shade, par_sun = jnp.zeros(sze), jnp.zeros(sze)
     beam_flux_par = jnp.zeros(sze)
 
-    prob_sh = prob_sh.at[:jtot].set(1.0)
+    # prob_sh = jnp.zeros(sze)
+    # prob_sh = prob_sh.at[:jtot].set(1.0)
+    prob_sh = jnp.concatenate([jnp.ones(jtot), jnp.zeros(sze - jtot)])
 
     return (
         sun_lai,
@@ -567,8 +610,11 @@ def nir_day(
     fraction_beam = nir_beam / (nir_beam + nir_diffuse)
     beam = jnp.zeros(jktot) + fraction_beam
     # tbeam = jnp.zeros(jktot) + fraction_beam
-    sumlai = jnp.zeros(sze)
-    sumlai = sumlai.at[:jtot].set(jnp.cumsum(dLAIdz[::-1][2:])[::-1])
+    # sumlai = jnp.zeros(sze)
+    # sumlai = sumlai.at[:jtot].set(jnp.cumsum(dLAIdz[::-1][2:])[::-1])
+    # sumlai = jnp.concatenate(
+    #     [jax.lax.cumsum(dLAIdz[:jtot], reverse=True), jnp.zeros(sze - jtot)]
+    # )
 
     # Compute probability of penetration for direct and
     # diffuse radiation for each layer in the canopy
@@ -591,21 +637,34 @@ def nir_day(
     _, beam_update = jax.lax.scan(
         f=update_beam, init=beam[jktot - 1], xs=jnp.arange(jtot)
     )
-    beam = beam.at[:-1].set(beam_update[::-1])
+    # beam = beam.at[:-1].set(beam_update[::-1])
+    beam = jnp.concatenate([beam_update[::-1], beam[-1:]])
     tbeam = beam
 
     # beam PAR that is reflected upward by a layer
-    sup = sup.at[1:-1].set(tbeam[1:] - tbeam[:-1]) * nir_reflect
+    sup = jnp.concatenate(
+        [
+            jnp.array([tbeam[0] * nir_soil_refl]),
+            (tbeam[1:] - tbeam[:-1]) * nir_reflect,
+            sup[-1:] * nir_reflect,
+        ]
+    )
+    # sup = sup.at[1:-1].set(tbeam[1:] - tbeam[:-1]) * nir_reflect
 
     # beam PAR that is transmitted downward
-    sdn = sdn.at[:-2].set(tbeam[1:] - tbeam[:-1]) * nir_trans
+    sdn = jnp.concatenate([tbeam[1:] - tbeam[:-1], sdn[-2:]]) * nir_trans
+    # sdn = sdn.at[:-2].set(tbeam[1:] - tbeam[:-1]) * nir_trans
 
     # Initiate scattering using the technique of NORMAN (1979).
     # scattering is computed using an iterative technique.
     # Here Adum is the ratio up/down diffuse radiation.
-    sup = sup.at[0].set(tbeam[0] * nir_soil_refl)
-    nir_dn = nir_dn.at[jktot - 1].set(1.0 - fraction_beam)
-    adum = adum.at[0].set(nir_soil_refl)
+    # sup = sup.at[0].set(tbeam[0] * nir_soil_refl)
+    # nir_dn = nir_dn.at[jktot - 1].set(1.0 - fraction_beam)
+    # adum = adum.at[0].set(nir_soil_refl)
+    nir_dn = jnp.concatenate(
+        [nir_dn[:-2], jnp.array([1.0 - fraction_beam, nir_dn[-1]])]
+    )
+    adum = jnp.concatenate([jnp.array([nir_soil_refl]), adum[1:]])
     tlay2 = transmission_layer * transmission_layer
 
     def update_adum(carry, i):
@@ -615,7 +674,8 @@ def nir_day(
         return carry_new, carry_new
 
     _, adum_update = jax.lax.scan(update_adum, adum[0], jnp.arange(jtot))
-    adum = adum.at[1:-1].set(adum_update)
+    adum = jnp.concatenate([adum[:1], adum_update, adum[-1:]])
+    # adum = adum.at[1:-1].set(adum_update)
 
     def update_nird(carry, i):
         carry_new = (
@@ -629,9 +689,13 @@ def nir_day(
     _, nird_update = jax.lax.scan(
         update_nird, nir_dn[jktot - 1], jnp.arange(1, jktot)[::-1]
     )
-    nir_dn = nir_dn.at[:-2].set(nird_update[::-1])
+    # nir_dn = nir_dn.at[:-2].set(nird_update[::-1])
+    nir_dn = jnp.concatenate([nird_update[::-1], nir_dn[-2:]])
     nir_up = adum * nir_dn + sup
-    nir_up = nir_up.at[0].set(nir_soil_refl * nir_dn[0] + sup[0])
+    nir_up = jnp.concatenate(
+        [jnp.array([nir_soil_refl * nir_dn[0] + sup[0]]), nir_up[1:]]
+    )
+    # nir_up = nir_up.at[0].set(nir_soil_refl * nir_dn[0] + sup[0])
 
     # Iterative calculation of upward diffuse and downward beam +
     # diffuse PAR.
@@ -647,9 +711,13 @@ def nir_day(
         _, down = jax.lax.scan(
             f=calculate_down, init=nir_dn[jktot - 1], xs=jnp.arange(jtot)[::-1]
         )
-        nir_dn = nir_dn.at[:jtot].set(down[::-1])
+        # nir_dn = nir_dn.at[:jtot].set(down[::-1])
+        nir_dn = jnp.concatenate([down[::-1], nir_dn[-2:]])
         # upward --
-        nir_up = nir_up.at[0].set((nir_dn[0] + tbeam[0]) * nir_soil_refl)
+        # nir_up = nir_up.at[0].set((nir_dn[0] + tbeam[0]) * nir_soil_refl)
+        nir_up = jnp.concatenate(
+            [jnp.array([(nir_dn[0] + tbeam[0]) * nir_soil_refl]), nir_up[1:]]
+        )
 
         def calculate_up(c, j):
             c_new = (
@@ -660,7 +728,8 @@ def nir_day(
             return c_new, c_new
 
         _, up = jax.lax.scan(f=calculate_up, init=nir_up[0], xs=jnp.arange(jtot))
-        nir_up = nir_up.at[1:jktot].set(up)
+        # nir_up = nir_up.at[1:jktot].set(up)
+        nir_up = jnp.concatenate([nir_up[:1], up, nir_up[-1:]])
         carry_new = [nir_up, nir_dn]
         return carry_new, carry_new
 
@@ -671,13 +740,17 @@ def nir_day(
     nir_total = nir_beam + nir_diffuse
     nir_up = nir_up * nir_total
     nir_up = jnp.clip(nir_up, a_min=0.001)
-    nir_up = nir_up.at[jktot:].set(0)
-    beam_flux_nir = beam_flux_nir.at[:-1].set(beam * nir_total)
+    # nir_up = nir_up.at[jktot:].set(0)
+    # beam_flux_nir = beam_flux_nir.at[:-1].set(beam * nir_total)
+    nir_up = jnp.concatenate([nir_up[:jktot], jnp.array([0])])
+    beam_flux_nir = jnp.concatenate([beam * nir_total, beam_flux_nir[-1:]])
     beam_flux_nir = jnp.clip(beam_flux_nir, a_min=0.001)
-    beam_flux_nir = beam_flux_nir.at[jktot:].set(0)
+    # beam_flux_nir = beam_flux_nir.at[jktot:].set(0)
+    beam_flux_nir = jnp.concatenate([beam_flux_nir[:jktot], jnp.array([0])])
     nir_dn = nir_dn * nir_total
     nir_dn = jnp.clip(nir_dn, a_min=0.001)
-    nir_dn = nir_dn.at[jktot:].set(0)
+    nir_dn = jnp.concatenate([nir_dn[:jktot], jnp.array([0])])
+    # nir_dn = nir_dn.at[jktot:].set(0)
 
     # PSUN is the radiation incident on the mean leaf normal
     nir_normal = nir_beam * Gfunc_solar / solar_sine_beta
@@ -689,8 +762,10 @@ def nir_day(
     # jax.debug.print('nir_normal: {x}', x=nir_normal)
     # jax.debug.print('nir_beam: {x}', x=nir_beam)
 
-    nir_sh = nir_sh.at[jtot:].set(0)
-    nir_sun = nir_sun.at[jtot:].set(0)
+    nir_sh = jnp.concatenate([nir_sh[:jtot], jnp.zeros(sze - jtot)])
+    nir_sun = jnp.concatenate([nir_sun[:jtot], jnp.zeros(sze - jtot)])
+    # nir_sh = nir_sh.at[jtot:].set(0)
+    # nir_sun = nir_sun.at[jtot:].set(0)
 
     return (
         nir_dn,
@@ -785,7 +860,8 @@ def irflux(
     ir_dn, ir_up = jnp.zeros(sze), jnp.zeros(sze)
 
     ir_in = sky_ir(T_Kelvin, ratrad)
-    ir_dn = ir_dn.at[jktot - 1].set(ir_in)
+    # ir_dn = ir_dn.at[jktot - 1].set(ir_in)
+    ir_dn = jnp.concatenate([ir_dn[:jtot], jnp.array([ir_in, ir_dn[-1]])])
 
     # Loop from layers jtot to 1
     #
@@ -802,7 +878,8 @@ def irflux(
     IR_source_shade = prob_sh * jnp.power(Tk_shade_flit, 4.0)
     IR_source = epsigma * (IR_source_sun + IR_source_shade)
     SDN = IR_source * (1 - exxpdir)
-    SUP = SUP.at[1:jktot].set(IR_source[:jtot] * (1 - exxpdir[:jtot]))
+    SUP = jnp.concatenate([SUP[:1], IR_source[:jtot] * (1 - exxpdir[:jtot]), SUP[-1:]])
+    # SUP = SUP.at[1:jktot].set(IR_source[:jtot] * (1 - exxpdir[:jtot]))
 
     # Downward IR radiation, sum of that from upper layer that is transmitted
     # and the downward source generated in the upper layer.
@@ -812,17 +889,21 @@ def irflux(
         return carry_new, carry_new
 
     _, ird_update = jax.lax.scan(update_ird, ir_dn[jktot - 1], jnp.arange(jtot)[::-1])
-    ir_dn = ir_dn.at[:-2].set(ird_update[::-1])
+    # ir_dn = ir_dn.at[:-2].set(ird_update[::-1])
+    ir_dn = jnp.concatenate([ird_update[::-1], ir_dn[-2:]])
     emiss_IR_soil = epsigma * jnp.power((sfc_temperature + 273.16), 4.0)
-    SUP = SUP.at[0].set(ir_dn[0] * (1.0 - epsoil))
-    ir_up = ir_up.at[0].set(emiss_IR_soil + SUP[0])
+    SUP = jnp.concatenate([jnp.array([ir_dn[0] * (1.0 - epsoil)]), SUP[1:]])
+    ir_up = jnp.concatenate([jnp.array([emiss_IR_soil + SUP[0]]), ir_up[1:]])
+    # SUP = SUP.at[0].set(ir_dn[0] * (1.0 - epsoil))
+    # ir_up = ir_up.at[0].set(emiss_IR_soil + SUP[0])
 
     def update_iru(carry, i):
         carry_new = carry * exxpdir[i - 1] + SUP[i]
         return carry_new, carry_new
 
     _, iru_update = jax.lax.scan(update_iru, ir_up[0], jnp.arange(1, jktot))
-    ir_up = ir_up.at[1:jktot].set(iru_update)
+    ir_up = jnp.concatenate([ir_up[:1], iru_update, ir_up[-1:]])
+    # ir_up = ir_up.at[1:jktot].set(iru_update)
 
     # jax.debug.print("ir_up: {x}", x=ir_up)
     # jax.debug.print("ir_dn: {x}", x=ir_dn)
@@ -840,11 +921,14 @@ def irflux(
         _, down = jax.lax.scan(
             f=calculate_down, init=ir_dn[jktot - 1], xs=jnp.arange(jtot)[::-1]
         )
-        ir_dn = ir_dn.at[:jtot].set(down[::-1])
+        ir_dn = jnp.concatenate([down[::-1], ir_dn[-2:]])
+        # ir_dn = ir_dn.at[:jtot].set(down[::-1])
 
         # upward --
-        SUP = SUP.at[0].set(ir_dn[0] * (1.0 - epsoil))
-        ir_up = ir_up.at[0].set(emiss_IR_soil + SUP[0])
+        SUP = jnp.concatenate([jnp.array([ir_dn[0] * (1.0 - epsoil)]), SUP[1:]])
+        ir_up = jnp.concatenate([jnp.array([emiss_IR_soil + SUP[0]]), ir_up[1:]])
+        # SUP = SUP.at[0].set(ir_dn[0] * (1.0 - epsoil))
+        # ir_up = ir_up.at[0].set(emiss_IR_soil + SUP[0])
 
         def calculate_up(c, j):
             reflec_lay_ir = (1 - exxpdir[j - 1]) * epm1
@@ -852,7 +936,8 @@ def irflux(
             return c_new, c_new
 
         _, up = jax.lax.scan(f=calculate_up, init=ir_up[0], xs=jnp.arange(1, jktot))
-        ir_up = ir_up.at[1:jktot].set(up)
+        ir_up = jnp.concatenate([ir_up[:1], up, ir_up[-1:]])
+        # ir_up = ir_up.at[1:jktot].set(up)
         carry_new = [ir_up, ir_dn, SUP]
         return carry_new, carry_new
 
@@ -882,9 +967,12 @@ def g_func_diffuse(dLAIdz: Float_1D) -> Float_1D:
 
     Gfunc_sky = jnp.zeros([sze, 19])
 
-    llai = jnp.zeros(sze)
-    llai = llai.at[:jtot].set(jnp.cumsum(dLAIdz[::-1][2:])[::-1])
+    # llai = jnp.zeros(sze)
+    # llai = llai.at[:jtot].set(jnp.cumsum(dLAIdz[::-1][2:])[::-1])
     # llai = llai.at[:jtot].set(jnp.cumsum(dLAIdz))
+    llai = jnp.concatenate(
+        [jax.lax.cumsum(dLAIdz[:jtot], reverse=True), jnp.zeros(sze - jtot)]
+    )
 
     ang = 5.0 * PI180
     dang = 2.0 * ang
@@ -893,10 +981,16 @@ def g_func_diffuse(dLAIdz: Float_1D) -> Float_1D:
     aden = aden.at[:16].set(0.0625)
 
     K = 2 * jnp.arange(1, nsize) - 3
-    TT = TT.at[:-1].set(0.1963 * K)
-    sin_TT = sin_TT.at[:-1].set(jnp.sin(TT[:-1]))
-    del_TT = del_TT.at[: nsize - 2].set(TT[1 : nsize - 1] - TT[: nsize - 2])
-    del_sin = del_sin.at[: nsize - 2].set(sin_TT[1 : nsize - 1] - sin_TT[: nsize - 2])
+    # TT = TT.at[:-1].set(0.1963 * K)
+    # sin_TT = sin_TT.at[:-1].set(jnp.sin(TT[:-1]))
+    # del_TT = del_TT.at[: nsize - 2].set(TT[1 : nsize - 1] - TT[: nsize - 2])
+    # del_sin = del_sin.at[: nsize - 2].set(sin_TT[1 : nsize - 1] - sin_TT[: nsize - 2])
+    TT = jnp.concatenate([0.1963 * K, TT[-1:]])
+    sin_TT = jnp.concatenate([jnp.sin(TT[:-1]), sin_TT[-1:]])
+    del_TT = jnp.concatenate([TT[1 : nsize - 1] - TT[: nsize - 2], del_TT[-1:]])
+    del_sin = jnp.concatenate(
+        [sin_TT[1 : nsize - 1] - sin_TT[: nsize - 2], del_sin[-1:]]
+    )
 
     # jax.debug.print("TT: {x}.", x=TT)
     # jax.debug.print("sin_TT: {x}.", x=sin_TT)
@@ -925,8 +1019,11 @@ def g_func_diffuse(dLAIdz: Float_1D) -> Float_1D:
 
                 def calculate_pgf_1(PGF):
                     # jax.debug.print("-- {x} {y} {z}", z=aang-bang, y=aang, x=bang)
-                    PGF = PGF.at[: nsize - 2].set(
-                        X * del_TT[: nsize - 2] + Y * del_sin[: nsize - 2]
+                    # PGF = PGF.at[: nsize - 2].set(
+                    #     X * del_TT[: nsize - 2] + Y * del_sin[: nsize - 2]
+                    # )
+                    PGF = jnp.concatenate(
+                        [X * del_TT[: nsize - 2] + Y * del_sin[: nsize - 2], PGF[-2:]]
                     )
                     return PGF
 
@@ -979,7 +1076,8 @@ def g_func_diffuse(dLAIdz: Float_1D) -> Float_1D:
                     _, PGF_update = jax.lax.scan(
                         calculate_pgf_2a, None, jnp.arange(nsize - 2)
                     )
-                    PGF = PGF.at[: nsize - 2].set(PGF_update)
+                    # PGF = PGF.at[: nsize - 2].set(PGF_update)
+                    PGF = jnp.concatenate([PGF_update, PGF[-2:]])
                     # jax.debug.print("PGF_update: {x}.", x=PGF_update)
                     return PGF
 
@@ -1022,7 +1120,9 @@ def g_func_diffuse(dLAIdz: Float_1D) -> Float_1D:
 
     _, Gfunc_sky_update = jax.lax.scan(calculate_g_row, ang, jnp.arange(9))
 
-    Gfunc_sky = Gfunc_sky.at[:jtot, :9].set(Gfunc_sky_update.T)
+    # Gfunc_sky = Gfunc_sky.at[:jtot, :9].set(Gfunc_sky_update.T)
+    Gfunc_sky = jnp.concatenate([Gfunc_sky_update.T, jnp.zeros([sze - jtot, 9])])
+    Gfunc_sky = jnp.concatenate([Gfunc_sky, jnp.zeros([sze, 10])], axis=1)
 
     return Gfunc_sky
 
@@ -1053,16 +1153,25 @@ def gfunc(solar_beta_rad: Float_0D, dLAIdz: Float_1D) -> Float_1D:
 
     Gfunc_solar = jnp.zeros(sze)
 
-    llai = jnp.zeros(sze)
-    llai = llai.at[:jtot].set(jnp.cumsum(dLAIdz[::-1][2:])[::-1])
+    # llai = jnp.zeros(sze)
+    # llai = llai.at[:jtot].set(jnp.cumsum(dLAIdz[::-1][2:])[::-1])
+    llai = jnp.concatenate(
+        [jax.lax.cumsum(dLAIdz[:jtot], reverse=True), jnp.zeros(sze - jtot)]
+    )
 
     # Midpoint of azimuthal intervals
     aden = aden.at[:16].set(0.0625)
     K = 2 * jnp.arange(1, nsize) - 3
-    TT = TT.at[:-1].set(3.14159265 / 16.0 * K)
-    sin_TT = sin_TT.at[:-1].set(jnp.sin(TT[:-1]))
-    del_TT = del_TT.at[: nsize - 2].set(TT[1 : nsize - 1] - TT[: nsize - 2])
-    del_sin = del_sin.at[: nsize - 2].set(sin_TT[1 : nsize - 1] - sin_TT[: nsize - 2])
+    # TT = TT.at[:-1].set(3.14159265 / 16.0 * K)
+    # sin_TT = sin_TT.at[:-1].set(jnp.sin(TT[:-1]))
+    # del_TT = del_TT.at[: nsize - 2].set(TT[1 : nsize - 1] - TT[: nsize - 2])
+    # del_sin = del_sin.at[: nsize - 2].set(sin_TT[1 : nsize - 1] - sin_TT[: nsize - 2])
+    TT = jnp.concatenate([3.14159265 / 16.0 * K, TT[-1:]])
+    sin_TT = jnp.concatenate([jnp.sin(TT[:-1]), sin_TT[-1:]])
+    del_TT = jnp.concatenate([TT[1 : nsize - 1] - TT[: nsize - 2], del_TT[-1:]])
+    del_sin = jnp.concatenate(
+        [sin_TT[1 : nsize - 1] - sin_TT[: nsize - 2], del_sin[-1:]]
+    )
 
     # Compute the G function for each layer
     def calculate_g_each(c1, j):
@@ -1079,8 +1188,11 @@ def gfunc(solar_beta_rad: Float_0D, dLAIdz: Float_1D) -> Float_1D:
 
             def calculate_pgf_1(pgg):
                 # jax.debug.print("-- {x} {y} {z}", z=aang-bang, y=aang, x=bang)
-                pgg = pgg.at[: nsize - 2].set(
-                    X * del_TT[: nsize - 2] + Y * del_sin[: nsize - 2]
+                # pgg = pgg.at[: nsize - 2].set(
+                #     X * del_TT[: nsize - 2] + Y * del_sin[: nsize - 2]
+                # )
+                pgg = jnp.concatenate(
+                    [X * del_TT[: nsize - 2] + Y * del_sin[: nsize - 2], pgg[-2:]]
                 )
                 return pgg
 
@@ -1131,8 +1243,8 @@ def gfunc(solar_beta_rad: Float_0D, dLAIdz: Float_1D) -> Float_1D:
                 _, pgg_update = jax.lax.scan(
                     calculate_pgf_2a, None, jnp.arange(nsize - 2)
                 )
-                pgg = pgg.at[: nsize - 2].set(pgg_update)
-                # jax.debug.print("PGF_update: {x}.", x=PGF_update)
+                # pgg = pgg.at[: nsize - 2].set(pgg_update)
+                pgg = jnp.concatenate([pgg_update, pgg[-2:]])
                 return pgg
 
             pgg = jax.lax.cond(
@@ -1157,7 +1269,8 @@ def gfunc(solar_beta_rad: Float_0D, dLAIdz: Float_1D) -> Float_1D:
     # _, G_row = jax.lax.scan(calculate_g_each, PPP, jnp.arange(9))
     _, Gfunc_solar_update = jax.lax.scan(calculate_g_each, None, jnp.arange(jtot))
 
-    Gfunc_solar = Gfunc_solar.at[:jtot].set(Gfunc_solar_update)
+    # Gfunc_solar = Gfunc_solar.at[:jtot].set(Gfunc_solar_update)
+    Gfunc_solar = jnp.concatenate([Gfunc_solar_update, Gfunc_solar[-2:]])
 
     return Gfunc_solar
 
@@ -1182,7 +1295,7 @@ def gammaf(x: Float_0D) -> Float_0D:
     y = jax.lax.cond(
         x > 0,
         lambda x: jnp.sqrt(2.0 * jnp.pi / x) * jnp.power(x, x) * jnp.exp(-x) * gam,
-        lambda x: 0.0,
+        lambda x: jnp.inf,
         x,
     )
 
@@ -1208,7 +1321,9 @@ def freq(lflai: Float_0D) -> Float_0D:
     MU = nuu * ((90.0 / MEAN) - 1.0)
     SUM = nuu + MU
 
+    # FL1 = gamma(SUM) / (gamma(nuu) * gamma(MU))
     FL1 = gammaf(SUM) / (gammaf(nuu) * gammaf(MU))
+    # jax.debug.print("FL1: {a}; FL1-jax: {b}", a=gammaf(SUM), b=gamma(SUM))
     MU1 = MU - 1.0
     nu1 = nuu - 1.0
 
