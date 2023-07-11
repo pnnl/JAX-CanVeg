@@ -138,6 +138,42 @@ const double qalpha2 = 0.0484;   // qalpha squared, qalpha2 = pow(qalpha, 2.0);
 
 const double markov = 1.00;
 
+//   Leaf dimension. geometric mean of length and width (m)
+const double lleaf = .02;       // leaf length, m
+
+
+// Diffusivity values for 273 K and 1013 mb (STP) using values from Massman (1998) Atmos Environment
+// These values are for diffusion in air.  When used these values must be adjusted for
+// temperature and pressure
+
+// nu, Molecular viscosity
+
+
+const double nuvisc = 13.27;    // mm2 s-1
+const double nnu = 0.00001327;  // m2 s-1
+
+// Diffusivity of CO2
+
+const double dc = 13.81;         // mm2 s-1
+const double ddc = 0.00001381;   // m2 s-1
+
+//   Diffusivity of heat
+
+const double dh = 18.69;         // mm2 s-1
+const double ddh = 0.00001869;   // m2 s-1
+
+
+//  Diffusivity of water vapor
+
+const double dv = 21.78;         // mm2 s-1
+const double ddv = 0.00002178;   // m2 s-1
+
+
+// Diffusivity of ozone
+
+const double do3=14.44;          // mm2 s-1
+const double ddo3 = 0.00001444; // m2 s-1
+
 namespace py = pybind11;
 
 
@@ -3360,6 +3396,239 @@ OUTDAT:
 }
 
 
+double UZ (double zzz, double ht, double wnd)
+{
+    double y,zh, zh2, zh3, y1, uh;
+    /*
+             U(Z) inside the canopy during the day is about 1.09 u*
+             This simple parameterization is derived from turbulence
+             data measured in the WBW forest by Baldocchi and Meyers, 1988.
+    */
+
+    zh=zzz/ht;
+
+    // use Cionco exponential function
+
+    // uh=input.wnd*log((0.55-0.33)/0.055)/log((2.8-.333)/0.055);
+    uh=wnd*log((0.55-0.33)/0.055)/log((2.8-.333)/0.055);
+
+    y=uh*exp(-2.5*(1-zh));
+
+    return y;
+}
+
+
+std::tuple<double, double, double> BOUNDARY_RESISTANCE(
+    double delz, double zzz, double ht, double TLF, double grasshof, 
+    double press_kPa, double wnd, double pr33, double sc33, double scc33,
+    py::array_t<double, py::array::c_style> tair_filter_np
+)
+{
+    /*
+
+    **************************************
+
+    BOUNDARY_RESISTANCE
+
+    This subroutine computes the leaf boundary layer
+    resistances for heat, vapor and CO2 (s/m).
+
+    Flat plate theory is used, as discussed in Schuepp (1993) and
+    Grace and Wilson (1981).
+
+    We consider the effects of turbulent boundary layers and sheltering.
+    Schuepp's review shows a beta factor multiplier is necessary for SH in
+    flows with high turbulence.  The concepts and theories used have been
+    validated with our work on HNO3 transfer to the forest.
+
+
+    Schuepp. 1993 New Phytologist 125: 477-507
+
+
+    Diffusivities have been corrected using the temperature/Pressure algorithm in Massman (1998)
+
+
+    */
+
+
+    double Re,Re5,Re8;               // Reynolds numbers
+    double Sh_heat,Sh_vapor,Sh_CO2;  // Sherwood numbers
+
+    double graf, GR25;      // Grasshof numbers
+
+    double deltlf;
+
+    double Res_factor;
+
+    double nnu_T_P, ddh_T_P, ddv_T_P, ddc_T_P, T_kelvin;
+
+    double heat, vapor, co2;
+
+    int JLAY;
+
+    auto tair_filter = tair_filter_np.unchecked<1>();
+
+    JLAY = (int)(zzz / delz);
+
+    /*     TLF = solar.prob_beam[JLAY] * prof.sun_tleaf[JLAY] + solar.prob_sh[JLAY] * prof.shd_tleaf[JLAY];  */
+
+    /*     'Difference between leaf and air temperature  */
+
+    // deltlf = (TLF - prof.tair_filter[JLAY]);
+    // T_kelvin=prof.tair_filter[JLAY] + 273.16;
+    deltlf = (TLF - tair_filter(JLAY-1));
+    T_kelvin=tair_filter(JLAY-1) + 273.16;
+
+    if(deltlf > 0)
+        // graf = non_dim.grasshof * deltlf / T_kelvin;
+        graf = grasshof * deltlf / T_kelvin;
+    else
+        graf=0;
+
+
+    // nnu_T_P=nnu*(101.3 /input.press_kPa)*pow((T_kelvin/273.16),1.81);
+    nnu_T_P=nnu*(101.3 / press_kPa)*pow((T_kelvin/273.16),1.81);
+
+
+    // Re = lleaf * UZ(zzz) / nnu_T_P;
+    Re = lleaf * UZ(zzz, ht, wnd) / nnu_T_P;
+
+    if (Re > 0.)
+        Re5 = sqrt(Re);
+    else
+    {
+        // printf("bad RE in RESHEAT\n");
+        Re5=100.;
+    }
+
+
+    Re8 = pow(Re,.8);
+
+    if( Re > 14000.)
+    {
+
+        Res_factor=0.036*Re8*betfact;
+
+        /*
+        turbulent boundary layer
+
+        SH = .036 * Re8 * pr33*betfact;
+        SHV = .036 * Re8 * sc33*betfact;
+        SHCO2 = .036 * Re8 * scc33*betfact;
+
+        */
+
+        // Sh_heat = Res_factor * non_dim.pr33;
+        // Sh_vapor = Res_factor * non_dim.sc33;
+        // Sh_CO2 = Res_factor * non_dim.scc33;
+        Sh_heat = Res_factor * pr33;
+        Sh_vapor = Res_factor * sc33;
+        Sh_CO2 = Res_factor * scc33;
+
+    }
+    else
+    {
+
+        Res_factor=0.66*Re5*betfact;
+
+        /*
+        laminar sublayer
+
+        SH = .66 * Re5 * pr33*betfact;
+        SHV = .66 * Re5 * sc33*betfact;
+        SHCO2 = .66 * Re5 * scc33*betfact;
+        */
+
+
+        // Sh_heat = Res_factor * non_dim.pr33;
+        // Sh_vapor = Res_factor * non_dim.sc33;
+        // Sh_CO2 = Res_factor * non_dim.scc33;
+        Sh_heat = Res_factor * pr33;
+        Sh_vapor = Res_factor * sc33;
+        Sh_CO2 = Res_factor * scc33;
+
+    }
+
+
+    //   If there is free convection
+
+    if(graf / (Re * Re) > 1.)
+    {
+
+//     Compute Grashof number for free convection
+
+        if (graf < 100000.)
+            GR25 = .5 * pow(graf,.25);
+        else
+            GR25 = .13 * pow(graf,.33);
+
+
+        // Sh_heat = non_dim.pr33 * GR25;
+        // Sh_vapor = non_dim.sc33 * GR25;
+        // Sh_CO2 = non_dim.scc33 * GR25;
+        Sh_heat = pr33 * GR25;
+        Sh_vapor = sc33 * GR25;
+        Sh_CO2 = scc33 * GR25;
+    }
+
+    // lfddx=lleaf/ddx
+
+
+    // Correct diffusivities for temperature and pressure
+
+    // ddh_T_P=ddh*(101.3/input.press_kPa)*pow((T_kelvin/273.16),1.81);
+    // ddv_T_P=ddv*(101.3/input.press_kPa)*pow((T_kelvin/273.16),1.81);
+    // ddc_T_P=ddc*(101.3/input.press_kPa)*pow((T_kelvin/273.16),1.81);
+    ddh_T_P=ddh*(101.3/press_kPa)*pow((T_kelvin/273.16),1.81);
+    ddv_T_P=ddv*(101.3/press_kPa)*pow((T_kelvin/273.16),1.81);
+    ddc_T_P=ddc*(101.3/press_kPa)*pow((T_kelvin/273.16),1.81);
+
+    // bound_layer_res.heat = lleaf/(ddh_T_P * Sh_heat);
+    // bound_layer_res.vapor = lleaf/(ddv_T_P * Sh_vapor);
+    // bound_layer_res.co2 = lleaf / (ddc_T_P * Sh_CO2);
+    heat = lleaf/(ddh_T_P * Sh_heat);
+    vapor = lleaf/(ddv_T_P * Sh_vapor);
+    co2 = lleaf / (ddc_T_P * Sh_CO2);
+
+    // if (isinf(bound_layer_res.vapor) == 1)
+    // if (isinf(vapor) == 1)
+    if ((isinf(vapor) == 1) || (vapor > 9999)) // TODO: Peishi
+    {
+        // bound_layer_res.vapor = 9999;
+        vapor = 9999;
+    }
+
+    return std::make_tuple(heat, vapor, co2);
+    // return;
+}
+
+
+std::tuple<double, double> FRICTION_VELOCITY(
+    double ustar, double H_old, double sensible_heat_flux,
+    double air_density, double T_Kelvin
+)
+{
+    // this subroutine updates ustar and stability corrections
+    // based on the most recent H and z/L values
+
+    double xzl, logprod, phim;
+    double zl;
+
+    // this subroutine is uncessary for CanAlfalfa since we measure and input ustar
+
+    // met.ustar=input.ustar;
+    // met.H_old= 0.85 *met.sensible_heat_flux+ 0.15*met.H_old;    // filter sensible heat flux to reduce run to run instability
+    // met.zl = -(0.4*9.8*met.H_old*14.75)/(met.air_density*1005.*met.T_Kelvin*pow(met.ustar,3.)); // z/L
+
+    H_old= 0.85*sensible_heat_flux+0.15*H_old;    // filter sensible heat flux to reduce run to run instability
+    zl = -(0.4*9.8*H_old*14.75)/(air_density*1005.*T_Kelvin*pow(ustar,3.)); // z/L
+    // printf("%5.4f %5.4f %5.4f %5.4f", H_old, air_density, T_Kelvin, ustar);
+
+    return std::make_tuple(H_old, zl);
+    // return;
+}
+
+
 void CONC(
         double cref, double soilflux, double factor,
         int sze3, int jtot, int jtot3, double met_zl, double delz, int izref,
@@ -3568,6 +3837,17 @@ PYBIND11_MODULE(canoak, m) {
     py::arg("Iphoton"), py::arg("delz"), py::arg("zzz"), py::arg("ht"), py::arg("cca"),
     py::arg("leleaf"), py::arg("tlk"), py::arg("vapor"), py::arg("pstat273"), py::arg("kballstr"),
     py::arg("latent"), py::arg("co2air"), py::arg("co2bound_res"), py::arg("rhov_air_np")); 
+
+    m.def("uz", &UZ, "Subroutine to compute wind speed as a function of z.", 
+    py::arg("zzz"), py::arg("ht"), py::arg("wnd")); 
+
+    m.def("boundary_resistance", &BOUNDARY_RESISTANCE, "Subroutine to compute leaf boundary layer resistances for heat, water, CO2.",
+    py::arg("delz"), py::arg("zzz"), py::arg("ht"), py::arg("TLF"), py::arg("grasshof"),
+    py::arg("press_kPa"), py::arg("wnd"), py::arg("pr33"), py::arg("sc33"), py::arg("scc33"), 
+    py::arg("tair_filter_np")); 
+
+    m.def("friction_velocity", &FRICTION_VELOCITY, "Subroutine to update friction velocity with new z/L", 
+    py::arg("ustar"), py::arg("H_old"), py::arg("sensible_heat_flux"), py::arg("air_density"), py::arg("T_Kelvin"));
 
     m.def("conc", &CONC, "Subroutine to compute scalar concentrations from source estimates and the Lagrangian dispersion matrix",
     py::arg("cref"), py::arg("soilflux"), py::arg("factor"),
