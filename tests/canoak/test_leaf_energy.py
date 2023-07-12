@@ -10,6 +10,9 @@ import canoak  # noqa: E402
 
 from jax_canoak.physics.energy_fluxes import es  # type: ignore
 from jax_canoak.physics.energy_fluxes import sfc_vpd  # type: ignore
+from jax_canoak.physics.energy_fluxes import llambda  # type: ignore
+from jax_canoak.physics.energy_fluxes import desdt  # type: ignore
+from jax_canoak.physics.energy_fluxes import des2dt  # type: ignore
 
 config.update("jax_enable_x64", True)
 
@@ -59,3 +62,51 @@ class TestLeafEnergy(unittest.TestCase):
         # print(vpd_np, vpd_jnp)
         print("")
         self.assertTrue(np.allclose(vpd_np, vpd_jnp))
+
+    def test_llambda(self):
+        print("Performing test_llambda()...")
+        # Inputs
+        tak = 300.0
+
+        # CANOAK
+        lnp = canoak.llambda(tak)  # type: ignore
+
+        # JAX
+        llambda_jit = jax.jit(llambda)
+        ljnp = llambda_jit(tak)
+
+        # print(lnp, ljnp)
+        print("")
+        self.assertTrue(np.allclose(lnp, ljnp))
+
+    def test_desdt(self):
+        print("Performing test_desdt()...")
+        # Inputs
+        tk, latent18 = 300.0, 15.4
+
+        # CANOAK
+        des_np = canoak.desdt(tk, latent18)  # type: ignore
+
+        # JAX
+        desdt_jit = jax.jit(desdt)
+        des_jnp = desdt_jit(tk, latent18)
+
+        # print(des_np, des_jnp)
+        print("")
+        self.assertTrue(np.allclose(des_np, des_jnp))
+
+    def test_des2dt(self):
+        print("Performing test_des2dt()...")
+        # Inputs
+        tk, latent18 = 300.0, 15.4
+
+        # CANOAK
+        des2_np = canoak.des2dt(tk, latent18)  # type: ignore
+
+        # JAX
+        des2dt_jit = jax.jit(des2dt)
+        des2_jnp = des2dt_jit(tk, latent18)
+
+        # print(des2_np, des2_jnp)
+        print("")
+        self.assertTrue(np.allclose(des2_np, des2_jnp))

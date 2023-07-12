@@ -12,12 +12,13 @@ Author: Peishi Jiang
 Date: 2023.07.07.
 """
 
-# import jax
+import jax
 import jax.numpy as jnp
 
 # from typing import Tuple
 
 from ...shared_utilities.types import Float_0D
+from ...shared_utilities.constants import rgc1000
 
 
 def energy_and_carbon_fluxes():
@@ -28,8 +29,19 @@ def energy_balance_amphi():
     pass
 
 
-def llambda():
-    pass
+def llambda(tak: Float_0D) -> Float_0D:
+    """Latent heat vaporization, J kg-1.
+
+    Args:
+        tak (Float_0D): _description_
+
+    Returns:
+        Float_0D: _description_
+    """
+    y = 3149000.0 - 2370.0 * tak
+    # add heat of fusion for melting ice
+    y = jax.lax.cond(tak < 273.0, lambda x: x + 333.0, lambda x: x, y)
+    return y
 
 
 def es(tk: Float_0D) -> Float_0D:
@@ -81,9 +93,30 @@ def sfc_vpd(
     return rhum_leaf
 
 
-def desdt():
-    pass
+def desdt(t: Float_0D, latent18: Float_0D) -> Float_0D:
+    """Calculate the first derivative of es with respect to t.
+
+    Args:
+        t (Float_0D): _description_
+        latent18 (Float_0D): _description_
+
+    Returns:
+        Float_0D: _description_
+    """
+    return es(t) * latent18 / (rgc1000 * t * t)
 
 
-def des2dt():
-    pass
+def des2dt(t: Float_0D, latent18: Float_0D) -> Float_0D:
+    """Calculate the second derivative of the saturation vapor pressure
+       temperature curve.
+
+    Args:
+        t (Float_0D): _description_
+
+    Returns:
+        Float_0D: _description_
+    """
+
+    return -2.0 * es(t) * llambda(t) * 18.0 / (rgc1000 * t * t * t) + desdt(
+        t, latent18
+    ) * llambda(t) * 18.0 / (rgc1000 * t * t)

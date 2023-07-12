@@ -2639,6 +2639,18 @@ std::tuple<double, double> SOIL_RESPIRATION(double Ts, double base_respiration)
 }
 
 
+double LAMBDA (double tak)
+{
+    // Latent heat of Vaporiation, J kg-1
+    double y;
+    y = 3149000. - 2370. * tak;
+    // add heat of fusion for melting ice
+    if(tak < 273.)
+        y +=333;
+    return y;
+}
+
+
 double ES(double tk)
 {
 
@@ -2669,6 +2681,34 @@ double ES(double tk)
     return y;
 }
 
+
+double DESDT (double t, double latent18)
+{
+    // first derivative of es with respect to tk
+    //  Pa
+    double y;
+    // y = ES(t) * fact.latent18  / (rgc1000 * t * t);
+    y = ES(t) * latent18  / (rgc1000 * t * t);
+    return y;
+}
+
+
+double DES2DT(double T, double latent18)
+{
+    // The second derivative of the saturation vapor pressure
+    // temperature curve, using the polynomial equation of Paw U
+    //        a3en=1.675;
+    //        a4en=0.01408;
+    //        a5en=0.0005818;
+    double y;
+//        tcel=t-273.16;
+//       y=2*a3en+6*a4en*tcel+12*a5en*tcel*tcel;
+    // analytical equation seems better than Paw U's 4th order at low and high temperatures
+    //  d(g(x)f(x))/dx = f'(x)g(x) + g'(x)f(x)
+    // Tk
+    y = -2. * ES(T) * LAMBDA(T) * 18. / (rgc1000 * T * T * T) +  DESDT(T,latent18) * LAMBDA(T) * 18. / (rgc1000 * T * T);
+    return y;
+}
 
 double SFC_VPD (
     double delz, double tlk, double Z, double leleafpt, double latent, double vapor, 
@@ -3828,6 +3868,14 @@ PYBIND11_MODULE(canoak, m) {
     py::arg("Ts"), py::arg("base_respiration")); 
 
     m.def("es", &ES, "Subroutine to compute saturation vapor pressure given temperature.", py::arg("tk")); 
+
+    m.def("llambda", &LAMBDA, "Subroutine to compute latent heat of vaporization.", py::arg("tak")); 
+
+    m.def("desdt", &DESDT, "Subroutine to compute the first derivative of es with respect to tk.", 
+    py::arg("t"), py::arg("latent18")); 
+
+    m.def("des2dt", &DES2DT, "Subroutine to compute the second derivative of the saturation vapor pressure temperature curve.", 
+    py::arg("T"), py::arg("latent18")); 
 
     m.def("sfc_vpd", &SFC_VPD, "Subroutine to compute the relative humidity at the leaf surface for application in the Ball Berry Equation.",
     py::arg("delz"), py::arg("tlk"), py::arg("Z"), py::arg("leleafpt"),
