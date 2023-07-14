@@ -3669,6 +3669,601 @@ std::tuple<double, double> FRICTION_VELOCITY(
 }
 
 
+std::tuple<double, double, double, double> ENERGY_BALANCE_AMPHI(
+    double qrad, double taa, double rhovva, double rvsfc,
+    double stomsfc, double air_density, double latent, double press_Pa, double heat
+)
+{
+    /*
+            ENERGY BALANCE COMPUTATION for Amphistomatous leaves
+
+            A revised version of the quadratic solution to the leaf energy balance relationship is used.
+
+            Paw U, KT. 1987. J. Thermal Biology. 3: 227-233
+
+
+             H is sensible heat flux density on the basis of both sides of a leaf
+             J m-2 s-1 (W m-2).  Note KC includes a factor of 2 here for heat flux
+             because it occurs from both sides of a leaf.
+    */
+
+    // printf("%5.4f %5.4f %5.4f %5.4f %5.4f \n", qrad, taa, rhovva, latent, heat);
+    // printf("%5.4f %5.4f %5.4f %5.4f %5.4f \n", qrad, taa, rhovva, rvsfc, stomsfc);
+    // printf("Energy balance inputs: %5.4f %5.4f %5.4f %5.4f %5.4f %5.4f %5.4f %5.4f %5.4f \n", 
+    //     qrad, taa, rhovva, rvsfc, stomsfc, air_density, latent, press_Pa, heat);
+
+    double est, ea, tkta, le2;
+    double tk2, tk3, tk4;
+    double dest, d2est;
+    double lecoef, hcoef, hcoef2, repeat, acoeff, acoef;
+    double bcoef, ccoef, product;
+    double atlf, btlf, ctlf,vpd_leaf,llout;
+    double ke;
+
+    double tsfckpt, lept, H_leafpt, lout_leafpt;
+
+    double latent18 = latent * 18.;
+
+
+
+    tkta=taa;   // taa is already in Kelvin
+
+    est = ES(tkta);  //  es(T)  Pa
+
+
+    // ea  = RHOA * TAA * 1000 / 2.165
+
+    ea = 1000 * rhovva * tkta /2.1650;   // vapor pressure above leaf, Pa rhov is kg m-3
+
+
+
+    // Vapor pressure deficit, Pa
+
+
+    vpd_leaf = est - ea;
+
+    if (vpd_leaf < 0.)
+        vpd_leaf = 0;
+
+
+    // Slope of the vapor pressure-temperature curve, Pa/C
+    // evaluate as function of Tk
+
+
+    dest = DESDT(tkta, latent18);
+
+
+    // Second derivative of the vapor pressure-temperature curve, Pa/C
+    // Evaluate as function of Tk
+
+
+    d2est = DES2DT(tkta, latent18);
+
+
+    // Compute products of air temperature, K
+
+    tk2 = tkta * tkta;
+    tk3 = tk2 * tkta;
+    tk4 = tk3 * tkta;
+
+
+
+    // Longwave emission at air temperature, W m-2
+
+
+    llout = epsigma * tk4;
+
+    /*
+
+            Coefficient for latent heat flux
+
+            Oaks evaporate from only one side. They are hypostomatous.
+            Cuticle resistance is included in STOM.
+
+    */
+
+    // stomsfc is already for top and bottom from Photosynthesis_amphi
+
+    // ke = 1./ (rvsfc + stomsfc);  // hypostomatous
+
+    ke = 2/ (rvsfc + 2* stomsfc);  // amphistomatous..to add the Rb, need to assess rstop = rsbottom and add
+
+    lecoef = air_density * .622 * latent * ke / press_Pa;
+
+
+    // Coefficients for sensible heat flux
+
+
+    hcoef = air_density*cp/heat;
+    hcoef2 = 2 * hcoef;
+
+
+    // The quadratic coefficients for the a LE^2 + b LE +c =0
+
+
+    repeat = hcoef + epsigma4 * tk3;
+
+    acoeff = lecoef * d2est / (2. * repeat);
+    acoef = acoeff / 4.;
+
+    bcoef = -(repeat) - lecoef * dest / 2. + acoeff * (-qrad / 2. + llout);
+
+    ccoef = repeat * lecoef * vpd_leaf + lecoef * dest * (qrad / 2. - llout) + acoeff * ((qrad * qrad) / 4. + llout * llout - qrad * llout);
+
+
+    // LE1 = (-BCOEF + (BCOEF ^ 2 - 4 * ACOEF * CCOEF) ^ .5) / (2 * ACOEF)
+
+    product = bcoef * bcoef - 4. * acoef * ccoef;
+
+    // LE2 = (-BCOEF - (BCOEF * BCOEF - 4 * acoef * CCOEF) ^ .5) / (2. * acoef)
+
+
+    le2= (-bcoef - sqrt(product)) / (2. * acoef);
+    lept=le2;  // need to pass pointer out of subroutine
+    // *lept=le2;  // need to pass pointer out of subroutine
+
+
+    // solve for Ts using quadratic solution
+
+
+    // coefficients to the quadratic solution
+
+    atlf = epsigma12 * tk2 + d2est * lecoef / 2.;
+
+    btlf = epsigma8 * tk3 + hcoef2 + lecoef * dest;
+
+    ctlf = -qrad + 2 * llout + lecoef * vpd_leaf;
+
+
+    // IF (BTLF * BTLF - 4 * ATLF * CTLF) >= 0 THEN
+
+    product = btlf * btlf - 4 * atlf * ctlf;
+
+
+    // T_sfc_K = TAA + (-BTLF + SQR(BTLF * BTLF - 4 * ATLF * CTLF)) / (2 * ATLF)
+    if (product >= 0)
+        tsfckpt = tkta + (-btlf + sqrt(product)) / (2 * atlf);
+        // *tsfckpt = tkta + (-btlf + sqrt(product)) / (2 * atlf);
+    else
+        tsfckpt=tkta;
+        // *tsfckpt=tkta;
+
+    // if(*tsfckpt < -230 || *tsfckpt > 325)
+    //     *tsfckpt=tkta;
+    if(tsfckpt < -230 || tsfckpt > 325)
+        tsfckpt=tkta;
+
+    // long wave emission of energy
+    lout_leafpt =epsigma2*pow(tsfckpt,4);
+    // *lout_leafpt =epsigma2*pow(*tsfckpt,4);
+
+    // H is sensible heat flux
+    H_leafpt = hcoef2 * (tsfckpt- tkta);
+    // *H_leafpt = hcoef2 * (*tsfckpt- tkta);
+
+
+    // printf("Energy balance: %5.4f %5.4f %5.4f %5.4f %5.4f \n", qrad, tsfckpt, lept, H_leafpt, lout_leafpt);
+    // printf("%5.4f %5.4f %5.4f %5.4f %5.4f \n", qrad, taa, rhovva, latent, heat);
+    return std::make_tuple(tsfckpt, lept, H_leafpt, lout_leafpt);
+    // return;
+}
+
+
+void ENERGY_AND_CARBON_FLUXES(
+    double jtot, double delz, double zzz, double ht, double grasshof, double press_kPa, 
+    double co2air, double wnd, double pr33, double sc33, double scc33,
+    double rhovva, double air_density,
+    double press_Pa, double lai, double pai, double pstat273, double kballstr,
+    // Input arrays
+    py::array_t<double, py::array::c_style> tair_filter_np, py::array_t<double, py::array::c_style> zzz_ht_np,
+    py::array_t<double, py::array::c_style> prob_beam_np, py::array_t<double, py::array::c_style> prob_sh_np,
+    py::array_t<double, py::array::c_style> rnet_sun_np, py::array_t<double, py::array::c_style> rnet_sh_np,
+    py::array_t<double, py::array::c_style> quantum_sun_np, py::array_t<double, py::array::c_style> quantum_sh_np,
+    py::array_t<double, py::array::c_style> can_co2_air_np, py::array_t<double, py::array::c_style> rhov_air_np,
+    py::array_t<double, py::array::c_style> rhov_filter_np, py::array_t<double, py::array::c_style> dLAIdz_np,
+    // Output arrays
+    py::array_t<double, py::array::c_style> sun_rs_np, py::array_t<double, py::array::c_style> shd_rs_np,
+    py::array_t<double, py::array::c_style> sun_gs_np, py::array_t<double, py::array::c_style> shd_gs_np,
+    py::array_t<double, py::array::c_style> sun_tleaf_np, py::array_t<double, py::array::c_style> shd_tleaf_np,
+    py::array_t<double, py::array::c_style> sun_resp_np, py::array_t<double, py::array::c_style> shd_resp_np,
+    py::array_t<double, py::array::c_style> sun_wj_np, py::array_t<double, py::array::c_style> shd_wj_np,
+    py::array_t<double, py::array::c_style> sun_wc_np, py::array_t<double, py::array::c_style> shd_wc_np,
+    py::array_t<double, py::array::c_style> sun_A_np, py::array_t<double, py::array::c_style> shd_A_np,
+    py::array_t<double, py::array::c_style> sun_rbh_np, py::array_t<double, py::array::c_style> shd_rbh_np,
+    py::array_t<double, py::array::c_style> sun_rbv_np, py::array_t<double, py::array::c_style> shd_rbv_np,
+    py::array_t<double, py::array::c_style> sun_rbco2_np, py::array_t<double, py::array::c_style> shd_rbco2_np,
+    py::array_t<double, py::array::c_style> sun_ci_np, py::array_t<double, py::array::c_style> shd_ci_np,
+    py::array_t<double, py::array::c_style> sun_cica_np, py::array_t<double, py::array::c_style> shd_cica_np,
+    py::array_t<double, py::array::c_style> dLEdz_np, py::array_t<double, py::array::c_style> dHdz_np,
+    py::array_t<double, py::array::c_style> dRNdz_np, py::array_t<double, py::array::c_style> dPsdz_np,
+    py::array_t<double, py::array::c_style> Ci_np, py::array_t<double, py::array::c_style> drbv_np,
+    py::array_t<double, py::array::c_style> dRESPdz_np, py::array_t<double, py::array::c_style> dStomCondz_np
+)
+{
+    /*
+
+                    The ENERGY_AND_CARBON_FLUXES routine to computes coupled fluxes
+            of energy, water and CO2 exchange, as well as leaf temperature.  Computataions
+            are performed for each layer in the canopy and on the sunlit and shaded fractions.
+
+                    Analytical solution for leaf energy balance and leaf temperature is used.  The program
+                    is derived from work by Paw U (1986) and was corrected for errors with a re-derivation
+            of the equations.  The quadratic form of the solution is used, rather than the quartic
+            version that Paw U prefers.
+
+            Estimates of leaf temperature are used to adjust kinetic coefficients for enzyme kinetics,
+            respiration and photosynthesis, as well as the saturation vapor pressure at the leaf surface.
+
+            The Analytical solution of the coupled set of equations for photosynthesis and stomatal
+            conductance by Baldocchi (1994, Tree Physiology) is used.  This equation is a solution to
+            a cubic form of the photosynthesis equation.  The photosynthesis algorithms are from the
+            model of Farquhar.  Stomatal conductance is based on the algorithms of Ball-
+            Berry and Collatz et al., which couple gs to A
+
+                    Layer 1 is the soil, Layer 30 is top of the canopy
+
+    */
+
+    int JJ;
+
+    double Tair_K_filtered;    //  temporary absolute air temperature
+    double T_sfc_K,T_sfc_C;    // surface temperatures in Kelvin and Centigrade
+    double H_sun,LE_sun,loutsun,Rn_sun,A_sun;  // energy fluxes on sun leaves
+    double LE_shade,H_shade,loutsh,Rn_shade,A_shade;  // energy fluxes on shaded leaves
+    double LE_leaf, H_leaf, lout_leaf, resp_shade, resp_sun;
+    double rs_sun, rs_shade, A_mg, resp, internal_CO2;
+    double wj_leaf, wc_leaf;
+
+    double latent, latent18;
+    double tsfckpt, lept, H_leafpt, lout_leafpt;
+    double bound_layer_res_heat, bound_layer_res_vapor, bound_layer_res_co2;
+
+    std::tuple <double, double, double> bound_layer_res;
+    std::tuple <double, double, double, double> leaf_energy;
+    std::tuple <double, double, double, double, double, double> leaf_photosynthesis;
+
+    // Input arrays
+    auto tair_filter = tair_filter_np.unchecked<1>();
+    auto zzz_ht = zzz_ht_np.unchecked<1>();
+    auto prob_beam = prob_beam_np.unchecked<1>();
+    auto prob_sh = prob_sh_np.unchecked<1>();
+    auto rnet_sun = rnet_sun_np.unchecked<1>();
+    auto rnet_sh = rnet_sh_np.unchecked<1>();
+    auto quantum_sun = quantum_sun_np.unchecked<1>();
+    auto quantum_sh = quantum_sh_np.unchecked<1>();
+    auto can_co2_air = can_co2_air_np.unchecked<1>();
+    auto rhov_air = rhov_air_np.unchecked<1>();
+    auto rhov_filter = rhov_filter_np.unchecked<1>();
+    auto dLAIdz = dLAIdz_np.unchecked<1>();
+    // Output arrays
+    auto sun_rs = sun_rs_np.mutable_unchecked<1>();
+    auto shd_rs = shd_rs_np.mutable_unchecked<1>();
+    auto sun_gs = sun_gs_np.mutable_unchecked<1>();
+    auto shd_gs = shd_gs_np.mutable_unchecked<1>();
+    auto sun_tleaf = sun_tleaf_np.mutable_unchecked<1>();
+    auto shd_tleaf = shd_tleaf_np.mutable_unchecked<1>();
+    auto sun_resp = sun_resp_np.mutable_unchecked<1>();
+    auto shd_resp = shd_resp_np.mutable_unchecked<1>();
+    auto sun_wj = sun_wj_np.mutable_unchecked<1>();
+    auto shd_wj = shd_wj_np.mutable_unchecked<1>();
+    auto sun_wc = sun_wc_np.mutable_unchecked<1>();
+    auto shd_wc = shd_wc_np.mutable_unchecked<1>();
+    auto sun_A= sun_A_np.mutable_unchecked<1>();
+    auto shd_A= shd_A_np.mutable_unchecked<1>();
+    auto sun_rbh= sun_rbh_np.mutable_unchecked<1>();
+    auto shd_rbh= shd_rbh_np.mutable_unchecked<1>();
+    auto sun_rbv= sun_rbv_np.mutable_unchecked<1>();
+    auto shd_rbv= shd_rbv_np.mutable_unchecked<1>();
+    auto sun_rbco2= sun_rbco2_np.mutable_unchecked<1>();
+    auto shd_rbco2= shd_rbco2_np.mutable_unchecked<1>();
+    auto sun_ci= sun_ci_np.mutable_unchecked<1>();
+    auto shd_ci= shd_ci_np.mutable_unchecked<1>();
+    auto sun_cica= sun_cica_np.mutable_unchecked<1>();
+    auto shd_cica= shd_cica_np.mutable_unchecked<1>();
+    auto dLEdz= dLEdz_np.mutable_unchecked<1>();
+    auto dHdz= dHdz_np.mutable_unchecked<1>();
+    auto dRNdz= dRNdz_np.mutable_unchecked<1>();
+    auto dPsdz= dPsdz_np.mutable_unchecked<1>();
+    auto Ci= Ci_np.mutable_unchecked<1>();
+    auto drbv= drbv_np.mutable_unchecked<1>();
+    auto dRESPdz= dRESPdz_np.mutable_unchecked<1>();
+    auto dStomCondz= dStomCondz_np.mutable_unchecked<1>();
+
+    for (JJ=1; JJ <= jtot; JJ++)
+    {
+
+        // zero summing values
+
+        H_sun=0;
+        LE_sun=0;
+        Rn_sun=0;
+        loutsun=0;
+        rs_sun=0;
+        // prof.sun_gs[JJ]=0;
+        sun_gs(JJ-1)=0;
+        A_sun=0;
+        A_mg=0;
+        resp=0;
+        resp_shade=0;
+        resp_sun=0;
+        wc_leaf=0;
+        wj_leaf=0;
+        internal_CO2=0;
+
+        /*
+
+            First compute energy balance of sunlit leaf, then
+            repeat and compute algorithm for shaded leaves.
+
+            The stomatal resistances on the sunlit and shaded leaves are pre-estimated
+            as a function of PAR using STOMATA
+
+            Remember layer is two-sided so include upper and lower streams
+            are considered.
+
+            KC is the convective transfer coeff. (W M-2 K-1). A factor
+            of 2 is applied since convective heat transfer occurs
+            on both sides of leaves.
+
+            To calculate the total leaf resistance we must combine stomatal
+            and the leaf boundary layer resistance.  Many crops are amphistomatous
+            so KE must be multiplied by 2.  Deciduous forest, on the other hand
+            has stomata on one side of the leaf.
+
+        */
+
+        Tair_K_filtered = tair_filter(JJ-1) + 273.16;  // absolute air temperature
+
+
+        // Initialize surface temperature with air temperature
+
+        T_sfc_K = Tair_K_filtered;
+
+
+
+        //      Energy balance on sunlit leaves
+
+
+        //  update latent heat with new temperature during each call of this routine
+
+        latent = LAMBDA(T_sfc_K);
+        latent18=latent*18.;
+        // printf("%5.4f %5.4f \n", T_sfc_K, latent);
+
+        if(prob_beam(JJ-1) > 0.0)
+        {
+
+            // initial stomatal resistance as a function of PAR. Be careful and use
+            // the light dependent version only for first iteration
+            rs_sun = sun_rs(JJ-1);
+            // printf("rs_sun: %5.4f", rs_sun);
+
+
+            //   Compute the resistances for heat and vapor transfer, rh and rv,
+            //   for each layer, s/m
+            // BOUNDARY_RESISTANCE(prof.ht[JJ],prof.sun_tleaf[JJ]);
+            // bound_layer_res_heat, bound_layer_res_vapor, bound_layer_res_co2 = BOUNDARY_RESISTANCE(
+            bound_layer_res = BOUNDARY_RESISTANCE(
+                delz, zzz_ht(JJ-1), ht, sun_tleaf(JJ-1), grasshof, press_kPa, wnd, pr33, sc33, scc33, tair_filter_np
+            );
+            bound_layer_res_heat = std::get<0>(bound_layer_res);
+            bound_layer_res_vapor = std::get<1>(bound_layer_res);
+            bound_layer_res_co2 = std::get<2>(bound_layer_res);
+            // printf("bound layer res: %5.4f %5.4f %5.4f %5.4f\n", press_Pa,bound_layer_res_heat, bound_layer_res_vapor, bound_layer_res_co2);
+
+            // compute energy balance of sunlit leaves
+            // ENERGY_BALANCE_AMPHI(solar.rnet_sun[JJ], &T_sfc_K, Tair_K_filtered, prof.rhov_filter[JJ], bound_layer_res.vapor, rs_sun, &LE_leaf, &H_leaf, &lout_leaf);
+            // T_sfc_K, LE_leaf, H_leaf, lout_leaf = ENERGY_BALANCE_AMPHI(
+            leaf_energy = ENERGY_BALANCE_AMPHI(
+                rnet_sun(JJ-1), T_sfc_K, rhovva, rhov_filter(JJ-1), rs_sun, air_density, 
+                latent, press_Pa, bound_layer_res_heat
+            );
+            T_sfc_K = std::get<0>(leaf_energy);
+            LE_leaf = std::get<1>(leaf_energy);
+            H_leaf = std::get<2>(leaf_energy);
+            lout_leaf = std::get<3>(leaf_energy);
+            // printf("%5.4f %5.4f %5.4f %5.4f %5.4f \n", rnet_sun(JJ-1), T_sfc_K, LE_leaf, H_leaf, lout_leaf);
+
+            // compute photosynthesis of sunlit leaves if leaves have emerged
+            if(lai > pai)
+                // PHOTOSYNTHESIS_AMPHI(solar.quantum_sun[JJ], &rs_sun, prof.ht[JJ],
+                //                      prof.co2_air[JJ], T_sfc_K, &LE_leaf, &A_mg, &resp, &internal_CO2,
+                //                      &wj_leaf,&wc_leaf);
+                // rs_sun, A_mg, resp, internal_CO2, wj_leaf, wc_leaf = PHOTOSYNTHESIS_AMPHI(
+                leaf_photosynthesis = PHOTOSYNTHESIS_AMPHI(
+                    quantum_sun(JJ-1), delz, zzz_ht(JJ-1), ht, can_co2_air(JJ-1), T_sfc_K, LE_leaf,
+                    bound_layer_res_vapor, pstat273, kballstr, latent, co2air, bound_layer_res_co2, rhov_air_np
+                );
+                rs_sun = std::get<0>(leaf_photosynthesis);
+                A_mg = std::get<1>(leaf_photosynthesis);
+                resp = std::get<2>(leaf_photosynthesis);
+                internal_CO2 = std::get<3>(leaf_photosynthesis);
+                wj_leaf = std::get<4>(leaf_photosynthesis);
+                wc_leaf = std::get<5>(leaf_photosynthesis);
+
+            // Assign values of function to the LE and H source/sink strengths
+
+            T_sfc_C=T_sfc_K-273.16;             // surface temperature, Centigrade
+            H_sun = H_leaf;                                 // sensible heat flux
+            LE_sun = LE_leaf;                                       // latent heat flux
+            sun_tleaf(JJ-1) = T_sfc_C;
+            loutsun = lout_leaf;                            // long wave out
+            Rn_sun = rnet_sun(JJ-1) - lout_leaf;  // net radiation
+            // printf("Output -- %5.4f %5.4f %5.4f %5.4f %5.4f \n", rnet_sun(JJ-1), T_sfc_C, LE_leaf, H_leaf, lout_leaf);
+
+            A_sun = A_mg;                           // leaf photosynthesis, mg CO2 m-2 s-1
+            resp_sun=resp;                          // stomatal resistance
+
+            sun_resp(JJ-1)=resp;     // respiration on sun leaves
+            sun_gs(JJ-1)=1./rs_sun;      // stomatal conductance
+            sun_wj(JJ-1)=wj_leaf;
+            sun_wc(JJ-1)=wc_leaf;
+            sun_A(JJ-1) = A_sun*1000./mass_CO2;  // micromolC m-2 s-1
+            sun_rs(JJ-1) = rs_sun;
+            sun_rbh(JJ-1) = bound_layer_res_heat;
+            sun_rbv(JJ-1) = bound_layer_res_vapor;
+            sun_rbco2(JJ-1) = bound_layer_res_co2;
+            sun_ci(JJ-1)=internal_CO2;
+            // prof.sun_resp[JJ]=resp;     // respiration on sun leaves
+            // prof.sun_gs[JJ]=1./rs_sun;      // stomatal conductance
+            // prof.sun_wj[JJ]=wj_leaf;
+            // prof.sun_wc[JJ]=wc_leaf;
+            // prof.sun_A[JJ] = A_sun*1000./mass_CO2;  // micromolC m-2 s-1
+            // prof.sun_rs[JJ] = rs_sun;
+            // prof.sun_rbh[JJ] = bound_layer_res.heat;
+            // prof.sun_rbv[JJ] = bound_layer_res.vapor;
+            // prof.sun_rbco2[JJ] = bound_layer_res.co2;
+            // prof.sun_ci[JJ]=internal_CO2;
+        }
+
+        //    Energy balance on shaded leaves
+
+        // initial value of stomatal resistance based on light
+        rs_shade = shd_rs(JJ-1);
+
+
+        // boundary layer resistances on shaded leaves.  With different
+        // surface temperature, the convective effect may differ from that
+        // computed on sunlit leaves
+        // BOUNDARY_RESISTANCE(prof.ht[JJ],prof.shd_tleaf[JJ]);
+        // bound_layer_res_heat, bound_layer_res_vapor, bound_layer_res_co2 = BOUNDARY_RESISTANCE(
+        bound_layer_res = BOUNDARY_RESISTANCE(
+            delz, zzz_ht(JJ-1), ht, shd_tleaf(JJ-1), grasshof, press_kPa, wnd, pr33, sc33, scc33, tair_filter_np
+        );
+        bound_layer_res_heat = std::get<0>(bound_layer_res);
+        bound_layer_res_vapor = std::get<1>(bound_layer_res);
+        bound_layer_res_co2 = std::get<2>(bound_layer_res);
+        // printf("bound layer res: %5.4f %5.4f %5.4f %5.4f\n", press_Pa,bound_layer_res_heat, bound_layer_res_vapor, bound_layer_res_co2);
+
+        // Energy balance of shaded leaves
+        // ENERGY_BALANCE_AMPHI(solar.rnet_sh[JJ], &T_sfc_K, Tair_K_filtered, prof.rhov_filter[JJ], bound_layer_res.vapor, rs_shade, &LE_leaf, &H_leaf, &lout_leaf);
+        // T_sfc_K, LE_leaf, H_leaf, lout_leaf = ENERGY_BALANCE_AMPHI(
+        leaf_energy = ENERGY_BALANCE_AMPHI(
+            rnet_sh(JJ-1), T_sfc_K, rhovva, rhov_filter(JJ-1), rs_shade, air_density, 
+            latent, press_Pa, bound_layer_res_heat
+        );
+        T_sfc_K = std::get<0>(leaf_energy);
+        LE_leaf = std::get<1>(leaf_energy);
+        H_leaf = std::get<2>(leaf_energy);
+        lout_leaf = std::get<3>(leaf_energy);
+
+        // compute photosynthesis and stomatal conductance of shaded leaves
+
+        if(lai > pai)
+            // PHOTOSYNTHESIS_AMPHI(solar.quantum_sh[JJ], &rs_shade,prof.ht[JJ], prof.co2_air[JJ],
+            //                      T_sfc_K, &LE_leaf, &A_mg, &resp, &internal_CO2,&wj_leaf,&wc_leaf);
+            // rs_sun, A_mg, resp, internal_CO2, wj_leaf, wc_leaf = PHOTOSYNTHESIS_AMPHI(
+            leaf_photosynthesis = PHOTOSYNTHESIS_AMPHI(
+                quantum_sh(JJ-1), delz, zzz_ht(JJ-1), ht, can_co2_air(JJ-1), T_sfc_K, LE_leaf,
+                bound_layer_res_vapor, pstat273, kballstr, latent, co2air, bound_layer_res_co2, rhov_air_np
+            );
+            rs_shade = std::get<0>(leaf_photosynthesis);
+            A_mg = std::get<1>(leaf_photosynthesis);
+            resp = std::get<2>(leaf_photosynthesis);
+            internal_CO2 = std::get<3>(leaf_photosynthesis);
+            wj_leaf = std::get<4>(leaf_photosynthesis);
+            wc_leaf = std::get<5>(leaf_photosynthesis);
+
+        // re-assign variable names from functions output
+
+        T_sfc_C=T_sfc_K-273.16;
+        LE_shade = LE_leaf;
+        H_shade = H_leaf;
+        loutsh = lout_leaf;
+        Rn_shade = rnet_sh(JJ-1) - lout_leaf;
+
+        // prof.shd_wj[JJ]=wj_leaf;
+        // prof.shd_wc[JJ]=wc_leaf;
+        A_shade = A_mg;
+        resp_shade=resp;
+
+        shd_wj(JJ-1)=wj_leaf;
+        shd_wc(JJ-1)=wc_leaf;
+        shd_resp(JJ-1)=resp;
+        shd_tleaf(JJ-1) = T_sfc_C;
+        shd_gs(JJ-1)=1./rs_shade;
+        shd_A(JJ-1) = A_shade*1000/mass_CO2;   // micromolC m-2 s-1
+        shd_rs(JJ-1) = rs_shade;
+        shd_rbh(JJ-1) = bound_layer_res_heat;
+        shd_rbv(JJ-1) = bound_layer_res_vapor;
+        shd_rbco2(JJ-1) = bound_layer_res_co2;
+        shd_ci(JJ-1)= internal_CO2;
+        // prof.shd_wj[JJ]=wj_leaf;
+        // prof.shd_wc[JJ]=wc_leaf;
+        // prof.shd_resp[JJ]=resp;
+        // prof.shd_tleaf[JJ] = T_sfc_C;
+        // prof.shd_gs[JJ]=1./rs_shade;
+        // prof.shd_A[JJ] = A_shade*1000/mass_CO2;   // micromolC m-2 s-1
+        // prof.shd_rs[JJ] = rs_shade;
+        // prof.shd_rbh[JJ] = bound_layer_res.heat;
+        // prof.shd_rbv[JJ] = bound_layer_res.vapor;
+        // prof.shd_rbco2[JJ] = bound_layer_res.co2;
+        // prof.shd_ci[JJ]= internal_CO2;
+
+
+        // compute layer energy fluxes, weighted by leaf area and sun and shaded fractions
+        // prof.dLEdz[JJ] = prof.dLAIdz[JJ] * (prob_beam[JJ] * LE_sun + solar.prob_sh[JJ] * LE_shade);
+        // prof.dHdz[JJ] = prof.dLAIdz[JJ] * (prob_beam[JJ] * H_sun + solar.prob_sh[JJ] * H_shade);
+        // prof.dRNdz[JJ] = prof.dLAIdz[JJ] * (prob_beam[JJ] * Rn_sun + solar.prob_sh[JJ] * Rn_shade);
+        dLEdz(JJ-1) = dLAIdz(JJ-1) * (prob_beam(JJ-1) * LE_sun + prob_sh(JJ-1) * LE_shade);
+        dHdz(JJ-1) = dLAIdz(JJ-1) * (prob_beam(JJ-1) * H_sun + prob_sh(JJ-1) * H_shade);
+        dRNdz(JJ-1) = dLAIdz(JJ-1) * (prob_beam(JJ-1) * Rn_sun + prob_sh(JJ-1) * Rn_shade);
+
+
+        // photosynthesis of the layer,  prof.dPsdz has units mg m-3 s-1
+        // prof.dPsdz[JJ] = prof.dLAIdz[JJ] * (A_sun * prob_beam[JJ] + A_shade * solar.prob_sh[JJ]);
+        // prof.Ci[JJ] = (prof.sun_ci[JJ] * prob_beam[JJ] + prof.shd_ci[JJ] * solar.prob_sh[JJ]);
+        // prof.shd_cica[JJ]=prof.shd_ci[JJ]/prof.co2_air[JJ];
+        // prof.sun_cica[JJ]=prof.sun_ci[JJ]/prof.co2_air[JJ];
+        dPsdz(JJ-1) = dLAIdz(JJ-1) * (A_sun * prob_beam(JJ-1) + A_shade * prob_sh(JJ-1));
+        Ci(JJ-1) = (sun_ci(JJ-1) * prob_beam(JJ-1) + shd_ci(JJ-1) * prob_sh(JJ-1));
+        shd_cica(JJ-1)=shd_ci(JJ-1)/can_co2_air(JJ-1);
+        sun_cica(JJ-1)=sun_ci(JJ-1)/can_co2_air(JJ-1);
+
+        // scaling boundary layer conductance for vapor, 1/rbv
+        // prof.drbv[JJ] = (prob_beam[JJ]/ prof.sun_rbv[JJ] + solar.prob_sh[JJ]/ prof.shd_rbv[JJ]);
+        drbv(JJ-1) = (prob_beam(JJ-1)/ sun_rbv(JJ-1) + prob_sh(JJ-1)/ shd_rbv(JJ-1));
+
+
+        // photosynthesis of layer, prof.dPsdz has units of micromoles m-2 s-1
+        // prof.dPsdz[JJ] = prof.dLAIdz[JJ] * (prof.sun_A[JJ] * prob_beam[JJ] +
+        //                                     prof.shd_A[JJ] * solar.prob_sh[JJ]);
+        dPsdz(JJ-1) = dLAIdz(JJ-1) * (sun_A(JJ-1) * prob_beam(JJ-1) + shd_A(JJ-1) * prob_sh(JJ-1));
+
+
+        //  respiration of the layer, micromol m-2 s-1
+        // prof.dRESPdz[JJ] = prof.dLAIdz[JJ] * (resp_sun * prob_beam[JJ] + resp_shade * solar.prob_sh[JJ]);
+        dRESPdz(JJ-1) = dLAIdz(JJ-1) * (resp_sun * prob_beam(JJ-1) + resp_shade * prob_sh(JJ-1));
+
+        // prof.dStomCondz has units of: m s-1
+        // prof.dStomCondz[JJ] = prof.dLAIdz[JJ] * (prob_beam[JJ]*prof.sun_gs[JJ] + solar.prob_sh[JJ]*prof.shd_gs[JJ]);
+        dStomCondz(JJ-1) = dLAIdz(JJ-1) * (prob_beam(JJ-1)*sun_gs(JJ-1) + prob_sh(JJ-1)*shd_gs(JJ-1));
+
+        /*
+
+                printf(" HSUN      LESUN   AVAIL ENERGY    lout_leaf    day_local\n");
+                printf(" %6.1f     %6.1f     %6.1f         %6.1f   %6i\n", H_sun, LE_sun, solar.rnet_sun[JJ], loutsun, jd);
+                printf("\n");
+                printf(" HSH      LESH     AVAIL ENERGY  lout_leaf   TIME \n");
+                printf(" %6.2f    %6.2f      %6.2f       %6.2f   %6.2f\n", H_shade, LE_shade, solar.rnet_sh[JJ], loutsh, time_var.local_time);
+                printf("\n");
+                printf(" TL SUN   TL SH     TA      RHOV     CO2\n");
+                printf("  %6.2f    %6.2f    %6.2f    %7.5f   %6.2f\n", prof.sun_tleaf[JJ], prof.shd_tleaf[JJ], prof.tair[JJ], prof.rhov_air[JJ], prof.co2_air[JJ]);
+                printf("\n");
+                printf(" TSOIL    soilevap    soilheat    SOILRAD    GSOIL\n");
+                printf(" %6.3f    %5.2f       %5.2f      %5.2f       %5.2f\n",soil.sfc_temperature, soilevap, soilheat,rnsoil - loutsoil, soil.gsoil);
+                printf("\n");
+                printf("\n");
+                printf("LAYER    LAI  solar.sin_beta \n");
+                printf(" %3i   %6.2f   %6.3f \n", JJ, time_var.lai, solar.sin_beta);
+
+          */
+
+    }        // next JJ
+
+    return;
+}
+
 void CONC(
         double cref, double soilflux, double factor,
         int sze3, int jtot, int jtot3, double met_zl, double delz, int izref,
@@ -3881,7 +4476,7 @@ PYBIND11_MODULE(canoak, m) {
     py::arg("delz"), py::arg("tlk"), py::arg("Z"), py::arg("leleafpt"),
     py::arg("latent"), py::arg("vapor"), py::arg("rhov_air_np")); 
 
-    m.def("photosynthesis_amphi", &PHOTOSYNTHESIS_AMPHI, "Subroutine to compute leaf photosynthesis.",
+    m.def("photosynthesis_amphi", &PHOTOSYNTHESIS_AMPHI, "Subroutine to compute photosynthesis on the amphistomatous leaves.",
     py::arg("Iphoton"), py::arg("delz"), py::arg("zzz"), py::arg("ht"), py::arg("cca"),
     py::arg("leleaf"), py::arg("tlk"), py::arg("vapor"), py::arg("pstat273"), py::arg("kballstr"),
     py::arg("latent"), py::arg("co2air"), py::arg("co2bound_res"), py::arg("rhov_air_np")); 
@@ -3896,6 +4491,26 @@ PYBIND11_MODULE(canoak, m) {
 
     m.def("friction_velocity", &FRICTION_VELOCITY, "Subroutine to update friction velocity with new z/L", 
     py::arg("ustar"), py::arg("H_old"), py::arg("sensible_heat_flux"), py::arg("air_density"), py::arg("T_Kelvin"));
+
+    m.def("energy_balance_amphi", &ENERGY_BALANCE_AMPHI, "Subroutine to calcuate the energy balance on the amphistomatous leaves.", 
+    py::arg("qrad"), py::arg("taa"), py::arg("rhovva"), py::arg("rvsfc"),
+    py::arg("stomsfc"), py::arg("air_density"), py::arg("latent"), py::arg("press_Pa"), py::arg("heat"));
+
+    m.def("energy_and_carbon_fluxes", &ENERGY_AND_CARBON_FLUXES, "Subroutine to compute coupled fluxes of energy, water and CO2 exchange, as well as leaf temperature.", 
+    py::arg("jtot"), py::arg("delz"), py::arg("zzz"), py::arg("ht"), py::arg("grasshof"), py::arg("press_kPa"),
+    py::arg("co2air"), py::arg("wnd"), py::arg("pr33"), py::arg("sc33"), py::arg("scc33"),
+    py::arg("rhovva"), py::arg("air_density"),
+    py::arg("press_Pa"), py::arg("lai"), py::arg("pai"), py::arg("pstat273"), py::arg("kballstr"),
+    // Input arrays
+    py::arg("tair_filter_np"), py::arg("zzz_ht_np"), py::arg("prob_beam_np"), py::arg("prob_sh_np"), py::arg("rnet_sun_np"), py::arg("rnet_sh_np"),
+    py::arg("quantum_sun_np"), py::arg("quantum_sh_np"), py::arg("can_co2_air_np"), py::arg("rhov_air_np"), py::arg("rhov_filter_np"), py::arg("dLAIdz_np"),
+    // Output arrays
+    py::arg("sun_rs_np"), py::arg("shd_rs_np"), py::arg("sun_gs_np"), py::arg("shd_gs_np"), py::arg("sun_tleaf_np"), py::arg("shd_tleaf_np"),
+    py::arg("sun_resp_np"), py::arg("shd_resp_np"), py::arg("sun_wj_np"), py::arg("shd_wj_np"), py::arg("sun_wc_np"), py::arg("shd_wc_np"),
+    py::arg("sun_A_np"), py::arg("shd_A_np"), py::arg("sun_rbh_np"), py::arg("shd_rbh_np"),
+    py::arg("sun_rbv_np"), py::arg("shd_rbv_np"), py::arg("sun_rbco2_np"), py::arg("shd_rbco2_np"), py::arg("sun_ci_np"), py::arg("shd_ci_np"),
+    py::arg("sun_cica_np"), py::arg("shd_cica_np"), py::arg("dLEdz_np"), py::arg("dHdz_np"), py::arg("dRNdz_np"), py::arg("dPsdz_np"),
+    py::arg("Ci_np"), py::arg("drbv_np"), py::arg("dRESPdz_np"), py::arg("dStomCondz_np"));
 
     m.def("conc", &CONC, "Subroutine to compute scalar concentrations from source estimates and the Lagrangian dispersion matrix",
     py::arg("cref"), py::arg("soilflux"), py::arg("factor"),

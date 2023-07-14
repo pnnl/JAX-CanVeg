@@ -11,7 +11,6 @@ from .radiation_transfer import (
     freq,  # noqa: F401
 )
 from .leaf_energy_balance import (
-    energy_and_carbon_fluxes,  # noqa: F401
     energy_balance_amphi,  # noqa: F401
     sfc_vpd,  # noqa: F401
     llambda,  # noqa: F401
