@@ -4264,6 +4264,24 @@ void ENERGY_AND_CARBON_FLUXES(
     return;
 }
 
+
+double SOIL_SFC_RESISTANCE(double wg)
+{   double y, wg0;
+    // Camillo and Gurney model for soil resistance
+    // Rsoil= 4104 (ws-wg)-805, ws=.395, wg=0
+    // ws= 0.395
+    // wg is at 10 cm, use a linear interpolation to the surface, top cm, mean between 0 and 2 cm
+    wg0 = 1 * wg/10;
+
+    //    y=4104.* (0.395-wg0)-805.;
+
+    // model of Kondo et al 1990, JAM for a 2 cm thick soil
+    y = 3e10 * pow((0.395-wg0), 16.6);
+
+    return y;
+}
+
+
 void CONC(
         double cref, double soilflux, double factor,
         int sze3, int jtot, int jtot3, double met_zl, double delz, int izref,
@@ -4511,6 +4529,8 @@ PYBIND11_MODULE(canoak, m) {
     py::arg("sun_rbv_np"), py::arg("shd_rbv_np"), py::arg("sun_rbco2_np"), py::arg("shd_rbco2_np"), py::arg("sun_ci_np"), py::arg("shd_ci_np"),
     py::arg("sun_cica_np"), py::arg("shd_cica_np"), py::arg("dLEdz_np"), py::arg("dHdz_np"), py::arg("dRNdz_np"), py::arg("dPsdz_np"),
     py::arg("Ci_np"), py::arg("drbv_np"), py::arg("dRESPdz_np"), py::arg("dStomCondz_np"));
+
+    m.def("soil_sfc_resistance", &SOIL_SFC_RESISTANCE, "Subroutine to compute soil resistance.", py::arg("wg")); 
 
     m.def("conc", &CONC, "Subroutine to compute scalar concentrations from source estimates and the Lagrangian dispersion matrix",
     py::arg("cref"), py::arg("soilflux"), py::arg("factor"),
