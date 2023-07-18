@@ -4282,6 +4282,562 @@ double SOIL_SFC_RESISTANCE(double wg)
 }
 
 
+int SET_SOIL(
+    double dt, double total_t, int n_soil, 
+    double water_content_15cm, double soil_T_base, 
+    double air_temp, double air_density, double air_density_mole, double air_press_Pa,
+    py::array_t<double, py::array::c_style> T_soil_np, 
+    py::array_t<double, py::array::c_style> z_soil_np,
+    py::array_t<double, py::array::c_style> soil_bulk_density_np, 
+    py::array_t<double, py::array::c_style> cp_soil_np,
+    py::array_t<double, py::array::c_style> k_conductivity_soil_np
+)
+{
+
+
+    /*
+
+      Routines, algorithms and parameters for soil moisture were from
+
+      Campbell, G.S. 1985. Soil physics with basic. Elsevier
+
+      updated to algorithms in Campbell and Norman and derived from Campbell et al 1994 Soil Science
+
+
+      Need to adjust for clay and organic fractions.. Need to adjust heat capacity and conductivity for peat
+
+    */
+
+    int I;
+    int IP1,IM1;
+    // int n_soil = 9;                 // number of soil layers
+
+    double C1,C2,C3,C4;
+    double z_litter = .00;   // depth of litter layer
+
+    double Cp_water,Cp_air, Cp_org, Cp_mineral, Cp_soil, Cp_soil_num;  // heat capacity
+    double K_water, K_air,K_org,K_mineral, K_soil, K_soil_num;		// thermal conductivigty
+    double wt_water,wt_air,wt_org,wt_mineral;     // weighting factors, Campbell and Norman
+    double fw,k_fluid;
+    double desdt;
+
+    double clay_fraction, peat_fraction, pore_fraction, mineral_fraction;
+    double soil_air_fraction, water_content_litter;
+    double latent, latent18;
+
+    auto T_soil = T_soil_np.mutable_unchecked<1>();
+    auto z_soil = z_soil_np.mutable_unchecked<1>();
+    auto soil_bulk_density = soil_bulk_density_np.mutable_unchecked<1>();
+    auto cp_soil = cp_soil_np.mutable_unchecked<1>();
+    auto k_conductivity_soil = k_conductivity_soil_np.mutable_unchecked<1>();
+
+    // soil.dt = 20.;          // Time step in seconds
+
+    // int soil_mtime = (long int) (3600 /dt);   // time steps per hour
+    int soil_mtime = (long int) (total_t /dt);   // time steps per hour
+    // printf("%d \n", soil_mtime);
+
+    /*
+            Soil water content
+    */
+
+    // soil.water_content_15cm = input.soil_moisture;     //  measured at 10 cmwater content of soil m3 m-3
+
+
+    // Water content of litter. Values ranged between 0.02 and 0.126
+    water_content_litter = .0;   // assumed constant but needs to vary
+
+
+    // soil content
+    clay_fraction = .3;      //  Clay fraction
+    peat_fraction = 0.129;    //  SOM = a C; C = 7.5%, a = 1.72
+    pore_fraction = 0.687;    // from alfalfa, 1 minus ratio bulk density 0.83 g cm-3/2.65 g cm-3, density of solids
+    mineral_fraction= 0.558;  // from bulk density asssuming density of solids is 2.65
+
+    soil_air_fraction = pore_fraction - water_content_15cm;
+
+    Cp_water= 4180;   // J kg-1 K-1, heat capacity
+    Cp_air =  1065;
+    Cp_org = 1920;
+    Cp_mineral = 870;
+
+    K_mineral= 2.5;  // W m-1 K-1, thermal conductivity
+    K_org= 0.8;
+    K_water= 0.25;
+
+    // thermal conductivity code from Campbell and Norman
+
+    fw=1./(1+pow((water_content_15cm/0.15),-4));  // terms for Stefan flow as water evaporates in the pores
+
+    latent = LAMBDA(air_temp+273.15);
+    latent18 = latent * 18.;
+    desdt=DESDT(air_temp+273.15, latent18);
+    K_air= 0.024 + 44100*2.42e-5*fw*air_density_mole*desdt/air_press_Pa;
+
+    k_fluid=K_air + fw *(K_water-K_air);
+
+    wt_air=2/(3*(1+.2*(K_air/k_fluid-1))) + 1/(3*(1+(1-2*.2)*(K_air/k_fluid -1)));
+    wt_water=2/(3*(1+.2*(K_water/k_fluid-1))) + 1/(3*(1+(1-2*.2)*(K_water/k_fluid -1)));
+    wt_mineral=2/(3*(1+.2*(K_mineral/k_fluid-1))) + 1/(3*(1+(1-2*.2)*(K_mineral/k_fluid -1)));
+    wt_org=2/(3*(1+.2*(K_org/k_fluid-1))) + 1/(3*(1+(1-2*.2)*(K_org/k_fluid -1)));
+
+    Cp_soil_num= ( air_density * Cp_air * soil_air_fraction + 1000.000 * Cp_water * water_content_15cm +
+                   1300.000 *Cp_org * peat_fraction + 2650.000 * Cp_mineral * mineral_fraction);
+
+    Cp_soil=Cp_soil_num/( air_density *  soil_air_fraction + 1000.000 *  water_content_15cm +
+                          1300.000  * peat_fraction + 2650.000 * mineral_fraction);
+
+    K_soil_num=mineral_fraction * wt_mineral*K_mineral + soil_air_fraction * wt_air*K_air +
+               water_content_15cm * wt_water*K_water + peat_fraction * wt_org*K_mineral;
+
+    K_soil=K_soil_num/(mineral_fraction * wt_mineral + soil_air_fraction * wt_air +
+                       water_content_15cm * wt_water + peat_fraction * wt_org);
+
+
+
+    //  Assign soil layers and initial temperatures
+    //  and compute layer heat capacities and conductivities
+
+
+    for(I=0,IP1=1; I <= n_soil; I++,IP1++)
+    {
+        IM1=I-1;
+        z_soil(IP1) = z_soil(I) + .005 * pow(1.5, (double)IM1);
+        // printf("%5.4f ", z_soil(IP1));
+        T_soil(I) = soil_T_base;
+
+        // assign bulk densities for litter and soil
+
+        if (z_soil(IP1) < z_litter)
+            soil_bulk_density(IP1) = .074 ;  // litter
+        else
+            soil_bulk_density(IP1) = 0.83;   // soil  bulk density for the alfalfa, g cm-3
+
+    }  //  next I
+
+    for(I=1; I<=n_soil+1; I++)
+    {
+        // Heat capacity and conductivity.
+
+
+        // assuming in the numeric code it is bulk density times Cp as values in code have
+        // Campbell and Norman have rhos Cs = rhoa Cpa + .. correctly in the book, pg 119.
+
+        // use weighted Cp check units kg m-3 times J kg-1 K-1
+
+        // 2 is if dt =t(i+1)-t(i-1)
+
+        cp_soil(I) = Cp_soil * (z_soil(I+1) - z_soil(I-1)) / (2. * dt);
+
+
+        // adopt new equations from Campbell and Norman and Campbell 1994, after the basic book was written
+
+        //      C1 = .65 - .78 * soil.bulk_density[I] + .6 * soil.bulk_density[I] * soil.bulk_density[I];
+        //      C2 = 1.06 * soil.bulk_density[I];  // corrected according to Campbell notes
+        //     C3= 1. + 2.6 / sqrt(soil.mineral_fraction);
+        //      C4 = .03 + .1 * soil.bulk_density[I] * soil.bulk_density[I];
+
+        // soil conductivity needs debugging ?? or are units for bulk of soil kg m-3
+        //soil.k_conductivity_soil[I] = (C1 + C2 * soil.water_content_15cm - (C1 - C4) * exp(-pow((C3 * soil.water_content_15cm), 4.))) / (soil.z_soil[I + 1] - soil.z_soil[I]);
+
+        k_conductivity_soil(I) = K_soil / (z_soil(I + 1) - z_soil(I));
+
+
+    }  // NEXT I
+    return soil_mtime;
+    // return;
+}
+
+
+std::tuple<double, double, double, double, double> SOIL_ENERGY_BALANCE(
+    int soilsze, double epsoil, double delz, double ht, double wnd, 
+    double air_density, double air_relative_humidity, double air_press_Pa, double air_temp,
+    double water_content_15cm, double input_tsoil, double beam_flux_par_sfc, 
+    double par_down_sfc, double par_up_sfc,
+    double beam_flux_nir_sfc, double nir_dn_sfc, double nir_up_sfc,
+    double ir_dn_sfc, double tair_filter_sfc, double soil_sfc_temperature, double rhov_filter_sfc,
+    double soil_bulk_density_sfc, int soil_mtime, int time_var_count,
+    double soil_rnet, double soil_lout, double soil_evap, double soil_heat,
+    py::array_t<double, py::array::c_style> T_soil_np, 
+    py::array_t<double, py::array::c_style> k_conductivity_soil_np,
+    py::array_t<double, py::array::c_style> cp_soil_np
+)
+{
+    /*
+
+     The soil energy balance model of Campbell has been adapted to
+     compute soil energy fluxes and temperature profiles at the soil
+     surface.  The model has been converted from BASIC to C.  We
+     also use an analytical version of the soil surface energy
+     balance to solve for LE, H and G.
+
+     10/30/15 converted soil moisture to psi and then to rh and vpd soil.  yields better soil LE
+
+     10/15 updated the Cp and Kthermal using more recent theory by Campbell and Norman
+
+     Combine surface energy balance calculations with soil heat
+     transfer model to calculate soil conductive and convective heat
+     transfer and evaporation rates.  Here, only the deep temperature
+     is needed and G, Hs and LEs can be derived from air temperature
+     and energy inputs.
+
+    Soil evaporation models by Kondo, Mafouf et al. and
+    Dammond and Simmonds are used. Dammond and Simmonds for example
+    have a convective adjustment to the resistance to heat transfer.
+    Our research in Oregon and Canada have shown that this consideration
+    is extremely important to compute G and Rn_soil correctly.
+
+     */
+
+    int J, JJ, mm1, I, IP1, IM1;
+
+    double Fst,Gst, le2;
+
+    double soil_par,soil_nir;
+
+    double u_soil,Rh_soil,Rv_soil, kv_soil, kcsoil;
+
+    double T_new_soil[soilsze];
+
+    double a_soil[soilsze], b_soil[soilsze], c_soil[soilsze], d_soil[soilsze];
+    double est,dest,d2est,tk2,tk3,tk4,llout,lecoef;
+    double acoef,acoeff,bcoef,ccoef;
+    double repeat, product;
+    double vpdsoil,att,btt,ctt;
+    double storage;
+    double facstab, stabdel, vpdfact, ea, psi, psiPa, rhsoil;
+
+    double water_content_sfc, soil_resistance_h2o;
+    double soil_T_base, soil_T_air, soil_T_Kelvin, gsoil, soil_T_15cm;
+    double latent, latent18;
+
+
+    int n_soil = soilsze-3;         // number of soil layers
+    int n_soil_1 = soilsze-2;      // m +1
+
+    auto T_soil = T_soil_np.mutable_unchecked<1>();
+    auto k_conductivity_soil = k_conductivity_soil_np.mutable_unchecked<1>();
+    auto cp_soil = cp_soil_np.mutable_unchecked<1>();
+
+    // kv_soil is the water vapor transfer coef for the soil
+    water_content_sfc=0;   // at the soil surface
+
+
+    // soil surface resistance to water vapor transfer
+
+    // updated and revisited the soil resistance model
+    soil_resistance_h2o=SOIL_SFC_RESISTANCE(water_content_15cm);
+
+    //  Compute soilevap as a function of energy balance at the soil
+    //  surface. Net incoming short and longwave energy
+
+    // radiation balance at soil in PAR band, W m-2
+    // soil_par = (solar.beam_flux_par[1] + solar.par_down[1] - solar.par_up[1]) / 4.6;
+    soil_par = (beam_flux_par_sfc + par_down_sfc - par_up_sfc) / 4.6;
+
+
+    // radiation balance at soil in NIR band, W m-2
+    // soil_nir = solar.beam_flux_nir[1] + solar.nir_dn[1] - solar.nir_up[1];
+    soil_nir = beam_flux_nir_sfc + nir_dn_sfc - nir_up_sfc;
+
+    // incoming radiation balance at soil, solar and terrestrial, W m-2
+    // soil.rnet = soil_par + soil_nir + solar.ir_dn[1]*epsoil;  // the Q value of Rin - Rout + Lin
+    soil_rnet = soil_par + soil_nir + ir_dn_sfc*epsoil;  // the Q value of Rin - Rout + Lin
+
+    // initialize T profile
+    soil_T_base = input_tsoil;     // 32 cm
+
+
+    // initialize the soil temperature profile at the lower bound.
+    for (I=0; I<= n_soil_1; I++)
+        T_soil(I)=soil_T_base;
+
+    // set air temperature over soil with lowest air layer, filtered
+    soil_T_air = tair_filter_sfc;
+
+    // Compute Rh_soil and rv_soil from wind log profile for lowest layer
+    // u_soil = UZ(delz);              // wind speed one layer above soil
+    u_soil = UZ(delz, ht, wnd);              // wind speed one layer above soil
+    // Rh_soil = 32.6 / u_soil; // bound. layer rest for heat above soil
+    // Rv_soil = 31.7 / u_soil; // bound. layer rest for vapor above soil
+
+// Stability factor from Daamen and Simmonds
+    stabdel=5.*9.8*(delz)*(soil_sfc_temperature-soil_T_air)/((soil_T_air+273.)*u_soil*u_soil);
+
+    if (stabdel > 0)
+        facstab=pow(1.+stabdel,-0.75);
+    else
+        facstab=pow(1.+stabdel,-2.);
+
+    if(time_var_count <= 1.)
+        facstab=1.;
+
+
+    if (facstab < .1)
+        facstab=.1;
+
+    if (facstab > 5)
+        facstab=5;
+
+
+    Rh_soil = 98.*facstab / u_soil;
+
+    if (Rh_soil > 5000.)
+        Rh_soil=5000.;
+
+    if(Rh_soil < 5.)
+        Rh_soil=5.;
+
+    Rv_soil=Rh_soil;
+
+
+    //  kcsoil is the convective transfer coeff for the soil. (W m-2 K-1)
+    kcsoil = (cp * air_density) / Rh_soil;
+
+    // soil surface conductance to water vapor transfer
+    kv_soil = 1. / (Rv_soil + soil_resistance_h2o);
+
+    // Boundary layer conductance at soil surface, W m-2 K-1
+    // soil.k_conductivity_soil[0] = kcsoil;
+    k_conductivity_soil(0) = kcsoil;
+
+    // T_new_soil[0] = soil.T_air;
+    // soil.T_soil[0] = soil.T_air;           // was soil.T_air  but re-setting boundary
+    // soil.T_soil[n_soil_1] = soil.T_base;
+    // T_new_soil[n_soil_1] = soil.T_soil[n_soil_1];
+    T_new_soil[0] = soil_T_air;
+    T_soil(0) = soil_T_air;           // was soil.T_air  but re-setting boundary
+    T_soil(n_soil_1) = soil_T_base;
+    T_new_soil[n_soil_1] = T_soil(n_soil_1);
+
+
+    // initialize absolute temperature
+    soil_T_Kelvin=soil_T_air+273.16;
+
+
+    // evaluate latent heat of evaporation at T_soil
+    latent = LAMBDA(soil_T_Kelvin);
+    latent18 = latent * 18.;
+
+    // evaluate saturation vapor pressure in the energy balance equation it is est of air layer
+    est = ES(soil_T_Kelvin);  //  es(T) f Pa
+    ea = rhov_filter_sfc * soil_T_Kelvin * 461.89;
+
+    // Vapor pressure deficit, Pa
+    if(air_relative_humidity > 0.75)
+        vpdfact=1.0;
+    else
+        vpdfact=1.00;
+
+    // should not use atmospheric humidity. Plus there is a unit problem
+    // with est and ea.
+
+
+    //  vpdsoil = est - ea;      // Pa
+
+    //  if (vpdsoil < 0.)
+    //  vpdsoil = 0;
+
+
+    // Redo this using a pedo transfer function to convert volumetric water content to matric potential
+    // then solve for RH;  psi = R Tk/ Mw ln(RH)
+
+    // Slope of the vapor pressure-temperature curve, Pa/C
+    //  evaluate as function of Tk
+
+    // fit psi vs grav water content for Sherman Island
+
+    // abs(psi) = -12.56 + -12.49 * log (grav content)
+
+    // bulk density at Sherman Island is 1.11
+
+    psi = -12.56 -12.49 * log(water_content_15cm/soil_bulk_density_sfc);  // - MPa
+    psiPa = -psi *1000000;  // Pa
+    rhsoil= exp(psiPa*1.805e-5/(8.314*soil_T_Kelvin));  // relative humidity
+    vpdsoil = (1-rhsoil)*est;   // vpd of the soil
+    dest = DESDT(soil_T_Kelvin, latent18);
+
+    // Second derivative of the vapor pressure-temperature curve, Pa/C
+    // Evaluate as function of Tk
+    d2est = DES2DT(soil_T_Kelvin, latent18);
+
+    //   Compute products of absolute air temperature
+    tk2 = soil_T_Kelvin * soil_T_Kelvin;
+    tk3 = tk2 * soil_T_Kelvin;
+    tk4 = tk3 * soil_T_Kelvin;
+
+    // Longwave emission at air temperature, W m-2
+    llout = epsoil*sigma * tk4;
+
+    // coefficients for latent heat flux density
+    lecoef = air_density * .622 * latent * kv_soil / air_press_Pa;
+
+    // Weighting factors for solving diff eq.
+    Fst = 0.6;
+    Gst = 1. - Fst;
+
+    //  solve by looping through the d[]/dt term of the Fourier
+    //  heat transfer equation
+    for(J = 1; J<= soil_mtime; J++)
+    {
+
+        for(I = 1; I<=n_soil; I++) // define coef for each soil layer
+        {
+            IM1=I-1;
+            IP1=I+1;
+
+            c_soil[I] = -k_conductivity_soil(I) * Fst;
+            a_soil[IP1] = c_soil[I];
+            b_soil[I] = Fst * (k_conductivity_soil(I) + k_conductivity_soil(IM1)) + cp_soil(I);
+            d_soil[I] = Gst * k_conductivity_soil(IM1) * T_soil(IM1) + (cp_soil(I) - Gst * (k_conductivity_soil(I) + k_conductivity_soil(IM1))) * T_soil(I) + Gst * k_conductivity_soil(I) * T_soil(IP1);
+        }
+
+        d_soil[1] = d_soil[1] + k_conductivity_soil(0) * T_new_soil[0] * Fst + soil_rnet - soil_lout - soil_evap;
+        d_soil[n_soil] = d_soil[n_soil] + k_conductivity_soil(n_soil) * Fst * T_new_soil[n_soil_1];
+
+
+        mm1=n_soil-1;
+        for(I = 1; I<= mm1; I++)
+        {
+            IP1=I+1;
+            c_soil[I] = c_soil[I] / b_soil[I];
+            d_soil[I] = d_soil[I] / b_soil[I];
+            b_soil[IP1] = b_soil[IP1] - a_soil[IP1] * c_soil[I];
+            d_soil[IP1] = d_soil[IP1] - a_soil[IP1] * d_soil[I];
+        }
+        // // Printing by looping through the array elements
+        // for (JJ = 1; JJ <= soilsze; JJ++) {
+        //     std::cout << b_soil[JJ-1] << ' ';
+        // }
+        // std::cout << '\n';
+
+        T_new_soil[n_soil] = d_soil[n_soil] / b_soil[n_soil];
+
+        for(I = mm1; I>= 1; I--)
+            T_new_soil[I] = d_soil[I] - c_soil[I] * T_new_soil[I + 1];
+        
+        // // Printing by looping through the array elements
+        // for (JJ = 1; JJ <= soilsze; JJ++) {
+        //     std::cout << T_new_soil[JJ-1] << ' ';
+        // }
+        // std::cout << '\n';
+
+        // soil temperature at 15 cm
+        soil_T_15cm=T_new_soil[7];
+
+
+        // compute soil conductive heat flux density, W m-2
+        gsoil = k_conductivity_soil[1] * (T_new_soil[1] - T_new_soil[2]);
+        storage = cp_soil[1] * (T_new_soil[1] - T_soil(1));
+        gsoil += storage;
+
+
+        // test if gsoil is in bounds??
+
+        if(gsoil < -500. || gsoil > 500.)
+            gsoil=0;
+
+
+
+        // The quadratic coefficients for the solution to
+        //   a LE^2 + b LE +c =0
+
+
+        // should be a function of Q, not Rnet
+        repeat = kcsoil + 4. * epsoil*sigma * tk3;
+        acoeff = lecoef * d2est / (2. * repeat);
+        acoef = acoeff;
+        bcoef = -(repeat) - lecoef * dest + acoeff * (-2.*soil_rnet +2* llout+2*gsoil);
+        ccoef = (repeat) * lecoef * vpdsoil + lecoef * dest * (soil_rnet - llout-gsoil) +
+                acoeff * ((soil_rnet * soil_rnet) + llout * llout + gsoil*gsoil -
+                          2.*soil_rnet * llout - 2.*soil_rnet*gsoil+2*gsoil*llout);
+
+
+// LE1 = (-BCOEF + (BCOEF ^ 2 - 4 * ACOEF * CCOEF) ^ .5) / (2 * ACOEF)
+
+        product = bcoef * bcoef - 4 * acoef * ccoef;
+
+// LE2 = (-BCOEF - (BCOEF * BCOEF - 4 * acoef * CCOEF) ^ .5) / (2 * acoef)
+
+        if (product >= 0)
+            le2= (-bcoef - pow(product,.5)) / (2 * acoef);
+        else
+            le2 = 0;
+
+        // latent energy flux density over soil, W m-2
+        soil_evap=le2;
+
+        // solve for Ts using quadratic solution
+        att = 6 * epsoil*sigma * tk2 + d2est * lecoef / 2;
+        btt = 4 * epsoil*sigma * tk3 + kcsoil + lecoef * dest;
+        ctt = -soil_rnet + llout+gsoil + lecoef * vpdsoil;
+
+        // IF (BTLF * BTLF - 4 * ATLF * CTLF) >= 0 THEN /
+        product = btt * btt - 4. * att * ctt;
+
+        // T_sfc_K = TAA +
+        //     (-BTLF + SQR(BTLF * BTLF - 4 * ATLF * CTLF)) / (2 * ATLF)
+
+        if (product >= 0.)
+            soil_sfc_temperature = soil_T_air + (-btt + sqrt(product)) / (2. * att);
+        else
+            soil_sfc_temperature=soil_T_air;
+
+        // Soil surface temperature, K
+        soil_T_Kelvin=soil_sfc_temperature+273.16;
+
+        // IR emissive flux density from soil, W m-2
+        soil_lout = epsoil*sigma*pow(soil_T_Kelvin,4);
+
+        // Sensible heat flux density over soil, W m-2
+        soil_heat = kcsoil * (T_soil(1)- soil_T_air);
+
+
+
+        /*
+
+          printf(" \n");
+          printf("GSOIL  HSOIL  LESOIL  solar.rnsoil  lout  TSOIL\n");
+          printf("%5.1f  %5.1f  %5.1f  %5.1f\n", soil.gsoil, soil.heat, soil.evap, solar.rnsoil - soil.lout, loutsoil, soil.sfc_temperature);
+          printf("\n");
+
+
+          printf("  Z   TEMP\n");
+
+        */
+
+
+        // // Printing by looping through the array elements
+        // for (J = 1; J <= soilsze; J++) {
+        //     std::cout << T_new_soil[J-1] << ' ';
+        // }
+        // std::cout << '\n';
+
+        // compute new soil temperature profile
+
+        for(I=0; I<=n_soil_1; I++)
+        {
+
+//   printf("%5.2f    %5.2f\n",z_soil[I],T_new_soil[I]);
+
+            // check for extremes??
+
+            // TODO: Peishi
+            // if (T_new_soil[I] < -10. || T_new_soil[I] > 70.)
+            //     // T_new_soil[I]=input.ta;
+            //     T_new_soil[I]=air_temp;
+
+            T_soil(I)=T_new_soil[I];
+
+        }  // next i
+
+
+    }             // next J
+    return std::make_tuple(soil_rnet, soil_lout, soil_heat, soil_evap, soil_sfc_temperature);
+    // return;
+}
+
+
 void CONC(
         double cref, double soilflux, double factor,
         int sze3, int jtot, int jtot3, double met_zl, double delz, int izref,
@@ -4531,6 +5087,23 @@ PYBIND11_MODULE(canoak, m) {
     py::arg("Ci_np"), py::arg("drbv_np"), py::arg("dRESPdz_np"), py::arg("dStomCondz_np"));
 
     m.def("soil_sfc_resistance", &SOIL_SFC_RESISTANCE, "Subroutine to compute soil resistance.", py::arg("wg")); 
+
+    m.def("soil_energy_balance", &SOIL_ENERGY_BALANCE, "Subroutine to compute soil energy fluxes and temperature profiles at the soil surface.", 
+    py::arg("soilsze"), py::arg("epsoil"), py::arg("delz"), py::arg("ht"), py::arg("wnd"),
+    py::arg("air_density"), py::arg("air_relative_humidity"), py::arg("air_press_Pa"), py::arg("air_temp"),
+    py::arg("water_content_15cm"), py::arg("input_tsoil"), py::arg("beam_flux_par_sfc"), py::arg("par_down_sfc"), py::arg("par_up_sfc"),
+    py::arg("beam_flux_nir_sfc"), py::arg("nir_dn_sfc"), py::arg("nir_up_sfc"), py::arg("ir_dn_sfc"),
+    py::arg("tair_filter_sfc"), py::arg("soil_sfc_temperature"), py::arg("rhov_filter_sfc"), py::arg("soil_bulk_density_sfc"),
+    py::arg("soil_mtime"), py::arg("time_var_count"), py::arg("soil_rnet"), py::arg("soil_lout"), py::arg("soil_evap"), py::arg("soil_heat"),
+    py::arg("T_soil_np"), py::arg("k_conductivity_soil_np"), py::arg("cp_soil_np")
+    );
+
+    m.def("set_soil", &SET_SOIL, "Subroutine to set up the soil profile characteristics.",
+    py::arg("dt"), py::arg("total_t"), py::arg("n_soil"), 
+    py::arg("water_content_15cm"), py::arg("soil_T_base"),
+    py::arg("air_temp"), py::arg("air_density"), py::arg("air_density_mole"), py::arg("air_press_Pa"),
+    py::arg("T_soil_np"), py::arg("z_soil_np"), py::arg("soil_bulk_density_np"), 
+    py::arg("cp_soil_np"), py::arg("k_conductivity_soil_np"));
 
     m.def("conc", &CONC, "Subroutine to compute scalar concentrations from source estimates and the Lagrangian dispersion matrix",
     py::arg("cref"), py::arg("soilflux"), py::arg("factor"),

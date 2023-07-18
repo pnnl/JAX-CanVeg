@@ -25,7 +25,6 @@ from .turbulence_leaf_boundary_layer import (
 )
 from .soil_energy_balance import (
     set_soil,  # noqa: F401
-    set_soil_temp,  # noqa: F401
     soil_energy_balance,  # noqa: F401
     soil_sfc_resistance,  # noqa: F401
 )
