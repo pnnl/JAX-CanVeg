@@ -90,7 +90,7 @@ def boundary_resistance(
     # Sh_CO2 = Res_factor * scc33
     # If there is free convection
     # jax.debug.print(
-    #     "{a} {b} {c}", a=graf, b=Re, c=graf/(Re*Re)
+    #     "{a} {b} {c}", a=graf, b=T_kelvin, c=nnu_T_P
     # )
     conds = jnp.array(
         [

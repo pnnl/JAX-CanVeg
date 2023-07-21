@@ -1,1 +1,1 @@
-from .conc import conc  # noqa: F401
+from .utils import conc, filter_array  # noqa: F401

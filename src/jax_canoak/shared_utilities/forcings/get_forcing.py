@@ -125,6 +125,9 @@ def get_input_t(forcings: PointData, t: Float_0D) -> Tuple:
     # Heat coefficient
     heatcoef = air_density * cp
 
+    # The initial heat flux
+    H_old = 0.0
+
     return (
         rglobal,
         parin,
@@ -151,4 +154,5 @@ def get_input_t(forcings: PointData, t: Float_0D) -> Tuple:
         air_density_mole,
         soil_Tave_15cm,
         heatcoef,
+        H_old,
     )

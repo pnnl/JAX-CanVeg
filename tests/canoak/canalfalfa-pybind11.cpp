@@ -3851,8 +3851,7 @@ std::tuple<double, double, double, double> ENERGY_BALANCE_AMPHI(
 
 void ENERGY_AND_CARBON_FLUXES(
     double jtot, double delz, double zzz, double ht, double grasshof, double press_kPa, 
-    double co2air, double wnd, double pr33, double sc33, double scc33,
-    double rhovva, double air_density,
+    double co2air, double wnd, double pr33, double sc33, double scc33, double air_density,
     double press_Pa, double lai, double pai, double pstat273, double kballstr,
     // Input arrays
     py::array_t<double, py::array::c_style> tair_filter_np, py::array_t<double, py::array::c_style> zzz_ht_np,
@@ -4054,8 +4053,12 @@ void ENERGY_AND_CARBON_FLUXES(
             // compute energy balance of sunlit leaves
             // ENERGY_BALANCE_AMPHI(solar.rnet_sun[JJ], &T_sfc_K, Tair_K_filtered, prof.rhov_filter[JJ], bound_layer_res.vapor, rs_sun, &LE_leaf, &H_leaf, &lout_leaf);
             // T_sfc_K, LE_leaf, H_leaf, lout_leaf = ENERGY_BALANCE_AMPHI(
+            // leaf_energy = ENERGY_BALANCE_AMPHI(
+            //     rnet_sun(JJ-1), T_sfc_K, rhovva, rhov_filter(JJ-1), rs_sun, air_density, 
+            //     latent, press_Pa, bound_layer_res_heat
+            // );
             leaf_energy = ENERGY_BALANCE_AMPHI(
-                rnet_sun(JJ-1), T_sfc_K, rhovva, rhov_filter(JJ-1), rs_sun, air_density, 
+                rnet_sun(JJ-1), Tair_K_filtered, rhov_filter(JJ-1), bound_layer_res_vapor, rs_sun, air_density, 
                 latent, press_Pa, bound_layer_res_heat
             );
             T_sfc_K = std::get<0>(leaf_energy);
@@ -4139,9 +4142,13 @@ void ENERGY_AND_CARBON_FLUXES(
         // ENERGY_BALANCE_AMPHI(solar.rnet_sh[JJ], &T_sfc_K, Tair_K_filtered, prof.rhov_filter[JJ], bound_layer_res.vapor, rs_shade, &LE_leaf, &H_leaf, &lout_leaf);
         // T_sfc_K, LE_leaf, H_leaf, lout_leaf = ENERGY_BALANCE_AMPHI(
         leaf_energy = ENERGY_BALANCE_AMPHI(
-            rnet_sh(JJ-1), T_sfc_K, rhovva, rhov_filter(JJ-1), rs_shade, air_density, 
+            rnet_sh(JJ-1), Tair_K_filtered, rhov_filter(JJ-1), bound_layer_res_vapor, rs_shade, air_density, 
             latent, press_Pa, bound_layer_res_heat
         );
+        // leaf_energy = ENERGY_BALANCE_AMPHI(
+        //     rnet_sh(JJ-1), T_sfc_K, rhovva, rhov_filter(JJ-1), rs_shade, air_density, 
+        //     latent, press_Pa, bound_layer_res_heat
+        // );
         T_sfc_K = std::get<0>(leaf_energy);
         LE_leaf = std::get<1>(leaf_energy);
         H_leaf = std::get<2>(leaf_energy);
@@ -4449,7 +4456,7 @@ int SET_SOIL(
 }
 
 
-std::tuple<double, double, double, double, double> SOIL_ENERGY_BALANCE(
+std::tuple<double, double, double, double, double, double> SOIL_ENERGY_BALANCE(
     int soilsze, double epsoil, double delz, double ht, double wnd, 
     double air_density, double air_relative_humidity, double air_press_Pa, double air_temp,
     double water_content_15cm, double input_tsoil, double beam_flux_par_sfc, 
@@ -4823,9 +4830,9 @@ std::tuple<double, double, double, double, double> SOIL_ENERGY_BALANCE(
             // check for extremes??
 
             // TODO: Peishi
-            // if (T_new_soil[I] < -10. || T_new_soil[I] > 70.)
-            //     // T_new_soil[I]=input.ta;
-            //     T_new_soil[I]=air_temp;
+            if (T_new_soil[I] < -10. || T_new_soil[I] > 70.)
+                // T_new_soil[I]=input.ta;
+                T_new_soil[I]=air_temp;
 
             T_soil(I)=T_new_soil[I];
 
@@ -4833,7 +4840,7 @@ std::tuple<double, double, double, double, double> SOIL_ENERGY_BALANCE(
 
 
     }             // next J
-    return std::make_tuple(soil_rnet, soil_lout, soil_heat, soil_evap, soil_sfc_temperature);
+    return std::make_tuple(soil_rnet, soil_lout, soil_heat, soil_evap, latent, soil_sfc_temperature);
     // return;
 }
 
@@ -5072,8 +5079,7 @@ PYBIND11_MODULE(canoak, m) {
 
     m.def("energy_and_carbon_fluxes", &ENERGY_AND_CARBON_FLUXES, "Subroutine to compute coupled fluxes of energy, water and CO2 exchange, as well as leaf temperature.", 
     py::arg("jtot"), py::arg("delz"), py::arg("zzz"), py::arg("ht"), py::arg("grasshof"), py::arg("press_kPa"),
-    py::arg("co2air"), py::arg("wnd"), py::arg("pr33"), py::arg("sc33"), py::arg("scc33"),
-    py::arg("rhovva"), py::arg("air_density"),
+    py::arg("co2air"), py::arg("wnd"), py::arg("pr33"), py::arg("sc33"), py::arg("scc33"), py::arg("air_density"),
     py::arg("press_Pa"), py::arg("lai"), py::arg("pai"), py::arg("pstat273"), py::arg("kballstr"),
     // Input arrays
     py::arg("tair_filter_np"), py::arg("zzz_ht_np"), py::arg("prob_beam_np"), py::arg("prob_sh_np"), py::arg("rnet_sun_np"), py::arg("rnet_sh_np"),

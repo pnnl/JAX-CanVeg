@@ -19,6 +19,7 @@ from .leaf_energy_balance import des2dt as des2dt_func
 from .turbulence_leaf_boundary_layer import uz
 from ...shared_utilities.types import Float_0D, Float_1D
 from ...shared_utilities.constants import cp, sigma
+from ...shared_utilities.utils import filter_array
 
 
 def set_soil(
@@ -288,6 +289,7 @@ def soil_energy_balance(
     # to convert volumetric water content to matric potential
     # then solve for RH;  psi = R Tk/ Mw ln(RH)
     psi = -12.56 - 12.49 * jnp.log(water_content_15cm / soil_bulk_density_sfc)  # - MPa
+    # jax.debug.print("1psi - {a} {z}", a=water_content_15cm, z=soil_bulk_density_sfc)
     psiPa = -psi * 1000000  # Pa
     rhsoil = jnp.exp(psiPa * 1.805e-5 / (8.314 * soil_T_Kelvin))  # relative humidity
     vpdsoil = (1 - rhsoil) * est  # vpd of the soil
@@ -308,6 +310,7 @@ def soil_energy_balance(
     # Weighting factors for solving diff eq.
     Fst = 0.6
     Gst = 1.0 - Fst
+    # jax.debug.print("0-llout: {a}; lecoef: {b}; d2est: {c}",a=llout,b=lecoef,c=d2est)
 
     # solve by looping through the d[]/dt term of the Fourier
     # heat transfer equation
@@ -336,6 +339,7 @@ def soil_energy_balance(
 
         _, abcd = jax.lax.scan(calculate_abcd, None, jnp.arange(1, n_soil + 1))
         a_soil, b_soil, c_soil, d_soil = abcd
+        # jax.debug.print("1a - {a} {z}", a=d_soil[:2], z=i)
         d_soil_top = (
             d_soil[0]
             + k_conductivity_soil[0] * T_soil[0] * Fst
@@ -347,18 +351,20 @@ def soil_energy_balance(
         d_soil = jnp.concatenate(
             [jnp.array([d_soil_top]), d_soil[1:-1], jnp.array([d_soil_bot])]
         )
+        # jax.debug.print(
+        # "1b - {a} {b} {c} {z}", a=d_soil[:2], b=soil_evap, c=soil_lout, z=i)
 
         mm1 = n_soil - 1
 
-        def update_abcd(c, i2):
-            new_b, new_d = c
+        def update_abcd(c2, i2):
+            new_b, new_d = c2
             ip2 = i2 + 1
             new_c = c_soil[i2] / new_b
             new_d = new_d / new_b
             new_b_next = b_soil[ip2] - a_soil[i2] * new_c
             new_d_next = d_soil[ip2] - a_soil[i2] * new_d
-            cnew = [new_b_next, new_d_next]
-            return cnew, [new_c, new_b_next, new_d]
+            c2new = [new_b_next, new_d_next]
+            return c2new, [new_c, new_b_next, new_d]
 
         carry_i2, bcd_mm1 = jax.lax.scan(
             update_abcd, [b_soil[0], d_soil[0]], jnp.arange(mm1)
@@ -389,9 +395,6 @@ def soil_energy_balance(
                 jnp.array([T_new_soil_bot, T_soil[n_soil_1]]),
             ]
         )  # nsoil+2
-        # jax.debug.print(
-        #     "{a}", a=T_new_soil,
-        # )
 
         # compute soil conductive heat flux density, W m-2
         gsoil = k_conductivity_soil[1] * (T_new_soil[1] - T_new_soil[2])
@@ -449,8 +452,11 @@ def soil_energy_balance(
         soil_lout = epsoil * sigma * jnp.power(soil_T_Kelvin, 4)
         # Sensible heat flux density over soil, W m-2
         soil_heat = kcsoil * (T_soil[1] - soil_T_air)
+        # jax.debug.print("1 - kcsoil: {b}; soil_heat: {a}", a=soil_heat, b=kcsoil)
 
         fluxes = [soil_rnet, soil_lout, soil_heat, soil_evap, soil_sfc_temperature]
+
+        T_new_soil = filter_array(T_new_soil, -10.0, 70.0, tsoil_init)
         T_soil = T_new_soil
 
         cnew = fluxes + [T_soil]
@@ -462,6 +468,7 @@ def soil_energy_balance(
     #     [soil_rnet, soil_lout, soil_heat, soil_evap, soil_sfc_temperature, T_soil],
     #     xs=None, length=soil_mtime
     # )
+    # jax.debug.print("1-Tsoil: {a}", a=T_soil)
     carry = jax.lax.fori_loop(
         0,
         soil_mtime,
@@ -469,8 +476,17 @@ def soil_energy_balance(
         [soil_rnet, soil_lout, soil_heat, soil_evap, soil_sfc_temperature, T_soil],
     )
     soil_rnet, soil_lout, soil_heat, soil_evap, soil_sfc_temperature, T_soil = carry
+    # jax.debug.print("2-Tsoil: {a}", a=T_soil)
 
-    return soil_rnet, soil_lout, soil_heat, soil_evap, soil_sfc_temperature, T_soil
+    return (
+        soil_rnet,
+        soil_lout,
+        soil_heat,
+        soil_evap,
+        latent,
+        soil_sfc_temperature,
+        T_soil,
+    )
 
 
 def soil_sfc_resistance(wg: Float_0D) -> Float_0D:
@@ -480,7 +496,7 @@ def soil_sfc_resistance(wg: Float_0D) -> Float_0D:
         wg (Float_0D): _description_
 
     Returns:
-        _type_: _description_
+        Float_0D: _description_
     """
     # Camillo and Gurney model for soil resistance
     # Rsoil= 4104 (ws-wg)-805, ws=.395, wg=0

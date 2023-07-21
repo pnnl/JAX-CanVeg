@@ -174,9 +174,6 @@ def par_day(
 
     fraction_beam = par_beam / parin
     beam = jnp.zeros(jktot) + fraction_beam
-    # tbeam = jnp.zeros(jktot) + fraction_beam
-    # sumlai = jnp.zeros(sze)
-    # sumlai = sumlai.at[:jtot].set(jnp.cumsum(dLAIdz[::-1][2:])[::-1])
     sumlai = jnp.concatenate(
         [jax.lax.cumsum(dLAIdz[:jtot], reverse=True), jnp.zeros(sze - jtot)]
     )
@@ -193,7 +190,6 @@ def par_day(
     # Compute the probability of beam penetration
     exp_direct = jnp.exp(-dLAIdz * markov * Gfunc_solar / solar_sine_beta)
     pen2 = jnp.exp(-sumlai * markov * Gfunc_solar / solar_sine_beta)
-    # pen2 = pen2.at[-2:].set(0)
     pen2 = jnp.concatenate([pen2[:-2], jnp.zeros(2)])
 
     # sunlit and shaded LAI
@@ -201,26 +197,21 @@ def par_day(
     shd_lai = sumlai - sun_lai
     sun_lai = jnp.concatenate([sun_lai[:-2], jnp.zeros(2)])
     shd_lai = jnp.concatenate([shd_lai[:-2], jnp.zeros(2)])
-    # sun_lai = sun_lai.at[-2:].set(0)
-    # shd_lai = shd_lai.at[-2:].set(0)
 
     # probability of beam
     prob_beam = markov * pen2
-    # beam = beam.at[:-1].set(beam[1:] * exp_direct)
+
     def update_beam(carry, i):
-        # carry_new = carry * jnp.power(exp_direct[jtot-1-i], i)
         carry_new = carry * exp_direct[jtot - 1 - i]
         return carry_new, carry_new
 
     _, beam_update = jax.lax.scan(
         f=update_beam, init=beam[jktot - 1], xs=jnp.arange(jtot)
     )
-    # beam = beam.at[:-1].set(beam_update[::-1])
     beam = jnp.concatenate([beam_update[::-1], beam[-1:]])
     qu = 1.0 - prob_beam
     qu = jnp.clip(qu, a_min=0.0, a_max=1.0)
     qu = jnp.concatenate([qu[:-2], jnp.zeros(2)])
-    # qu = qu.at[-2:].set(0)
 
     # probability of umbra
     prob_sh = qu
@@ -234,26 +225,19 @@ def par_day(
             sup[-1:] * par_reflect,
         ]
     )
-    # sup = jnp.concatenate([sup[:1], tbeam[1:] - tbeam[:-1], sup[-1:]]) * par_reflect
-    # sup = sup.at[1:-1].set(tbeam[1:] - tbeam[:-1]) * par_reflect
 
     # beam PAR that is transmitted downward
     sdn = jnp.concatenate([tbeam[1:] - tbeam[:-1], sdn[-2:]]) * par_trans
-    # sdn = sdn.at[:-2].set(tbeam[1:] - tbeam[:-1]) * par_trans
 
     # Initiate scattering using the technique of NORMAN (1979).
     # scattering is computed using an iterative technique.
     # Here Adum is the ratio up/down diffuse radiation.
-    # sup = sup.at[0].set(tbeam[0] * par_soil_refl)
-    # par_down = par_down.at[jktot - 1].set(1.0 - fraction_beam)
-    # adum = adum.at[0].set(par_soil_refl)
-    # sup = sup.at[0].set(tbeam[0] * par_soil_refl)
     par_down = jnp.concatenate(
         [par_down[:-2], jnp.array([1.0 - fraction_beam, par_down[-1]])]
     )
     adum = jnp.concatenate([jnp.array([par_soil_refl]), adum[1:]])
     tlay2 = transmission_layer * transmission_layer
-    # adum = adum.at[1:].set(adum)
+
     def update_adum(carry, i):
         carry_new = (
             carry * tlay2[i] / (1 - carry * reflectance_layer[i]) + reflectance_layer[i]
@@ -262,7 +246,6 @@ def par_day(
 
     _, adum_update = jax.lax.scan(update_adum, adum[0], jnp.arange(jtot))
     adum = jnp.concatenate([adum[:1], adum_update, adum[-1:]])
-    # adum = adum.at[1:-1].set(adum_update)
 
     def update_pard(carry, i):
         carry_new = (
@@ -274,15 +257,16 @@ def par_day(
         return carry_new, carry_new
 
     _, pard_update = jax.lax.scan(
-        update_pard, par_down[jktot - 1], jnp.arange(1, jktot)[::-1]
+        # update_pard, par_down[jktot - 1], jnp.arange(1, jktot)[::-1]
+        update_pard,
+        par_down[jktot - 1],
+        jnp.arange(jktot - 1, 0, -1),
     )
-    # par_down = par_down.at[:-2].set(pard_update[::-1])
     par_down = jnp.concatenate([pard_update[::-1], par_down[-2:]])
     par_up = adum * par_down + sup
     par_up = jnp.concatenate(
         [jnp.array([par_soil_refl * par_down[0] + sup[0]]), par_up[1:]]
     )
-    # par_up = par_up.at[0].set(par_soil_refl * par_down[0] + sup[0])
 
     # Iterative calculation of upward diffuse and downward beam +
     # diffuse PAR.
@@ -290,25 +274,24 @@ def par_day(
         par_up, par_down = carry[0], carry[1]
         # downward --
         def calculate_down(c, j):
-            # carry_new = carry * jnp.power(exp_direct[jtot-1-i], i)
             c_new = (
                 transmission_layer[j] * c + par_up[j] * reflectance_layer[j] + sdn[j]
             )
             return c_new, c_new
 
         _, down = jax.lax.scan(
-            f=calculate_down, init=par_down[jktot - 1], xs=jnp.arange(jtot)[::-1]
+            f=calculate_down,
+            init=par_down[jktot - 1],
+            xs=jnp.arange(jtot - 1, -1, -1)
+            # f=calculate_down, init=par_down[jktot - 1], xs=jnp.arange(jtot)[::-1]
         )
-        # par_down = par_down.at[:jtot].set(down[::-1])
         par_down = jnp.concatenate([down[::-1], par_down[-2:]])
         # upward --
-        # par_up = par_up.at[0].set((par_down[0] + tbeam[0]) * par_soil_refl)
         par_up = jnp.concatenate(
             [jnp.array([(par_down[0] + tbeam[0]) * par_soil_refl]), par_up[1:]]
         )
 
         def calculate_up(c, j):
-            # carry_new = carry * jnp.power(exp_direct[jtot-1-i], i)
             c_new = (
                 reflectance_layer[j] * par_down[j + 1]
                 + c * transmission_layer[j]
@@ -317,11 +300,7 @@ def par_day(
             return c_new, c_new
 
         _, up = jax.lax.scan(f=calculate_up, init=par_up[0], xs=jnp.arange(jtot))
-        # par_up = par_up.at[1:jktot].set(up)
         par_up = jnp.concatenate([par_up[:1], up, par_up[-1:]])
-        # up = reflectance_layer[:jtot]*par_down[:jtot]+ \
-        #     par_up[:jtot]*transmission_layer[:jtot] + sup[1:jktot]
-        # par_up = par_up.at[1:jktot].set(up)
         carry_new = [par_up, par_down]
         return carry_new, carry_new
 
@@ -333,19 +312,13 @@ def par_day(
     # Compute flux density of PAR
     par_up = par_up * parin
     par_up = jnp.clip(par_up, a_min=0.001)
-    # par_up = par_up.at[jktot:].set(0)
-    # beam_flux_par = beam_flux_par.at[:-1].set(beam * parin)
     par_up = jnp.concatenate([par_up[:jktot], jnp.array([0])])
     beam_flux_par = jnp.concatenate([beam * parin, beam_flux_par[-1:]])
     beam_flux_par = jnp.clip(beam_flux_par, a_min=0.001)
-    # beam_flux_par = beam_flux_par.at[jktot:].set(0)
     beam_flux_par = jnp.concatenate([beam_flux_par[:jktot], jnp.array([0])])
     par_down = par_down * parin
     par_down = jnp.clip(par_down, a_min=0.001)
     par_down = jnp.concatenate([par_down[:jktot], jnp.array([0])])
-    # par_down = par_down.at[jktot:].set(0)
-    # par_down = par_down.at[par_down<=0].set(0.001)
-    # par_total = beam_flux_par[jktot-1]+par_down[jktot-1]
 
     # PSUN is the radiation incident on the mean leaf normal
     par_beam = jnp.maximum(par_beam, 0.001)
@@ -357,10 +330,6 @@ def par_day(
     par_shade = quantum_sh / 4.6  # W m-2
     par_sun = par_normal_abs_energy + par_shade
 
-    # quantum_sh = quantum_sh.at[jtot:].set(0)
-    # quantum_sun = quantum_sun.at[jtot:].set(0)
-    # par_shade = par_shade.at[jtot:].set(0)
-    # par_sun = par_sun.at[jtot:].set(0)
     quantum_sh = jnp.concatenate([quantum_sh[:jtot], jnp.zeros(sze - jtot)])
     quantum_sun = jnp.concatenate([quantum_sun[:jtot], jnp.zeros(sze - jtot)])
     par_shade = jnp.concatenate([par_shade[:jtot], jnp.zeros(sze - jtot)])
@@ -687,7 +656,10 @@ def nir_day(
         return carry_new, carry_new
 
     _, nird_update = jax.lax.scan(
-        update_nird, nir_dn[jktot - 1], jnp.arange(1, jktot)[::-1]
+        # update_nird, nir_dn[jktot - 1], jnp.arange(1, jktot)[::-1]
+        update_nird,
+        nir_dn[jktot - 1],
+        jnp.arange(jktot - 1, 0, -1),
     )
     # nir_dn = nir_dn.at[:-2].set(nird_update[::-1])
     nir_dn = jnp.concatenate([nird_update[::-1], nir_dn[-2:]])
@@ -709,7 +681,10 @@ def nir_day(
             return c_new, c_new
 
         _, down = jax.lax.scan(
-            f=calculate_down, init=nir_dn[jktot - 1], xs=jnp.arange(jtot)[::-1]
+            f=calculate_down,
+            init=nir_dn[jktot - 1],
+            xs=jnp.arange(jtot - 1, -1, -1)
+            # f=calculate_down, init=nir_dn[jktot - 1], xs=jnp.arange(jtot)[::-1]
         )
         # nir_dn = nir_dn.at[:jtot].set(down[::-1])
         nir_dn = jnp.concatenate([down[::-1], nir_dn[-2:]])
@@ -888,7 +863,10 @@ def irflux(
         carry_new = carry * exxpdir[i] + SDN[i]
         return carry_new, carry_new
 
-    _, ird_update = jax.lax.scan(update_ird, ir_dn[jktot - 1], jnp.arange(jtot)[::-1])
+    _, ird_update = jax.lax.scan(
+        update_ird, ir_dn[jktot - 1], jnp.arange(jtot - 1, -1, -1)
+    )
+    # _, ird_update = jax.lax.scan(update_ird, ir_dn[jktot - 1], jnp.arange(jtot)[::-1])
     # ir_dn = ir_dn.at[:-2].set(ird_update[::-1])
     ir_dn = jnp.concatenate([ird_update[::-1], ir_dn[-2:]])
     emiss_IR_soil = epsigma * jnp.power((sfc_temperature + 273.16), 4.0)
@@ -919,7 +897,10 @@ def irflux(
             return c_new, c_new
 
         _, down = jax.lax.scan(
-            f=calculate_down, init=ir_dn[jktot - 1], xs=jnp.arange(jtot)[::-1]
+            f=calculate_down,
+            init=ir_dn[jktot - 1],
+            xs=jnp.arange(jtot - 1, -1, -1)
+            # f=calculate_down, init=ir_dn[jktot - 1], xs=jnp.arange(jtot)[::-1]
         )
         ir_dn = jnp.concatenate([down[::-1], ir_dn[-2:]])
         # ir_dn = ir_dn.at[:jtot].set(down[::-1])

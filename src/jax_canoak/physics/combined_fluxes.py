@@ -26,7 +26,6 @@ def energy_and_carbon_fluxes(
     pr33: Float_0D,
     sc33: Float_0D,
     scc33: Float_0D,
-    rhovva: Float_0D,
     air_density: Float_0D,
     lai: Float_0D,
     pai: Float_0D,
@@ -122,6 +121,7 @@ def energy_and_carbon_fluxes(
         latent,
         zzz,
     ):
+        tair_K_filter_z = tair_filter_z + 273.16
         # Compute the resistances for heat and vapor transfer, rh and rv,
         # for each layer, s/m
         boundres_heat, boundres_vapor, boundres_co2 = boundary_resistance(
@@ -138,15 +138,15 @@ def energy_and_carbon_fluxes(
         )
         # jax.debug.print(
         #     "boundres (jax): {x} {a} {b} {c}",
-        #     x=press_Pa, a=boundres_heat,
+        #     x=press_Pa, a=tair_filter_z,
         #     b=boundres_vapor, c=boundres_co2
         # )
         # Compute energy balance of leaves
         t_sfc_K, LE_leaf, H_leaf, lout_leaf = energy_balance_amphi(
             rnet_z,
-            t_sfc_K,
-            rhovva,
+            tair_K_filter_z,
             rhov_filter_z,
+            boundres_vapor,
             rs,
             air_density,
             latent,
@@ -202,7 +202,23 @@ def energy_and_carbon_fluxes(
         latent,
         zzz,
     ):
-        return 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+        return (
+            tleaf_z,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            rs,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+        )
 
     def update_energy_carbon_layer(carry, i):
         # First compute energy balance of sunlit leaf, then
@@ -303,6 +319,7 @@ def energy_and_carbon_fluxes(
 
         # jax.debug.print("t_sfc_K: {a}, shd_tleaf_each: {b}",
         #                 a=t_sfc_K, b=t_sfc_C_shd)
+        # jax.debug.print("internal_CO2_shd: {a}", a=internal_CO2_shd)
         output = [
             t_sfc_C_sun,
             H_leaf_sun,
@@ -371,7 +388,7 @@ def energy_and_carbon_fluxes(
         shd_wj,
         shd_wc,
     ) = outputs
-    # jax.debug.print("sun_tleaf: {a}; shd_tleaf: {b}", a=sun_tleaf, b=shd_tleaf)
+    # jax.debug.print("shd_ci: {a}; shd_tleaf: {b}", a=shd_ci, b=shd_tleaf)
 
     # Compute layer energy fluxes, weighted by leaf area and sun and shaded fractions
     dLEdz = dLAIdz[:jtot] * (
@@ -385,6 +402,10 @@ def energy_and_carbon_fluxes(
     Ci = sun_ci * prob_beam[:jtot] + shd_ci * prob_sh[:jtot]
     shd_cica = shd_ci / can_co2_air[:jtot]
     sun_cica = sun_ci / can_co2_air[:jtot]
+    # jax.debug.print("Ci: {a}", a=Ci)
+    # jax.debug.print("sun_ci: {a}", a=sun_ci)
+    # jax.debug.print("shd_ci: {a}", a=shd_ci)
+    # jax.debug.print("prob_beam: {a}", a=prob_beam)
 
     # Scaling boundary layer conductance for vapor, 1/rbv
     drbv = prob_beam[:jtot] / sun_rbv + prob_sh[:jtot] / shd_rbv

@@ -75,7 +75,7 @@ class TestConc(unittest.TestCase):
             dispersion_jnp,
         )
 
-        # print(cncc_jnp)
+        print(cncc_jnp)
         # print(cncc_np)
         # print(dispersion_np)
         print("")

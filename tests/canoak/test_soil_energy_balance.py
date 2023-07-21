@@ -153,6 +153,7 @@ class TestSoilEnergy(unittest.TestCase):
             soil_lout_np,
             soil_heat_np,
             soil_evap_np,
+            latent_np,
             soil_sfc_temperature_np,
         ) = canoak.soil_energy_balance(  # type: ignore
             soilsze,
@@ -214,6 +215,7 @@ class TestSoilEnergy(unittest.TestCase):
             soil_lout_jnp,
             soil_heat_jnp,
             soil_evap_jnp,
+            latent_jnp,
             soil_sfc_temperature_jnp,
             T_soil_jnp,
         ) = soil_energy_balance_jit(
@@ -264,4 +266,5 @@ class TestSoilEnergy(unittest.TestCase):
         self.assertTrue(np.allclose(soil_lout_jnp, soil_lout_np))
         self.assertTrue(np.allclose(soil_heat_jnp, soil_heat_np))
         self.assertTrue(np.allclose(soil_evap_jnp, soil_evap_np))
+        self.assertTrue(np.allclose(latent_jnp, latent_np))
         self.assertTrue(np.allclose(soil_sfc_temperature_jnp, soil_sfc_temperature_np))

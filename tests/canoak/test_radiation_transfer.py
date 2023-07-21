@@ -192,6 +192,8 @@ class TestRadiationTransfer(unittest.TestCase):
         # print(sun_lai_np)
         # print(quantum_sh_jnp)
         # print(quantum_sh_np)
+        # print(par_up_jnp, par_up_np)
+        # print(sun_lai_jnp, sun_lai_np)
         print("")
         self.assertTrue(np.allclose(sun_lai_jnp, sun_lai_np))
         self.assertTrue(np.allclose(shd_lai_jnp, shd_lai_np))
