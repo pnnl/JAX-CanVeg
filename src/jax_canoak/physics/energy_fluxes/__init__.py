@@ -28,3 +28,4 @@ from .soil_energy_balance import (
     soil_energy_balance,  # noqa: F401
     soil_sfc_resistance,  # noqa: F401
 )
+from .dispersion_matrix import disp_canveg  # noqa: F401
