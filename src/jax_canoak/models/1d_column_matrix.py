@@ -6,16 +6,23 @@ Author: Peishi Jiang
 Date: 2023.07.24.
 """
 
-# import jax
-# import jax.numpy as jnp
-import pandas as pd
+import jax
+import jax.numpy as jnp
 
 # import h5py
-# import numpy as np
+import numpy as np
 
-from jax_canoak.subjects import Para, Met
-from jax_canoak.physics.energy_fluxes import disp_canveg
+from jax_canoak.subjects import Para, Met, Soil
+from jax_canoak.subjects import ParNir, Ir, Rnet, SunShadedCan
+from jax_canoak.subjects import Qin, Veg
+from jax_canoak.physics.energy_fluxes import disp_canveg, diffuse_direct_radiation_mx
+from jax_canoak.physics.carbon_fluxes import angle_mx, leaf_angle_mx
 
+
+f_forcing = "../shared_utilities/forcings/AlfMetBouldinInput.csv"
+forcing_data = np.loadtxt(f_forcing, delimiter=",")
+forcing_data = jnp.array(forcing_data)
+n_time = forcing_data.shape[0]
 
 # ---------------------------------------------------------------------------- #
 #                     Model parameter/properties settings                      #
@@ -31,16 +38,14 @@ para = Para(
     n_can_layers=30,
     meas_ht=5.0,
     n_hr_per_day=48,
-    n_time=200,
+    n_time=n_time,
 )
 
 
 # ---------------------------------------------------------------------------- #
-#                     Get the model forcings                                   #
+#                     Set the model forcings                                   #
 # ---------------------------------------------------------------------------- #
-f_forcing = ""  # TODO
-forcing_data = pd.read_csv(f_forcing).values
-met = Met(forcing_data, para)
+met = Met(forcing_data, para.ntime, para.Mair, para.rugc)
 para.set_lai(met.lai)
 
 
@@ -51,23 +56,41 @@ dij = disp_canveg(para)
 
 
 # ---------------------------------------------------------------------------- #
-#                     ??? Initialize model states ?????                        #
+#                     Initialize model states                        #
 # ---------------------------------------------------------------------------- #
+soil = Soil(met, para)
+quantum, nir = ParNir(para.ntime, para.jtot), ParNir(para.ntime, para.jtot)
+ir, veg = Ir(para.ntime, para.jtot), Veg(para.ntime)
+qin, rnet = Qin(para.ntime, para.jktot), Rnet(para.ntime, para.jktot)
+sun, shade = SunShadedCan(para.ntime, para.jktot), SunShadedCan(para.ntime, para.jktot)
+
+dot = jax.vmap(lambda x, y: x * y, in_axes=(None, 1), out_axes=1)
+sun.Tsfc = dot(met.T_air_K, sun.Tsfc)
+shade.Tsfc = dot(met.T_air_K, shade.Tsfc)
 
 
 # ---------------------------------------------------------------------------- #
 #                     Compute sun angles                                       #
 # ---------------------------------------------------------------------------- #
-
+# beta_rad, solar_sin_beta, beta_deg = angle_mx(
+sun_ang = angle_mx(para.lat_deg, para.long_deg, para.time_zone, met.day, met.hhour)
 
 # ---------------------------------------------------------------------------- #
 #                     Compute direct and diffuse radiations                    #
 # ---------------------------------------------------------------------------- #
+ratrad, par_beam, par_diffuse, nir_beam, nir_diffuse = diffuse_direct_radiation_mx(
+    sun_ang.sin_beta, met.rglobal, met.parin, met.P_kPa
+)
+quantum.inbeam, quantum.indiffuse = par_beam, par_diffuse
+quantum.incoming = quantum.inbeam + quantum.indiffuse
+nir.inbeam, nir.indiffuse = nir_beam, nir_diffuse
+nir.incoming = nir.inbeam + nir.indiffuse
 
 
 # ---------------------------------------------------------------------------- #
 #                     Compute leaf angle                                       #
 # ---------------------------------------------------------------------------- #
+leaf_ang = leaf_angle_mx(sun_ang, para)
 
 
 # ---------------------------------------------------------------------------- #

@@ -1,5 +1,7 @@
 """
 Classes for model states.
+- SunAng()
+- LeafAng()
 - ParNir()
 - Ir()
 - Rnet()
@@ -20,30 +22,85 @@ from .meterology import Met
 from .parameters import Para
 
 from ..physics.energy_fluxes.soil_energy_balance_mx import soil_sfc_res
-from ..shared_utilities.types import Float_0D
+from ..shared_utilities.types import Float_0D, Int_0D
 
 
 dot = jax.vmap(lambda x, y: x * y, in_axes=(None, 1), out_axes=1)
 
 
+class SunAng(object):
+    def __init__(self, ntime: Int_0D) -> None:
+        self.sin_beta = jnp.zeros(ntime)
+        self.beta_rad = jnp.zeros(ntime)
+        self.beta_deg = jnp.zeros(ntime)
+        self.theta_rad = jnp.zeros(ntime)
+        self.theta_deg = jnp.zeros(ntime)
+        self.ntime = ntime
+
+    def _tree_flatten(self):
+        children = (
+            self.ntime,
+            self.beta_rad,
+            self.sin_beta,
+            self.beta_deg,
+            self.theta_rad,
+            self.theta_deg,
+        )
+        aux_data = {"ntime": self.ntime}
+        return (children, aux_data)
+
+    @classmethod
+    def _tree_unflatten(cls, aux_data, children):
+        return cls(**aux_data)
+        # return cls(*children, **aux_data)
+        # return cls(children[0])
+
+
+class LeafAng(object):
+    def __init__(self, ntime: int, jtot: int, nclass: int) -> None:
+        self.ntime, self.jtot, self.nclass = ntime, jtot, nclass
+        self.pdf = jnp.zeros(nclass)
+        self.Gfunc = jnp.zeros(nclass)
+        self.thetaSky = jnp.zeros(nclass)
+        self.Gfunc_Sky = jnp.zeros(nclass)
+        self.integ_exp_diff = jnp.zeros([ntime, jtot])
+
+    def _tree_flatten(self):
+        children = (
+            self.pdf,
+            self.Gfunc,
+            self.thetaSky,
+            self.Gfunc_Sky,
+            self.integ_exp_diff,
+        )
+        aux_data = {"ntime": self.ntime, "jtot": self.jtot, "nclass": self.nclass}
+        return (children, aux_data)
+
+    @classmethod
+    def _tree_unflatten(cls, aux_data, children):
+        return cls(**aux_data)
+
+
 class ParNir(object):
-    def __init__(self, para: Para) -> None:
-        self.sh_abs = jnp.zeros([para.ntime, para.jtot])
-        self.sun_abs = jnp.zeros([para.ntime, para.jtot])
-        self.sun = jnp.zeros([para.ntime, para.jktot])
-        self.dn_flux = jnp.zeros([para.ntime, para.jktot])
-        self.up_flux = jnp.zeros([para.ntime, para.jktot])
-        self.sun_normal = jnp.zeros([para.ntime, para.jktot])
-        self.sh_flux = jnp.zeros([para.ntime, para.jktot])
-        self.incoming = jnp.zeros(para.ntime)
-        self.beam_flux = jnp.zeros([para.ntime, para.jktot])
-        self.total = jnp.zeros([para.ntime, para.jktot])
-        self.inbeam = jnp.zeros(para.ntime)
-        self.indiffuse = jnp.zeros(para.ntime)
-        self.prob_beam = jnp.zeros([para.ntime, para.jktot])
-        self.prob_shade = jnp.ones([para.ntime, para.jktot])
-        self.sun_lai = jnp.zeros([para.ntime, para.jktot])
-        self.shade_lai = jnp.zeros([para.ntime, para.jktot])
+    def __init__(self, ntime: int, jtot: int) -> None:
+        self.ntime, self.jtot = ntime, jtot
+        jktot = jtot + 1
+        self.sh_abs = jnp.zeros([ntime, jtot])
+        self.sun_abs = jnp.zeros([ntime, jtot])
+        self.sun = jnp.zeros([ntime, jktot])
+        self.dn_flux = jnp.zeros([ntime, jktot])
+        self.up_flux = jnp.zeros([ntime, jktot])
+        self.sun_normal = jnp.zeros([ntime, jktot])
+        self.sh_flux = jnp.zeros([ntime, jktot])
+        self.incoming = jnp.zeros(ntime)
+        self.beam_flux = jnp.zeros([ntime, jktot])
+        self.total = jnp.zeros([ntime, jktot])
+        self.inbeam = jnp.zeros(ntime)
+        self.indiffuse = jnp.zeros(ntime)
+        self.prob_beam = jnp.zeros([ntime, jktot])
+        self.prob_shade = jnp.ones([ntime, jktot])
+        self.sun_lai = jnp.zeros([ntime, jktot])
+        self.shade_lai = jnp.zeros([ntime, jktot])
 
     def _tree_flatten(self):
         children = (
@@ -65,24 +122,26 @@ class ParNir(object):
             self.sun_lai,
             self.shade_lai,
         )
-        aux_data = {}
+        aux_data = {"ntime": self.ntime, "jtot": self.jtot}
         return (children, aux_data)
 
     @classmethod
     def _tree_unflatten(cls, aux_data, children):
-        return cls(*children, **aux_data)
+        return cls(**aux_data)
 
 
 class Ir(object):
-    def __init__(self, para: Para) -> None:
-        self.ir_dn = jnp.ones([para.ntime, para.jktot])
-        self.ir_up = jnp.ones([para.ntime, para.jktot])
-        self.IR_source_sun = jnp.zeros([para.ntime, para.jktot])
-        self.IR_source_shade = jnp.zeros([para.ntime, para.jktot])
-        self.IR_source = jnp.zeros([para.ntime, para.jktot])
-        self.shade = jnp.zeros([para.ntime, para.jtot])
-        self.shade_top = jnp.zeros([para.ntime, para.jktot])
-        self.shade_bottom = jnp.zeros([para.ntime, para.jktot])
+    def __init__(self, ntime: int, jtot: int) -> None:
+        self.ntime, self.jtot = ntime, jtot
+        jktot = jtot + 1
+        self.ir_dn = jnp.ones([ntime, jktot])
+        self.ir_up = jnp.ones([ntime, jktot])
+        self.IR_source_sun = jnp.zeros([ntime, jktot])
+        self.IR_source_shade = jnp.zeros([ntime, jktot])
+        self.IR_source = jnp.zeros([ntime, jktot])
+        self.shade = jnp.zeros([ntime, jtot])
+        self.shade_top = jnp.zeros([ntime, jktot])
+        self.shade_bottom = jnp.zeros([ntime, jktot])
 
     def _tree_flatten(self):
         children = (
@@ -95,42 +154,44 @@ class Ir(object):
             self.shade_top,
             self.shade_bottom,
         )
-        aux_data = {}
+        aux_data = {"ntime": self.ntime, "jtot": self.jtot}
         return (children, aux_data)
 
     @classmethod
     def _tree_unflatten(cls, aux_data, children):
-        return cls(*children, **aux_data)
+        return cls(**aux_data)
 
 
 class Rnet(object):
-    def __init__(self, para: Para) -> None:
-        self.sun = jnp.zeros([para.ntime, para.jktot])
-        self.sh = jnp.zeros([para.ntime, para.jktot])
-        self.sun_top = jnp.zeros([para.ntime, para.jktot])
-        self.sh_top = jnp.zeros([para.ntime, para.jktot])
-        self.sh_bottom = jnp.zeros([para.ntime, para.jktot])
+    def __init__(self, ntime: int, jktot: int) -> None:
+        self.ntime, self.jktot = ntime, jktot
+        self.sun = jnp.zeros([ntime, jktot])
+        self.sh = jnp.zeros([ntime, jktot])
+        self.sun_top = jnp.zeros([ntime, jktot])
+        self.sh_top = jnp.zeros([ntime, jktot])
+        self.sh_bottom = jnp.zeros([ntime, jktot])
 
     def _tree_flatten(self):
         children = (self.sun, self.sh, self.sun_top, self.sh_top, self.sh_bottom)
-        aux_data = {}
+        aux_data = {"ntime": self.ntime, "jktot": self.jktot}
         return (children, aux_data)
 
     @classmethod
     def _tree_unflatten(cls, aux_data, children):
-        return cls(*children, **aux_data)
+        return cls(**aux_data)
 
 
 class SunShadedCan(object):
-    def __init__(self, para: Para) -> None:
-        self.Ps = jnp.zeros([para.ntime, para.jktot])
-        self.Resp = jnp.zeros([para.ntime, para.jktot])
-        self.gs = jnp.zeros([para.ntime, para.jktot])
-        self.LE = jnp.zeros([para.ntime, para.jktot])
-        self.H = jnp.zeros([para.ntime, para.jktot])
-        self.Tsfc = jnp.zeros([para.ntime, para.jktot])
-        self.Tsfc_old = jnp.zeros([para.ntime, para.jktot])
-        self.Tsfc_new = jnp.zeros([para.ntime, para.jktot])
+    def __init__(self, ntime: int, jktot: int) -> None:
+        self.ntime, self.jktot = ntime, jktot
+        self.Ps = jnp.zeros([ntime, jktot])
+        self.Resp = jnp.zeros([ntime, jktot])
+        self.gs = jnp.zeros([ntime, jktot])
+        self.LE = jnp.zeros([ntime, jktot])
+        self.H = jnp.zeros([ntime, jktot])
+        self.Tsfc = jnp.ones([ntime, jktot])
+        self.Tsfc_old = jnp.ones([ntime, jktot])
+        self.Tsfc_new = jnp.ones([ntime, jktot])
 
     def _tree_flatten(self):
         children = (
@@ -143,61 +204,64 @@ class SunShadedCan(object):
             self.Tsfc_new,
             self.Tsfc_old,
         )
-        aux_data = {}
+        aux_data = {"ntime": self.ntime, "jktot": self.jktot}
         return (children, aux_data)
 
     @classmethod
     def _tree_unflatten(cls, aux_data, children):
-        return cls(*children, **aux_data)
+        return cls(**aux_data)
 
 
 class BoundLayerRes(object):
-    def __init__(self, para: Para) -> None:
-        self.heat = jnp.zeros([para.ntime, para.jktot])
-        self.vapor = jnp.zeros([para.ntime, para.jktot])
-        self.co2 = jnp.zeros([para.ntime, para.jktot])
+    def __init__(self, ntime: int, jktot: int) -> None:
+        self.ntime, self.jktot = ntime, jktot
+        self.heat = jnp.zeros([ntime, jktot])
+        self.vapor = jnp.zeros([ntime, jktot])
+        self.co2 = jnp.zeros([ntime, jktot])
 
     def _tree_flatten(self):
         children = (self.heat, self.vapor, self.co2)
-        aux_data = {}
+        aux_data = {"ntime": self.ntime, "jktot": self.jktot}
         return (children, aux_data)
 
     @classmethod
     def _tree_unflatten(cls, aux_data, children):
-        return cls(*children, **aux_data)
+        return cls(**aux_data)
 
 
 class Qin(object):
-    def __init__(self, para: Para) -> None:
-        self.sun_abs = jnp.zeros([para.ntime, para.jktot])
-        self.shade_abs = jnp.zeros([para.ntime, para.jktot])
+    def __init__(self, ntime: int, jktot: int) -> None:
+        self.ntime, self.jktot = ntime, jktot
+        self.sun_abs = jnp.zeros([ntime, jktot])
+        self.shade_abs = jnp.zeros([ntime, jktot])
 
     def _tree_flatten(self):
         children = (self.sun_abs, self.shade_abs)
-        aux_data = {}
+        aux_data = {"ntime": self.ntime, "jktot": self.jktot}
         return (children, aux_data)
 
     @classmethod
     def _tree_unflatten(cls, aux_data, children):
-        return cls(*children, **aux_data)
+        return cls(**aux_data)
 
 
 class Veg(object):
-    def __init__(self, para: Para) -> None:
-        self.Ps = jnp.zeros(para.ntime)
-        self.Rd = jnp.zeros(para.ntime)
-        self.H = jnp.zeros(para.ntime)
-        self.LE = jnp.zeros(para.ntime)
-        self.Tsfc = jnp.zeros(para.ntime)
+    def __init__(self, ntime: int) -> None:
+        self.ntime = ntime
+        self.Ps = jnp.zeros(ntime)
+        self.Rd = jnp.zeros(ntime)
+        self.H = jnp.zeros(ntime)
+        self.LE = jnp.zeros(ntime)
+        self.Tsfc = jnp.zeros(ntime)
 
     def _tree_flatten(self):
         children = (self.Ps, self.Rd, self.H, self.LE, self.Tsfc)
-        aux_data = {}
+        aux_data = {"ntime": self.ntime}
         return (children, aux_data)
 
     @classmethod
     def _tree_unflatten(cls, aux_data, children):
-        return cls(*children, **aux_data)
+        return cls(**aux_data)
 
 
 class Soil(object):
@@ -205,14 +269,15 @@ class Soil(object):
         self,
         met: Met,
         para: Para,
-        water_content_litter: Float_0D = 0.0,
-        bulkdensity: Float_0D = 1.06,
-        clay_fraction: Float_0D = 0.3,
-        peat_fraction: Float_0D = 0.08,
+        # water_content_litter: Float_0D = 0.0,
+        # bulkdensity: Float_0D = 1.06,
+        # clay_fraction: Float_0D = 0.3,
+        # peat_fraction: Float_0D = 0.08,
         dt: Float_0D = 20.0,
         n_soil: int = 10,
         depth: Float_0D = 0.15,
     ) -> None:
+        self.met, self.para = met, para
         # Soil water content
         self.water_content_15cm = (
             met.soilmoisture
@@ -220,18 +285,18 @@ class Soil(object):
 
         # Water content of litter. Values ranged between 0.02 and 0.126
         self.water_content_litter = (
-            water_content_litter  # assumed constant but needs to vary  # noqa: E501
+            0.0  # assumed constant but needs to vary  # noqa: E501
         )
 
         # fraction porosity + mineral + organic = 1
         # airborne fraction = porosity - volumetric water content
-        self.bulkdensity = bulkdensity  # g cm-3   Data from Tyler Anthony
+        self.bulkdensity = 1.06  # g cm-3   Data from Tyler Anthony
         self.bulkdensity_kg_m3 = self.bulkdensity * 100 * 100 * 100 / 1000
         self.pore_fraction = (
             1 - self.bulkdensity / 2.65
         )  # from alfalfa, 1 minus ratio bulk density 1.00 g cm-3/2.65 g cm-3, density of solids  # noqa: E501
-        self.clay_fraction = clay_fraction  #  Clay fraction
-        self.peat_fraction = peat_fraction  #  SOM = a C; C = 4.7%, a = 1.72  Kuno Kasak, 2019 Bouldin Alfalfa  # noqa: E501
+        self.clay_fraction = 0.3  #  Clay fraction
+        self.peat_fraction = 0.08  #  SOM = a C; C = 4.7%, a = 1.72  Kuno Kasak, 2019 Bouldin Alfalfa  # noqa: E501
         self.mineral_fraction = (
             1 - self.pore_fraction - self.peat_fraction
         )  # from bulk density asssuming density of solids is 2.65  # noqa: E501
@@ -417,15 +482,17 @@ class Soil(object):
             self.llout,
             self.resistance_h2o,
             self.T_soil_low_bound,
+            self.mtime,
         )
         aux_data = {
+            "met": self.met,
+            "para": self.para,
             "n_soil": self.n_soil,
             "depth": self.depth,
             "dt": self.dt,
-            "mtime": self.mtime,
         }
         return (children, aux_data)
 
     @classmethod
     def _tree_unflatten(cls, aux_data, children):
-        return cls(*children, **aux_data)
+        return cls(**aux_data)

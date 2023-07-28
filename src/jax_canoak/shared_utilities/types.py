@@ -1,6 +1,10 @@
 from typing import Union
 from jaxtyping import Array, Float, Int
 
+Int_0D = Union[int, Int[Array, ""]]  # noqa: F722
+Int_1D = Int[Array, "dim1"]
+Int_2D = Int[Array, "dim1 dim2"]
+
 Float_0D = Union[float, Float[Array, ""]]  # noqa: F722
 Float_1D = Float[Array, "dim1"]
 Float_2D = Float[Array, "dim1 dim2"]

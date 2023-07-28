@@ -7,16 +7,25 @@ Date: 2023.7.24.
 
 import jax.numpy as jnp
 
-# from typing import Array
-
-from .parameters import Para
-from ..shared_utilities.types import Float_2D
+# from .parameters import Para
+from ..shared_utilities.types import Float_2D, Int_0D, Float_0D
 from ..physics.energy_fluxes.leaf_energy_balance_mx import es, llambda, desdt, des2dt
+
+Mair = 28.97
+rugc = 8.314  # J mole-1 K-1
 
 
 class Met(object):
-    def __init__(self, data: Float_2D, prm: Para) -> None:
-        assert data.shape[0] == prm.ntime
+    def __init__(
+        self,
+        data: Float_2D,
+        ntime: Int_0D,
+        Mair: Float_0D = Mair,
+        rugc: Float_0D = rugc,
+    ) -> None:
+        assert data.shape[0] == ntime
+        self.ntime = ntime
+        self.Mair, self.rugc = Mair, rugc
         self.day = jnp.array(data[:, 0])  # day of year
         self.hhour = jnp.array(data[:, 1])  # hour
         self.T_air_K = jnp.array(data[:, 2])  # air temperature, K
@@ -47,10 +56,10 @@ class Met(object):
         self.es = es(self.T_air_K)  # saturation vapor pressure, Pa
         self.vpd_Pa = self.es - self.eair_Pa  # atmospheric vapor pressure deficit, Pa
         self.air_density = (
-            self.P_kPa * prm.Mair / (prm.rugc * self.T_air_K)
+            self.P_kPa * Mair / (rugc * self.T_air_K)
         )  # air density, kg m-3  # noqa: E501
         self.air_density_mole = (
-            1000.0 * self.air_density / prm.Mair
+            1000.0 * self.air_density / Mair
         )  # air density, moles m-3
         self.dest = desdt(
             self.T_air_K
@@ -89,9 +98,10 @@ class Met(object):
             self.llambda,
             self.zL,
         )
-        aux_data = {}
+        aux_data = {"ntime": self.ntime, "Mair": self.Mair, "rugc": self.rugc}
         return (children, aux_data)
 
     @classmethod
     def _tree_unflatten(cls, aux_data, children):
-        return cls(*children, **aux_data)
+        data = jnp.stack(children[:13]).T
+        return cls(data, **aux_data)

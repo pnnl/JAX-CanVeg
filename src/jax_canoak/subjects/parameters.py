@@ -8,6 +8,8 @@ Date: 2023.7.24.
 import jax
 import jax.numpy as jnp
 
+from math import floor
+
 # from typing import Array
 from ..shared_utilities.types import Float_0D, Float_1D
 
@@ -70,7 +72,8 @@ class Para(object):
         self.ht_atmos = self.meas_ht - self.veg_ht
         n_atmos_layers = 50
         self.dht_atmos = self.ht_atmos / n_atmos_layers
-        self.nlayers_atmos = self.jtot + jnp.floor(self.ht_atmos / self.dht_atmos)
+        self.nlayers_atmos = self.jtot + floor(self.ht_atmos / self.dht_atmos)
+        # jnp.floor(self.ht_atmos / self.dht_atmos).astype(int)
         self.nlayers_atmos = int(self.nlayers_atmos)
 
         # Set up time
@@ -332,15 +335,15 @@ class Para(object):
             self.npart,
         )
         aux_data = {
-            "jtot": self.jtot,
-            "ntime": self.ntime,
-            "hrs": self.hrs,
+            "n_can_layers": self.jtot,
+            "n_time": self.ntime,
+            "n_hr_per_day": self.hrs,
             "stomata": self.stomata,
             "hypo_amphi": self.hypo_amphi,
             "veg_ht": self.veg_ht,
             "time_zone": self.time_zone,
-            "lat_deg": self.lat_deg,
-            "lon_deg": self.long_deg,  # noqa: E501
+            "latitude": self.lat_deg,
+            "longitude": self.long_deg,  # noqa: E501
             "meas_ht": self.meas_ht,
             "leafangle": self.leafangle,
         }
@@ -348,4 +351,16 @@ class Para(object):
 
     @classmethod
     def _tree_unflatten(cls, aux_data, children):
-        return cls(*children, **aux_data)
+        return cls(**aux_data)
+
+        # time_zone: int = -8,
+        # latitude: Float_0D = 38.0991538,
+        # longitude: Float_0D = -121.49933,
+        # stomata: int = 2,
+        # hypo_amphi: int = 1,
+        # veg_ht: Float_0D = 0.8,
+        # leafangle: int = 1,
+        # n_can_layers: int = 30,
+        # meas_ht: Float_0D = 5.0,
+        # n_hr_per_day: int = 48,
+        # n_time: int = 200,

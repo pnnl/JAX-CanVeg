@@ -1,6 +1,7 @@
 from .parameters import Para
 from .meterology import Met
 from .states import ParNir, Ir, Rnet, SunShadedCan, BoundLayerRes, Qin, Veg, Soil
+from .states import SunAng, LeafAng
 
 from jax import tree_util
 
@@ -10,6 +11,12 @@ tree_util.register_pytree_node(
 )
 tree_util.register_pytree_node(
     Met, Met._tree_flatten, Met._tree_unflatten  # pyright: ignore
+)
+tree_util.register_pytree_node(
+    SunAng, SunAng._tree_flatten, SunAng._tree_unflatten  # pyright: ignore
+)
+tree_util.register_pytree_node(
+    LeafAng, LeafAng._tree_flatten, LeafAng._tree_unflatten  # pyright: ignore
 )
 tree_util.register_pytree_node(
     ParNir, ParNir._tree_flatten, ParNir._tree_unflatten  # pyright: ignore
