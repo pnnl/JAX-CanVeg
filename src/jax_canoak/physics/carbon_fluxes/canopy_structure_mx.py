@@ -132,7 +132,8 @@ def leaf_angle(sunang: SunAng, prm: Para, num_leaf_class: int = 50) -> LeafAng:
     # compute a matrix of Gfunc for all the inputs
     thetaSun = sunang.theta_rad
     leafang.Gfunc = Gfunc_dir(thetaSun, thetaLeaf, leafang.pdf)  # (ntime,)
-    leafang.Gfunc = jnp.clip(leafang.Gfunc, a_min=0.5)
+    leafang.Gfunc = leafang.Gfunc.at[leafang.Gfunc < 0.0].set(0.5)
+    # leafang.Gfunc = jnp.clip(leafang.Gfunc, a_min=0.5)
     # leafang.Gfunc(leafang.Gfunc < 0)=0.5
 
     # call function for Gfunction for each sky sector of the hemisphere

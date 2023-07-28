@@ -9,7 +9,7 @@ import jax.numpy as jnp
 
 # from .parameters import Para
 from ..shared_utilities.types import Float_2D, Int_0D, Float_0D
-from ..physics.energy_fluxes.leaf_energy_balance_mx import es, llambda, desdt, des2dt
+from .utils import es, llambda, desdt, des2dt
 
 Mair = 28.97
 rugc = 8.314  # J mole-1 K-1

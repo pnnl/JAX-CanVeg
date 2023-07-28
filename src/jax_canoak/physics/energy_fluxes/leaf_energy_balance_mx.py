@@ -2,84 +2,17 @@
 Leaf energy balance subroutines and runctions, including:
 - energy_balance_amphi()
 - sfc_vpd()
-- llambda()
-- es()
-- desdt()
-- des2dt()
 
 Author: Peishi Jiang
 Date: 2023.07.07.
 """
 
-import jax
-import jax.numpy as jnp
+# import jax
+# import jax.numpy as jnp
 
 # from typing import Tuple
 
-from ...shared_utilities.types import Float_0D, Float_ND
-from ...shared_utilities.constants import rgc1000
-
-# , epsigma, cp
-# from ...shared_utilities.constants import epsigma2, epsigma4, epsigma8, epsigma12
-
-
-def llambda(tak: Float_0D) -> Float_0D:
-    """Latent heat vaporization, J kg-1.
-
-    Args:
-        tak (Float_0D): _description_
-
-    Returns:
-        Float_0D: _description_
-    """
-    y = 3149000.0 - 2370.0 * tak
-    # add heat of fusion for melting ice
-    y = jax.lax.cond(tak < 273.0, lambda x: x + 333.0, lambda x: x, y)
-    return y
-
-
-def es(tk: Float_ND) -> Float_ND:
-    """Calculate saturated vapor pressure given temperature in Kelvin.
-
-    Args:
-        tk (Float_0D): _description_
-
-    Returns:
-        Float_0D: _description_
-    """
-    tc = tk - 273.15
-    return 613.0 * jnp.exp(17.502 * tc / (240.97 + tc))
-
-
-def desdt(t: Float_ND) -> Float_ND:
-    """Calculate the first derivative of es with respect to t.
-
-    Args:
-        t (Float_0D): _description_
-
-    Returns:
-        Float_0D: _description_
-    """
-    # llambda_all = llambda(t)
-    llambda_all = jnp.vectorize(llambda)(t)
-    return es(t) * llambda_all * 18.0 / (rgc1000 * t * t)
-
-
-def des2dt(t: Float_ND) -> Float_ND:
-    """Calculate the second derivative of the saturation vapor pressure
-       temperature curve.
-
-    Args:
-        t (Float_0D): _description_
-
-    Returns:
-        Float_0D: _description_
-    """
-    # llambda_all = llambda(t)
-    llambda_all = jnp.vectorize(llambda)(t)
-    return -2.0 * es(t) * llambda_all * 18.0 / (rgc1000 * t * t * t) + desdt(
-        t
-    ) * llambda_all * 18.0 / (rgc1000 * t * t)
+# from ...shared_utilities.types import Float_0D, Float_ND
 
 
 # def sfc_vpd(

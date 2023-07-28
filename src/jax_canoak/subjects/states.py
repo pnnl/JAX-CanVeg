@@ -1,5 +1,6 @@
 """
 Classes for model states.
+- Prof()
 - SunAng()
 - LeafAng()
 - ParNir()
@@ -21,11 +22,52 @@ import jax.numpy as jnp
 from .meterology import Met
 from .parameters import Para
 
-from ..physics.energy_fluxes.soil_energy_balance_mx import soil_sfc_res
+from .utils import soil_sfc_res
+
+# from ..physics.energy_fluxes.soil_energy_balance_mx import soil_sfc_res
 from ..shared_utilities.types import Float_0D, Int_0D
 
 
 dot = jax.vmap(lambda x, y: x * y, in_axes=(None, 1), out_axes=1)
+
+
+class Prof(object):
+    def __init__(self, ntime: int, jtot: int, nlayers: int) -> None:
+        self.ntime = ntime
+        self.jtot = jtot
+        self.nlayers = nlayers
+        self.zht = jnp.zeros(nlayers)
+        self.delz = jnp.zeros(nlayers)
+        self.co2 = jnp.ones([ntime, nlayers])
+        self.Tair_K = jnp.ones([ntime, nlayers])
+        self.Told_K = jnp.ones([ntime, nlayers])
+        self.eair_Pa = jnp.ones([ntime, nlayers])
+        self.wind = jnp.zeros([ntime, jtot])
+        self.Tsfc = jnp.zeros([ntime, jtot])
+        self.H = jnp.zeros([ntime, jtot])
+        self.LE = jnp.zeros([ntime, jtot])
+        self.Ps = jnp.zeros([ntime, jtot])
+
+    def _tree_flatten(self):
+        children = (
+            self.zht,
+            self.delz,
+            self.co2,
+            self.Tair_K,
+            self.Told_K,
+            self.eair_Pa,
+            self.wind,
+            self.Tsfc,
+            self.H,
+            self.LE,
+            self.Ps,
+        )
+        aux_data = {"ntime": self.ntime, "jtot": self.jtot, "nlayers": self.nlayers}
+        return (children, aux_data)
+
+    @classmethod
+    def _tree_unflatten(cls, aux_data, children):
+        return cls(**aux_data)
 
 
 class SunAng(object):
@@ -39,7 +81,6 @@ class SunAng(object):
 
     def _tree_flatten(self):
         children = (
-            self.ntime,
             self.beta_rad,
             self.sin_beta,
             self.beta_deg,
@@ -60,7 +101,7 @@ class LeafAng(object):
     def __init__(self, ntime: int, jtot: int, nclass: int) -> None:
         self.ntime, self.jtot, self.nclass = ntime, jtot, nclass
         self.pdf = jnp.zeros(nclass)
-        self.Gfunc = jnp.zeros(nclass)
+        self.Gfunc = jnp.zeros(ntime)
         self.thetaSky = jnp.zeros(nclass)
         self.Gfunc_Sky = jnp.zeros(nclass)
         self.integ_exp_diff = jnp.zeros([ntime, jtot])
@@ -101,6 +142,10 @@ class ParNir(object):
         self.prob_shade = jnp.ones([ntime, jktot])
         self.sun_lai = jnp.zeros([ntime, jktot])
         self.shade_lai = jnp.zeros([ntime, jktot])
+        self.reflect = 0.0
+        self.trans = 0.0
+        self.soil_refl = 0.0
+        self.absorbed = 0.0
 
     def _tree_flatten(self):
         children = (
@@ -121,6 +166,10 @@ class ParNir(object):
             self.prob_shade,
             self.sun_lai,
             self.shade_lai,
+            self.reflect,
+            self.trans,
+            self.soil_refl,
+            self.absorbed,
         )
         aux_data = {"ntime": self.ntime, "jtot": self.jtot}
         return (children, aux_data)
@@ -134,6 +183,7 @@ class Ir(object):
     def __init__(self, ntime: int, jtot: int) -> None:
         self.ntime, self.jtot = ntime, jtot
         jktot = jtot + 1
+        self.ir_in = jnp.zeros(ntime)
         self.ir_dn = jnp.ones([ntime, jktot])
         self.ir_up = jnp.ones([ntime, jktot])
         self.IR_source_sun = jnp.zeros([ntime, jktot])
@@ -145,6 +195,7 @@ class Ir(object):
 
     def _tree_flatten(self):
         children = (
+            self.ir_in,
             self.ir_dn,
             self.ir_up,
             self.IR_source_sun,
@@ -496,3 +547,42 @@ class Soil(object):
     @classmethod
     def _tree_unflatten(cls, aux_data, children):
         return cls(**aux_data)
+
+
+def initialize_profile_mx(met: Met, para: Para):
+    prof = Prof(para.ntime, para.jtot, para.nlayers_atmos)
+
+    prof.co2 = dot(met.CO2, prof.co2)
+    prof.Tair_K = dot(met.T_air_K, prof.Tair_K)
+    prof.Told_K = dot(met.T_air_K, prof.Told_K)
+    prof.eair_Pa = dot(met.eair_Pa, prof.eair_Pa)
+
+    # height of canopy layers
+    prof.zht = para.zht
+    prof.delz = para.delz
+
+    return prof
+
+
+def initialize_model_states(met: Met, para: Para):
+    soil = Soil(met, para)
+    quantum, nir = ParNir(para.ntime, para.jtot), ParNir(para.ntime, para.jtot)
+    quantum.reflect = para.par_reflect  # reflectance of leaf
+    quantum.trans = para.par_trans  # transmittances of leaf
+    quantum.soil_refl = para.par_soil_refl  # soil reflectances
+    quantum.absorbed = para.par_absorbed  # fraction absorbed
+    nir.reflect = para.nir_reflect  # reflectance of leaf
+    nir.trans = para.nir_trans  # transmittances of leaf
+    nir.soil_refl = para.nir_soil_refl  # soil reflectances
+    nir.absorbed = para.nir_absorbed  # fraction absorbed
+
+    ir, veg = Ir(para.ntime, para.jtot), Veg(para.ntime)
+    qin, rnet = Qin(para.ntime, para.jktot), Rnet(para.ntime, para.jktot)
+    sun, shade = SunShadedCan(para.ntime, para.jktot), SunShadedCan(
+        para.ntime, para.jktot
+    )  # noqa: E501
+    # dot = jax.vmap(lambda x, y: x * y, in_axes=(None, 1), out_axes=1)
+    sun.Tsfc = dot(met.T_air_K, sun.Tsfc)
+    shade.Tsfc = dot(met.T_air_K, shade.Tsfc)
+
+    return soil, quantum, nir, ir, veg, qin, rnet, sun, shade

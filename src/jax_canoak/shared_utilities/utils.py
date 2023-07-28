@@ -84,3 +84,7 @@ def filter_array(
 
     _, array_new = jax.lax.scan(update_array, init=None, xs=array)
     return array_new
+
+
+# dot product: (n) x (n,m) -> (n,m)
+dot = jax.vmap(lambda x, y: x * y, in_axes=(None, 1), out_axes=1)

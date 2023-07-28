@@ -32,4 +32,6 @@ from .soil_energy_balance import (
 from .dispersion_matrix import disp_canveg  # noqa: F401
 from .radiation_transfer_mx import (
     diffuse_direct_radiation as diffuse_direct_radiation_mx,  # noqa: F401
+    sky_ir as sky_ir_mx,  # noqa: F401
+    rad_tran_canopy as rad_tran_canopy_mx,  # noqa: F401
 )

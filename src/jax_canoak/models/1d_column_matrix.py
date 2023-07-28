@@ -6,16 +6,20 @@ Author: Peishi Jiang
 Date: 2023.07.24.
 """
 
-import jax
+# import jax
 import jax.numpy as jnp
 
 # import h5py
 import numpy as np
 
-from jax_canoak.subjects import Para, Met, Soil
-from jax_canoak.subjects import ParNir, Ir, Rnet, SunShadedCan
-from jax_canoak.subjects import Qin, Veg
+from jax_canoak.subjects import Para, Met
+
+# from jax_canoak.subjects import ParNir, Ir, Rnet, SunShadedCan
+# from jax_canoak.subjects import Qin, Veg
+from jax_canoak.subjects import initialize_profile_mx, initialize_model_states
+from jax_canoak.shared_utilities.types import HashableArrayWrapper
 from jax_canoak.physics.energy_fluxes import disp_canveg, diffuse_direct_radiation_mx
+from jax_canoak.physics.energy_fluxes import sky_ir_mx, rad_tran_canopy_mx
 from jax_canoak.physics.carbon_fluxes import angle_mx, leaf_angle_mx
 
 
@@ -23,6 +27,8 @@ f_forcing = "../shared_utilities/forcings/AlfMetBouldinInput.csv"
 forcing_data = np.loadtxt(f_forcing, delimiter=",")
 forcing_data = jnp.array(forcing_data)
 n_time = forcing_data.shape[0]
+lai = 4.0
+forcing_data = jnp.concatenate([forcing_data, jnp.ones([n_time, 1]) * lai], axis=1)
 
 # ---------------------------------------------------------------------------- #
 #                     Model parameter/properties settings                      #
@@ -58,15 +64,7 @@ dij = disp_canveg(para)
 # ---------------------------------------------------------------------------- #
 #                     Initialize model states                        #
 # ---------------------------------------------------------------------------- #
-soil = Soil(met, para)
-quantum, nir = ParNir(para.ntime, para.jtot), ParNir(para.ntime, para.jtot)
-ir, veg = Ir(para.ntime, para.jtot), Veg(para.ntime)
-qin, rnet = Qin(para.ntime, para.jktot), Rnet(para.ntime, para.jktot)
-sun, shade = SunShadedCan(para.ntime, para.jktot), SunShadedCan(para.ntime, para.jktot)
-
-dot = jax.vmap(lambda x, y: x * y, in_axes=(None, 1), out_axes=1)
-sun.Tsfc = dot(met.T_air_K, sun.Tsfc)
-shade.Tsfc = dot(met.T_air_K, shade.Tsfc)
+soil, quantum, nir, ir, veg, qin, rnet, sun, shade = initialize_model_states(met, para)
 
 
 # ---------------------------------------------------------------------------- #
@@ -74,6 +72,8 @@ shade.Tsfc = dot(met.T_air_K, shade.Tsfc)
 # ---------------------------------------------------------------------------- #
 # beta_rad, solar_sin_beta, beta_deg = angle_mx(
 sun_ang = angle_mx(para.lat_deg, para.long_deg, para.time_zone, met.day, met.hhour)
+mask_night = sun_ang.sin_beta <= 0.0
+mask_night_hashable = HashableArrayWrapper(mask_night)
 
 # ---------------------------------------------------------------------------- #
 #                     Compute direct and diffuse radiations                    #
@@ -96,19 +96,23 @@ leaf_ang = leaf_angle_mx(sun_ang, para)
 # ---------------------------------------------------------------------------- #
 #                     Initialize IR fluxes with air temperature                #
 # ---------------------------------------------------------------------------- #
+ir.ir_in = sky_ir_mx(met.T_air_K, ratrad, para.sigma)
 
 
 # ---------------------------------------------------------------------------- #
 #                     Initialize profiles of scalars/sources/sinks             #
 # ---------------------------------------------------------------------------- #
-
+prof = initialize_profile_mx(met, para)
 
 # ---------------------------------------------------------------------------- #
 #                     Compute radiation fields             #
 # ---------------------------------------------------------------------------- #
 # PAR
-
+quantum = rad_tran_canopy_mx(
+    sun_ang, leaf_ang, quantum, para, mask_night_hashable, niter=25
+)
 # NIR
+nir = rad_tran_canopy_mx(sun_ang, leaf_ang, nir, para, mask_night_hashable, niter=25)
 
 
 # ---------------------------------------------------------------------------- #
@@ -117,3 +121,12 @@ leaf_ang = leaf_angle_mx(sun_ang, para)
 # compute Tsfc -> IR -> Rnet -> Energy balance -> Tsfc
 # loop again and apply updated Tsfc info until convergence
 # This is where things should be jitted as a whole
+
+
+# # Plot
+# import matplotlib.pyplot as plt
+
+# fig, ax = plt.subplots(1, 1, figsize=(10,8))
+# ax.plot(met.day+met.hhour/24., par_beam, label='par_beam')
+# ax.plot(met.day+met.hhour/24., par_diffuse, label='par_diffuse')
+# plt.show()
