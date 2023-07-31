@@ -38,7 +38,7 @@ def angle(
     Returns:
         Tuple[Float_1D, Float_1D, Float_1D]: _description_
     """
-    ntime = hour.size
+    # ntime = hour.size
 
     RADD = PI / 180.0
     lat_rad = latitude * RADD  # latitude, radians
@@ -89,12 +89,21 @@ def angle(
     # Calculate solar elevation, degrees
     beta_deg = beta_rad * 180 / PI
 
-    sun_ang = SunAng(ntime)
-    sun_ang.sin_beta = sin_beta
-    sun_ang.beta_rad = beta_rad
-    sun_ang.beta_deg = beta_deg
-    sun_ang.theta_rad = PI / 2.0 - beta_rad
-    sun_ang.theta_deg = sun_ang.theta_rad * 180.0 / PI
+    theta_rad = PI / 2.0 - beta_rad
+    theta_deg = theta_rad * 180.0 / PI
+
+    sun_ang = SunAng(
+        sin_beta,
+        beta_rad,
+        beta_deg,
+        theta_rad,
+        theta_deg,
+    )
+    # sun_ang.sin_beta = sin_beta
+    # sun_ang.beta_rad = beta_rad
+    # sun_ang.beta_deg = beta_deg
+    # sun_ang.theta_rad = PI / 2.0 - beta_rad
+    # sun_ang.theta_deg = sun_ang.theta_rad * 180.0 / PI
 
     return sun_ang
     # return beta_rad, sin_beta, beta_deg
@@ -102,7 +111,7 @@ def angle(
 
 # @jax.jit
 def leaf_angle(sunang: SunAng, prm: Para, num_leaf_class: int = 50) -> LeafAng:
-    leafang = LeafAng(prm.ntime, prm.jtot, num_leaf_class)
+    # leafang = LeafAng(prm.ntime, prm.jtot, num_leaf_class)
     # estimate leaf angle for 50 classes between 0 and pi/2
     # at midpoint between each angle class.  This is a big improvement over
     # the older code that divided the sky into 9 classes.
@@ -121,7 +130,7 @@ def leaf_angle(sunang: SunAng, prm: Para, num_leaf_class: int = 50) -> LeafAng:
     # jax.debug.print("leaf angle: {a}", a=branches[prm.leafangle]())
     # pdf = jax.lax.switch(prm.leafangle, branches)
     # jax.debug.print("leaf angle: {a}", a=pdf)
-    leafang.pdf = jax.lax.switch(prm.leafangle, branches)
+    pdf = jax.lax.switch(prm.leafangle, branches)
 
     # using the algorithm from Warren Wilson and Wang et al
     # Wang, W. M., Z. L. Li, and H. B. Su. 2007.
@@ -131,19 +140,17 @@ def leaf_angle(sunang: SunAng, prm: Para, num_leaf_class: int = 50) -> LeafAng:
     # call function for G function, the direction cosine, for sun zenith angle
     # compute a matrix of Gfunc for all the inputs
     thetaSun = sunang.theta_rad
-    leafang.Gfunc = Gfunc_dir(thetaSun, thetaLeaf, leafang.pdf)  # (ntime,)
-    leafang.Gfunc = leafang.Gfunc.at[leafang.Gfunc < 0.0].set(0.5)
+    Gfunc = Gfunc_dir(thetaSun, thetaLeaf, pdf)  # (ntime,)
+    Gfunc = Gfunc.at[Gfunc < 0.0].set(0.5)
     # leafang.Gfunc = jnp.clip(leafang.Gfunc, a_min=0.5)
     # leafang.Gfunc(leafang.Gfunc < 0)=0.5
 
     # call function for Gfunction for each sky sector of the hemisphere
-    leafang.thetaSky = thetaLeaf  # (nclass,)
-    DA = PI / (2.0 * leafang.thetaSky.size)  # azimuth increment -> (pi/2)
+    thetaSky = thetaLeaf  # (nclass,)
+    DA = PI / (2.0 * thetaSky.size)  # azimuth increment -> (pi/2)
 
     # Compute G function for all sky sectors
-    leafang.Gfunc_Sky = Gfunc_diff(
-        leafang.thetaSky, thetaLeaf, leafang.pdf
-    )  # (nclass,)
+    Gfunc_Sky = Gfunc_diff(thetaSky, thetaLeaf, pdf)  # (nclass,)
 
     # compute probability of beam transfer with a markov function for clumped leaves
     dff_Markov = (
@@ -151,13 +158,15 @@ def leaf_angle(sunang: SunAng, prm: Para, num_leaf_class: int = 50) -> LeafAng:
     )  # the new LAI profile data of Belane (ntime, nlayers)  # noqa: E501
     dff_Markov = jnp.expand_dims(dff_Markov, axis=-1)  # (ntime, nlayers, 1)
     dff_Markov = jnp.tile(dff_Markov, num_leaf_class)  # (ntime, nlayers, nclass)
-    g = leafang.Gfunc_Sky / jnp.cos(leafang.thetaSky)  # (nclass)
+    g = Gfunc_Sky / jnp.cos(thetaSky)  # (nclass)
     exp_diffuse = -dff_Markov * g  # (ntime, nlayers, nclass)
     exp_diffuse = jnp.exp(exp_diffuse)  # (ntime, nlayers, nclass)
     XX = jnp.sum(
-        exp_diffuse * (jnp.cos(leafang.thetaSky) * jnp.sin(leafang.thetaSky)), axis=2
+        exp_diffuse * (jnp.cos(thetaSky) * jnp.sin(thetaSky)), axis=2
     )  # noqa: E501 (ntime, nlayers)
-    leafang.integ_exp_diff = 2.0 * XX * DA  # (ntime, nlayers)
+    integ_exp_diff = 2.0 * XX * DA  # (ntime, nlayers)
+
+    leafang = LeafAng(pdf, Gfunc, thetaSky, Gfunc_Sky, integ_exp_diff)
 
     return leafang
 

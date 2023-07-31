@@ -34,7 +34,8 @@ df_obs["LAI"] = 4.0
 ########################################################################
 f_div = dir_data / "AlfDIJ5000.csv"
 df_div = pd.read_csv(f_div, header=None)
-divergence = df_div.iloc[:, 0].values.reshape([30, 150])
+divergence = df_div.iloc[:, 0].values.reshape([30, 150]).T
+divergence = jnp.array(divergence)
 
 ########################################################################
 # Put everything together to a forcing class
@@ -83,6 +84,7 @@ df_obs.rename(columns=dict(zip(varn_list, varn_list_new)), inplace=True)
 # )  # Specific humidity [kg kg-1]
 
 ts = df_obs.index - pd.to_datetime(start, format="%Y-%m-%d %H:%M:%S")
+ts = ts + pd.Timedelta(days=1)
 # ts = jnp.asarray(ts.days.values)
 ts = list(ts.days.values + ts.seconds.values / 86400.0)
 ts = Time(

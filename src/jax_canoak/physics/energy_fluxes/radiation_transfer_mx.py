@@ -3,6 +3,7 @@ Radiation transfer functions, including:
 - diffuse_direct_radiation()
 - sky_ir()
 - rad_tran_canopy()
+- ir_rad_tran_canopy()
 
 Author: Peishi Jiang
 Date: 2023.07.27.
@@ -14,10 +15,10 @@ import jax.numpy as jnp
 from functools import partial
 from typing import Tuple
 
-from ...subjects import SunAng, LeafAng, ParNir, Para
+from ...subjects import SunAng, LeafAng, ParNir, Para, Ir, SunShadedCan, Soil
 from ...shared_utilities.types import Float_0D, Float_1D
 from ...shared_utilities.types import HashableArrayWrapper
-from ...shared_utilities.utils import dot
+from ...shared_utilities.utils import dot, add
 
 
 # @jax.jit
@@ -124,6 +125,7 @@ def sky_ir(T: Float_1D, ratrad: Float_1D, sigma: Float_0D) -> Float_1D:
             - ratrad
         )
     )
+    # y = sigma * jnp.power(T, 4.0)
     return y
 
 
@@ -279,11 +281,124 @@ def rad_tran_canopy(
     rad.sh_abs = (
         rad.dn_flux[:, : prm.jtot] + rad.up_flux[:, : prm.jtot]
     ) * rad.absorbed
-    normal = dot(
-        leafang.Gfunc / sunang.sin_beta, rad.beam_flux[:, : prm.jtot]
-    )  # (ntime, jtot)  # noqa: E501
+    # normal = dot(
+    #     leafang.Gfunc / sunang.sin_beta, rad.beam_flux[:, : prm.jtot]
+    # )  # (ntime, jtot)  # noqa: E501
+    normal = rad.beam_flux[:, prm.jtot] * leafang.Gfunc / sunang.sin_beta  # (ntime,)
+    # jax.debug.print("{a}", a=rad.beam_flux[:, prm.jtot].mean())
     normal = jnp.clip(normal, a_min=0.0)
     sun_normal_abs = normal * rad.absorbed
-    rad.sun_abs = sun_normal_abs + rad.sh_abs
+    # rad.sun_abs = sun_normal_abs + rad.sh_abs
+    rad.sun_abs = add(sun_normal_abs, rad.sh_abs)
 
     return rad
+
+
+def ir_rad_tran_canopy(
+    leafang: LeafAng,
+    ir: Ir,
+    rad: ParNir,
+    soil: Soil,
+    sun: SunShadedCan,
+    shade: SunShadedCan,
+    prm: Para,
+) -> Ir:
+    """This subroutine computes the flux density of diffuse
+       radiation in the infrared waveband.  The Markov model is used
+       to compute the probability of beam penetration through clumped foliage.
+
+       The algorithms of Norman (1979) are used.
+
+       Norman, J.M. 1979. Modeling the complete crop canopy.
+       Modification of the Aerial Environment of Crops.
+       B. Barfield and J. Gerber, Eds. American Society of Agricultural Engineers, 249-280.
+
+       And adaption algorithms from Bonan, Climate Change and Terrestrial Ecosystem
+       Modeling of Norman's model
+
+    Args:
+        leafang (LeafAng): _description_
+        ir (Ir): _description_
+        rad (ParNir): _description_
+        sun (SunShadedCan): _description_
+        shade (SunShadedCan): _description_
+        prm (Para): _description_
+
+    Returns:
+        Ir: _description_
+    """  # noqa: E501
+    # Set upper boundary condition
+    ir.ir_dn = jnp.concatenate(
+        [ir.ir_dn[:, : prm.jtot], jnp.expand_dims(ir.ir_in, axis=1)], axis=1
+    )
+    ir.ir_up = jnp.concatenate(
+        [ir.ir_up[:, : prm.jtot], jnp.expand_dims(ir.ir_in, axis=1)], axis=1
+    )
+
+    # Compute IR radiative source flux as a function of leaf temperature weighted
+    # according to sunlit and shaded fractions
+    ir.IR_source_sun = rad.prob_beam[:, : prm.jtot] * jnp.power(sun.Tsfc, 4.0)
+    ir.IR_source_shade = rad.prob_shade[:, : prm.jtot] * jnp.power(shade.Tsfc, 4.0)
+    ir.IR_source = prm.epsigma * (ir.IR_source_sun + ir.IR_source_shade)
+
+    # Compute downward IR from the Top down
+    # following Bonan and consider forward and backward scattering of IR, scat=(1-ep)/2
+    # normally we assume relectance is 1-ep and transmission is zero, but that only
+    # allows backward scattering and the IR fluxes are not so great leaving the canopy
+    scat = (1 - prm.ep) / 2
+
+    forward_scat = leafang.integ_exp_diff + (1 - leafang.integ_exp_diff) * scat
+    backward_scat = (1 - leafang.integ_exp_diff) * scat
+    sdn = ir.IR_source * (1 - leafang.integ_exp_diff)
+    sup = ir.IR_source * (1 - leafang.integ_exp_diff)
+    # print(leafang.integ_exp_diff)
+
+    def calculate_dn_layer(c, i):
+        dn_layer_t, up_layer_b = c, ir.ir_up[:, i]
+        dn_layer_b = (
+            dn_layer_t * forward_scat[:, i]
+            + up_layer_b * backward_scat[:, i]
+            # dn_layer_t * leafang.integ_exp_diff[:,i]
+            + sdn[:, i]
+        )
+        cnew = dn_layer_b
+        return cnew, cnew
+
+    _, out = jax.lax.scan(
+        calculate_dn_layer, ir.ir_dn[:, -1], jnp.arange(prm.jtot - 1, -1, -1)
+    )
+    out = out.T
+    ir.ir_dn = jnp.concatenate([out[:, ::-1], ir.ir_dn[:, -1:]], axis=1)
+    # ir.ir_dn = jnp.concatenate([out, ir.ir_dn[:,-1:]], axis=1)
+
+    # Compute upward IR from the bottom up with the lower boundary condition based on
+    # soil temperature
+    up_bot = (1 - prm.epsoil) * ir.ir_dn[:, 0] + prm.epsoil * prm.sigma * jnp.power(
+        soil.sfc_temperature, 4
+    )
+
+    def calculate_up_layer(c, i):
+        un_layer_b, dn_layer_t = c, ir.ir_dn[:, i + 1]
+        up_layer_t = (
+            un_layer_b * forward_scat[:, i]
+            + dn_layer_t * backward_scat[:, i]
+            # un_layer_b * leafang.integ_exp_diff[:,i]
+            + sup[:, i]
+        )
+        cnew = up_layer_t
+        return cnew, cnew
+
+    _, out = jax.lax.scan(calculate_up_layer, up_bot, jnp.arange(prm.jtot))
+    out = out.T
+    ir.ir_up = jnp.concatenate([jnp.expand_dims(up_bot, axis=-1), out], axis=1)
+
+    # IR shade on top + bottom of leaves
+    ir.shade = ir.ir_up[:, : prm.jtot] + ir.ir_dn[:, : prm.jtot]
+
+    # Bonan shows IR Balance for ground area
+    ir.balance = (1 - leafang.integ_exp_diff) * (
+        (ir.ir_up[:, : prm.jtot] + ir.ir_dn[:, 1 : prm.jktot]) * prm.ep
+        - 2 * ir.IR_source
+    )
+
+    return ir

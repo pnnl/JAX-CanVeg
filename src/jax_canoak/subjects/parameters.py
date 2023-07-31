@@ -12,8 +12,9 @@ from math import floor
 
 # from typing import Array
 from ..shared_utilities.types import Float_0D, Float_1D
+from ..shared_utilities.utils import dot, minus
 
-dot = jax.vmap(lambda x, y: x * y, in_axes=(None, 1), out_axes=1)
+# dot = jax.vmap(lambda x, y: x * y, in_axes=(None, 1), out_axes=1)
 
 
 class Para(object):
@@ -32,6 +33,14 @@ class Para(object):
         meas_ht: Float_0D = 5.0,
         n_hr_per_day: int = 48,
         n_time: int = 200,
+        lai: Float_1D = jnp.ones(200),
+        par_reflect: Float_0D = 0.05,
+        par_trans: Float_0D = 0.05,
+        par_soil_refl: Float_0D = 0.05,
+        nir_reflect: Float_0D = 0.60,
+        nir_trans: Float_0D = 0.20,
+        nir_soil_refl: Float_0D = 0.10,
+        npart: int = 500000,
     ) -> None:
         self.time_zone = time_zone  # time zone
         self.lat_deg = latitude  # latitude
@@ -81,11 +90,6 @@ class Para(object):
         self.ntime = n_time
         self.ndays = n_time / n_hr_per_day
 
-        # Initialize the lai states
-        self.dff = jnp.zeros([self.ntime, self.nlayers])
-        self.sumlai = jnp.zeros([self.ntime, self.nlayers])
-        self.dff_clmp = jnp.zeros([self.ntime, self.nlayers])
-
         # calculate height of layers in the canopy and atmosphere
         zht1 = jnp.arange(1, self.jktot) * self.dht_canopy
         delz1 = jnp.ones(self.jtot) * self.dht_canopy
@@ -97,13 +101,13 @@ class Para(object):
         self.zht = jnp.concatenate([zht1, zht2])
         self.delz = jnp.concatenate([delz1, delz2])
 
-        self.par_reflect = 0.05
-        self.par_trans = 0.05
+        self.par_reflect = par_reflect
+        self.par_trans = par_trans
+        self.par_soil_refl = par_soil_refl
         self.par_absorbed = 1.0 - self.par_reflect - self.par_trans
-        self.par_soil_refl = 0.05
-        self.nir_reflect = 0.60  # 0.4 .based on field and Ocean Optics...wt with Planck Law. High leaf N and high reflected NIR  # noqa: E501
-        self.nir_trans = 0.20  # 0.4 ...UCD presentation shows NIR transmission is about the same as reflectance; 80% NIR reflectance 700 to 1100 nm  # noqa: E501
-        self.nir_soil_refl = 0.10  # Ocean Optics spectra May 2, 2019 after cutting
+        self.nir_reflect = nir_reflect  # 0.4 .based on field and Ocean Optics...wt with Planck Law. High leaf N and high reflected NIR  # noqa: E501
+        self.nir_trans = nir_trans  # 0.4 ...UCD presentation shows NIR transmission is about the same as reflectance; 80% NIR reflectance 700 to 1100 nm  # noqa: E501
+        self.nir_soil_refl = nir_soil_refl  # Ocean Optics spectra May 2, 2019 after cutting  # noqa: E501
         self.nir_absorbed = 1.0 - self.nir_reflect - self.nir_trans
 
         # Leaf angle distributions
@@ -223,25 +227,52 @@ class Para(object):
         self.extinct = 2  # extinction coefficient wind in canopy
 
         # Dispersion Matrix Lagrangian model
-        self.npart = 500000  # number of random walk particles, use about 10,000 for testing, up to 1M for smoother profiles  # noqa: E501, E501
+        self.npart = npart  # number of random walk particles, use about 10,000 for testing, up to 1M for smoother profiles  # noqa: E501, E501
+
+        # Set LAI
+        # # Initialize the lai states
+        # self.dff = jnp.zeros([self.ntime, self.nlayers])
+        # self.sumlai = jnp.zeros([self.ntime, self.nlayers])
+        # self.dff_clmp = jnp.zeros([self.ntime, self.nlayers])
+        self.lai = lai
+        self.dff = (
+            jnp.ones([self.ntime, self.nlayers]) / self.nlayers
+        )  # (ntime,nlayers)
+        self.dff = dot(lai, self.dff)  # (ntime, nlayers)
+        # TODO: double check!
+        # self.sumlai = jax.lax.cumsum(self.dff, axis=1, reverse=True) #(ntime,nlayers)
+        self.sumlai = minus(lai, jax.lax.cumsum(self.dff, axis=1))  # (ntime, nlayers)
+        self.sumlai = jnp.clip(self.sumlai, a_min=0.0)  # (ntime, nlayers)
+        self.dff_clmp = self.dff / self.markov  # (ntime, nlayers)
 
     # def set_time(self, days: Float_1D) -> None:
     #     self.ntime=len(days)   # number of 30 minute runs
     #     self.ndays=self.ntime/self.hrs      # number of days
 
-    def set_lai(self, lai: Float_1D) -> None:
-        assert self.ntime == lai.size
-        # self.dff = 1./ self.nlayers
-        self.dff = (
-            jnp.ones([self.ntime, self.nlayers]) / self.nlayers
-        )  # (ntime,nlayers)
-        self.dff = dot(lai, self.dff)  # (ntime, nlayers)
-        self.sumlai = jax.lax.cumsum(self.dff, axis=1, reverse=True)  # (ntime, nlayers)
-        self.sumlai = jnp.clip(self.sumlai, a_min=0.0)  # (ntime, nlayers)
-        self.dff_clmp = self.dff / self.markov  # (ntime, nlayers)
+    # def set_lai(self, lai: Float_1D) -> None:
+    #     assert self.ntime == lai.size
+    #     # self.dff = 1./ self.nlayers
+    #     self.dff = (
+    #         jnp.ones([self.ntime, self.nlayers]) / self.nlayers
+    #     )  # (ntime,nlayers)
+    #     self.dff = dot(lai, self.dff)  # (ntime, nlayers)
+    #     # TODO: double check!
+    #     # self.sumlai = jax.lax.cumsum(self.dff, axis=1,reverse=True) #(ntime,nlayers)
+    #     self.sumlai = minus(lai, jax.lax.cumsum(self.dff, axis=1))  # (ntime, nlayers)
+    #     self.sumlai = jnp.clip(self.sumlai, a_min=0.0)  # (ntime, nlayers)
+    #     self.dff_clmp = self.dff / self.markov  # (ntime, nlayers)
 
     def _tree_flatten(self):
         children = (
+            # States as inputs
+            self.lai,
+            self.par_reflect,
+            self.par_trans,
+            self.par_soil_refl,
+            self.nir_reflect,
+            self.nir_trans,
+            self.nir_soil_refl,
+            # Derived states
             self.nlayers,
             self.dht,
             self.z0,
@@ -259,13 +290,13 @@ class Para(object):
             self.dff_clmp,
             self.zht,
             self.delz,
-            self.par_reflect,
-            self.par_trans,
-            self.par_absorbed,
+            # self.par_reflect,
+            # self.par_trans,
+            # self.par_absorbed,
             self.par_soil_refl,
-            self.nir_reflect,
-            self.nir_trans,
-            self.nir_soil_refl,
+            # self.nir_reflect,
+            # self.nir_trans,
+            # self.nir_soil_refl,
             self.nir_absorbed,
             self.sigma,
             self.ep,
@@ -332,7 +363,6 @@ class Para(object):
             self.Mair,
             self.dLdT,
             self.extinct,
-            self.npart,
         )
         aux_data = {
             "n_can_layers": self.jtot,
@@ -346,11 +376,28 @@ class Para(object):
             "longitude": self.long_deg,  # noqa: E501
             "meas_ht": self.meas_ht,
             "leafangle": self.leafangle,
+            "npart": self.npart,
         }
         return (children, aux_data)
 
     @classmethod
     def _tree_unflatten(cls, aux_data, children):
+        # args = {
+        #     "lai": children[0],
+        #     "par_reflect": children[1],
+        #     "par_trans": children[2],
+        #     "par_soil_refl": children[3],
+        #     "nir_reflect": children[4],
+        #     "nir_trans": children[5],
+        #     "nir_soil_refl": children[6],
+        # }
+        aux_data["lai"] = children[0]
+        aux_data["par_reflect"] = children[1]
+        aux_data["par_trans"] = children[2]
+        aux_data["par_soil_refl"] = children[3]
+        aux_data["nir_reflect"] = children[4]
+        aux_data["nir_trans"] = children[5]
+        aux_data["nir_soil_refl"] = children[6]
         return cls(**aux_data)
 
         # time_zone: int = -8,

@@ -28,7 +28,7 @@ class Met(object):
         self.Mair, self.rugc = Mair, rugc
         self.day = jnp.array(data[:, 0])  # day of year
         self.hhour = jnp.array(data[:, 1])  # hour
-        self.T_air_K = jnp.array(data[:, 2])  # air temperature, K
+        self.T_air_K = jnp.array(data[:, 2]) + 273.15  # air temperature, K
         self.rglobal = jnp.array(data[:, 3])  # global shortwave radiation, W m-2
         self.eair = jnp.array(data[:, 4])  # vapor pressure, kPa
         self.wind = jnp.array(data[:, 5])  # wind velocity, m/s

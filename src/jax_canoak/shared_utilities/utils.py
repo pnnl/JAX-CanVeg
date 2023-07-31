@@ -88,3 +88,9 @@ def filter_array(
 
 # dot product: (n) x (n,m) -> (n,m)
 dot = jax.vmap(lambda x, y: x * y, in_axes=(None, 1), out_axes=1)
+
+# plus: (n) + (n,m) -> (n,m)
+add = jax.vmap(lambda x, y: x + y, in_axes=(None, 1), out_axes=1)
+
+# minus: (n) + (n,m) -> (n,m)
+minus = jax.vmap(lambda x, y: x - y, in_axes=(None, 1), out_axes=1)

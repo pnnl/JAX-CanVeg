@@ -1,5 +1,6 @@
 """
 Soil energy balance functions and subroutines, including:
+- soil_energy_balance()
 
 Author: Peishi Jiang
 Date: 2023.07.25.
@@ -11,26 +12,41 @@ Date: 2023.07.25.
 # from typing import Tuple
 
 # from ...shared_utilities.types import Float_1D
+from ...subjects import ParNir, Ir, Met, Prof, Para, Soil
 
 
-# def soil_sfc_res(wg: Float_1D) -> Float_1D:
-#     """Calculate the soil surface resistance.
+def soil_energy_balance(
+    quantum: ParNir, nir: ParNir, ir: Ir, met: Met, prof: Prof, prm: Para, soil: Soil
+) -> Soil:
+    """The soil energy balance model of Campbell has been adapted to
+       compute soil energy fluxes and temperature profiles at the soil
+       surface.  The model has been converted from BASIC to C.  We
+       also use an analytical version of the soil surface energy
+       balance to solve for LE, H and G.
 
-#     Args:
-#         wg (Float_0D): _description_
+       Combine surface energy balance calculations with soil heat
+       transfer model to calculate soil conductive and convective heat
+       transfer and evaporation rates.  Here, only the deep temperature
+       is needed and G, Hs and LEs can be derived from air temperature
+       and energy inputs.
 
-#     Returns:
-#         Float_0D: _description_
-#     """
-#     # Camillo and Gurney model for soil resistance
-#     # Rsoil= 4104 (ws-wg)-805, ws=.395, wg=0
-#     # ws= 0.395
-#     # wg is at 10 cm, use a linear interpolation to the surface, top cm, mean
-#     # between 0 and 2 cm
-#     wg0 = 1.0 * wg / 10.0
-#     # y=4104.* (0.395-wg0)-805.;
+       Soil evaporation models by Kondo, Mafouf et al. and
+       Dammond and Simmonds are used. Dammond and Simmonds for example
+       have a convective adjustment to the resistance to heat transfer.
+       Our research in Oregon and Canada have shown that this consideration
+       is extremely important to compute G and Rn_soil correctly.
 
-#     # model of Kondo et al 1990, JAM for a 2 cm thick soil
-#     y = 3.0e10 * jnp.power((0.395 - wg0), 16.6)
+    Args:
+        quantum (ParNir): _description_
+        nir (ParNir): _description_
+        ir (Ir): _description_
+        met (Met): _description_
+        prof (Prof): _description_
+        prm (Para): _description_
+        soil (Soil): _description_
 
-#     return y
+    Returns:
+        Soil: _description_
+    """
+    # TODO!
+    return soil
