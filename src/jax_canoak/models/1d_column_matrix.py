@@ -6,7 +6,7 @@ Author: Peishi Jiang
 Date: 2023.07.24.
 """
 
-# import jax
+import jax
 import jax.numpy as jnp
 
 # import h5py
@@ -20,7 +20,7 @@ from jax_canoak.subjects import initialize_profile_mx, initialize_model_states
 from jax_canoak.shared_utilities.types import HashableArrayWrapper
 from jax_canoak.physics import energy_carbon_fluxes_mx
 from jax_canoak.physics.energy_fluxes import disp_canveg, diffuse_direct_radiation_mx
-from jax_canoak.physics.energy_fluxes import sky_ir_mx, rad_tran_canopy_mx
+from jax_canoak.physics.energy_fluxes import rad_tran_canopy_mx, sky_ir_v2_mx
 from jax_canoak.physics.energy_fluxes import compute_qin_mx, ir_rad_tran_canopy_mx
 from jax_canoak.physics.energy_fluxes import uz_mx, soil_energy_balance_mx
 from jax_canoak.physics.carbon_fluxes import angle_mx, leaf_angle_mx
@@ -28,14 +28,17 @@ from jax_canoak.shared_utilities.utils import dot
 
 
 import matplotlib.pyplot as plt
-from jax_canoak.shared_utilities import plot_ir, plot_rad
+from jax_canoak.shared_utilities import plot_ir, plot_rad, plot_canopy1
+from jax_canoak.shared_utilities import plot_soil, plot_soiltemp
 
+jax.check_tracer_leaks("JAX_CHECK_TRACER_LEAKS")
 
 f_forcing = "../shared_utilities/forcings/AlfMetBouldinInput.csv"
 forcing_data = np.loadtxt(f_forcing, delimiter=",")
 forcing_data = jnp.array(forcing_data)
 n_time = forcing_data.shape[0]
-lai = 3.6
+# lai = 3.6
+lai = 5.0
 forcing_data = jnp.concatenate([forcing_data, jnp.ones([n_time, 1]) * lai], axis=1)
 plot = True
 
@@ -49,7 +52,7 @@ stomata = 2
 hypo_amphi = 1
 veg_ht = 0.8
 leafangle = 1
-n_can_layers = 30
+n_can_layers = 50
 meas_ht = 5.0
 n_hr_per_day = 48
 n_time = n_time
@@ -97,8 +100,6 @@ soil, quantum, nir, ir, veg, qin, rnet, sun, shade = initialize_model_states(met
 # ---------------------------------------------------------------------------- #
 # beta_rad, solar_sin_beta, beta_deg = angle_mx(
 sun_ang = angle_mx(para.lat_deg, para.long_deg, para.time_zone, met.day, met.hhour)
-mask_night = sun_ang.sin_beta <= 0.0
-mask_night_hashable = HashableArrayWrapper(mask_night)
 
 # ---------------------------------------------------------------------------- #
 #                     Compute direct and diffuse radiations                    #
@@ -120,7 +121,8 @@ leaf_ang = leaf_angle_mx(sun_ang, para)
 # ---------------------------------------------------------------------------- #
 #                     Initialize IR fluxes with air temperature                #
 # ---------------------------------------------------------------------------- #
-ir.ir_in = sky_ir_mx(met.T_air_K, ratrad, para.sigma)
+# ir.ir_in = sky_ir_mx(met.T_air_K, ratrad, para.sigma)
+ir.ir_in = sky_ir_v2_mx(met, ratrad, para.sigma)
 ir.ir_dn = dot(ir.ir_in, ir.ir_dn)
 ir.ir_up = dot(ir.ir_in, ir.ir_up)
 
@@ -130,12 +132,29 @@ ir.ir_up = dot(ir.ir_in, ir.ir_up)
 # ---------------------------------------------------------------------------- #
 prof = initialize_profile_mx(met, para)
 
+
+# ---------------------------------------------------------------------------- #
+#                     Generate masks for matrix calculations                   #
+# ---------------------------------------------------------------------------- #
+# Night mask
+mask_night = sun_ang.sin_beta <= 0.0
+mask_night_hashable = HashableArrayWrapper(mask_night)
+# Turbulence mask
+nnu_T_P = dot(
+    para.nnu * (101.3 / met.P_kPa),
+    jnp.power(prof.Tair_K[:, : para.jtot] / 273.16, 1.81),
+)
+Re = para.lleaf * prof.wind[:, : para.jtot] / nnu_T_P
+mask_turbulence = Re > 14000.0
+mask_turbulence_hashable = HashableArrayWrapper(mask_turbulence)
+
+
 # ---------------------------------------------------------------------------- #
 #                     Compute radiation fields             #
 # ---------------------------------------------------------------------------- #
 # PAR
 quantum = rad_tran_canopy_mx(
-    sun_ang, leaf_ang, quantum, para, mask_night_hashable, niter=25
+    sun_ang, leaf_ang, quantum, para, mask_night_hashable, niter=5
 )
 # print(quantum.inbeam)
 # NIR
@@ -166,9 +185,11 @@ qin = compute_qin_mx(quantum, nir, ir, para, qin)
 # Compute new boundary layer conductances based on new leaf energy balance
 # and delta T, in case convection occurs
 # Different coefficients will be assigned if amphistomatous or hypostomatous
-sun, shade = energy_carbon_fluxes_mx(sun, shade, qin, quantum, met, prof, para)
+sun, shade = energy_carbon_fluxes_mx(
+    sun, shade, qin, quantum, met, prof, para, mask_turbulence_hashable
+)
 
-# Compute soil fluxes
+# # Compute soil fluxes
 soil = soil_energy_balance_mx(quantum, nir, ir, met, prof, para, soil)
 
 
@@ -179,5 +200,12 @@ if plot:
     plot_rad(quantum, para, "par")
     plot_rad(nir, para, "nir")
     plot_ir(ir, para)
+    fig, axes = plt.subplots(2, 1, figsize=(10, 10))
+    plot_canopy1(sun, qin, para, "sun", axes[0])
+    plot_canopy1(shade, qin, para, "shade", axes[1])
+    # plot_canopy2(sun, para, "sun")
+    # plot_canopy2(shade, para, "shade")
     # plot_leafang(leaf_ang, para)
+    plot_soil(soil, para)
+    plot_soiltemp(soil, para)
     plt.show()

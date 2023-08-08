@@ -12,10 +12,10 @@ Date: 2023.07.27.
 import jax
 import jax.numpy as jnp
 
-from functools import partial
+# from functools import partial
 from typing import Tuple
 
-from ...subjects import SunAng, LeafAng, ParNir, Para, Ir, SunShadedCan, Soil
+from ...subjects import SunAng, LeafAng, ParNir, Para, Ir, SunShadedCan, Soil, Met
 from ...shared_utilities.types import Float_0D, Float_1D
 from ...shared_utilities.types import HashableArrayWrapper
 from ...shared_utilities.utils import dot, add
@@ -81,8 +81,11 @@ def diffuse_direct_radiation(
     par_beam = fvsb * parin
     par_beam = par_beam.at[par_beam < 0].set(0.0)
     par_diffuse = parin - par_beam
-    par_beam = par_beam.at[parin == 0].set(0.001)
-    par_diffuse = par_diffuse.at[parin == 0].set(0.001)
+    # par_beam = par_beam.at[parin == 0].set(0.001)
+    # par_diffuse = par_diffuse.at[parin == 0].set(0.001)
+    par_beam = par_beam.at[parin == 0].set(0.0)
+    par_diffuse = par_diffuse.at[parin == 0].set(0.0)
+    # jax.debug.print("par_beam {a}", a=par_beam[:3])
 
     # NIR beam and diffuse flux densities
     xvalue = (0.9 - ratrad) / 0.68
@@ -92,8 +95,10 @@ def diffuse_direct_radiation(
     nir_beam = fansb * nirx
     nir_beam = nir_beam.at[nir_beam < 0].set(0.0)
     nir_diffuse = nirx - nir_beam
-    nir_beam = nir_beam.at[nirx == 0].set(0.1)
-    nir_diffuse = nir_diffuse.at[nirx == 0].set(0.1)
+    # nir_beam = nir_beam.at[nirx == 0].set(0.1)
+    # nir_diffuse = nir_diffuse.at[nirx == 0].set(0.1)
+    nir_beam = nir_beam.at[nirx == 0].set(0.0)
+    nir_diffuse = nir_diffuse.at[nirx == 0].set(0.0)
     nir_diffuse = nirx - nir_beam
     nir_beam = nirx - nir_diffuse
 
@@ -116,20 +121,42 @@ def sky_ir(T: Float_1D, ratrad: Float_1D, sigma: Float_0D) -> Float_1D:
     Returns:
         Float_0D: _description_
     """
-    y = (
-        sigma
-        * jnp.power(T, 4.0)
-        * (
-            (1.0 - 0.261 * jnp.exp(-0.000777 * jnp.power((273.16 - T), 2.0))) * ratrad
-            + 1
-            - ratrad
-        )
+    product = (
+        (1.0 - 0.261 * jnp.exp(-0.000777 * jnp.power((273.16 - T), 2.0))) * ratrad
+        + 1
+        - ratrad
     )
+    y = sigma * jnp.power(T, 4.0) * product
     # y = sigma * jnp.power(T, 4.0)
     return y
 
 
-@partial(jax.jit, static_argnames=["mask_night", "niter"])
+def sky_ir_v2(met: Met, ratrad: Float_1D, sigma: Float_0D) -> Float_1D:
+    """Choi, Minha, Jennifer M. Jacobs, and William P. Kustas. 2008.
+        'Assessment of clear and cloudy sky parameterizations for daily downwelling
+        longwave radiation over different land surfaces in Florida, USA'
+        , Geophysical Research Letters, 35.
+
+    Args:
+        met (Met): _description_
+        ratrad (Float_1D): _description_
+        sigma (Float_0D): _description_
+
+    Returns:
+        Float_0D: _description_
+    """
+    ea_mb = met.eair_Pa / 100
+    Rldc = (0.605 + 0.048 * jnp.power(ea_mb, 0.5)) * sigma * jnp.power(met.T_air_K, 4.0)
+
+    # c
+    c = 1 - ratrad
+
+    y = Rldc * (1 - c) + c * sigma * jnp.power(met.T_air_K, 4.0)
+    # y = sigma * jnp.power(T, 4.0)
+    return y
+
+
+# @partial(jax.jit, static_argnames=["mask_night", "niter"])
 def rad_tran_canopy(
     sunang: SunAng,
     leafang: LeafAng,
@@ -222,42 +249,74 @@ def rad_tran_canopy(
     up_init = jnp.zeros([prm.ntime, prm.jktot])
 
     # Now, let's iterate...
+    # def calculate_dnup(c2, j):
+    #     up, dn = c2[0], c2[1]
+    #     dn_top, up_bot = dn[:, -1], up[:, 0]
+    #     # dn
+    #     def calculate_dn_layer(c, i):
+    #         dn_layer_t, up_layer_b = c, up[:, i]
+    #         dn_layer_b = (
+    #             dn_layer_t * transmission_layer[:, i]
+    #             + up_layer_b * reflectance_layer[:, i]
+    #             + sdn[:, i]
+    #         )
+    #         cnew = dn_layer_b
+    #         return cnew, cnew
 
+    #     _, out = jax.lax.scan(
+    #         calculate_dn_layer, dn_top, jnp.arange(prm.jtot - 1, -1, -1)
+    #     )
+    #     out = out.T
+    #     dn = jnp.concatenate([out[:, ::-1], jnp.expand_dims(dn_top, axis=-1)], axis=1)
+
+    #     # up
+    #     def calculate_up_layer(c, i):
+    #         un_layer_b, dn_layer_t = c, dn[:, i + 1]
+    #         up_layer_t = (
+    #             un_layer_b * transmission_layer[:, i]
+    #             + dn_layer_t * reflectance_layer[:, i]
+    #             + sup[:, i]
+    #         )
+    #         cnew = up_layer_t
+    #         return cnew, cnew
+
+    #     _, out = jax.lax.scan(calculate_up_layer, up_bot, jnp.arange(prm.jtot))
+    #     out = out.T
+    #     up_bot = (dn[:, 0] + rad.incoming * fraction_beam * Tbeam[:, 0])*rad.soil_refl
+    #     up = jnp.concatenate([jnp.expand_dims(up_bot, axis=-1), out], axis=1)
+
+    #     c2new = [up, dn]
+    #     return c2new, None
     def calculate_dnup(c2, j):
         up, dn = c2[0], c2[1]
         dn_top, up_bot = dn[:, -1], up[:, 0]
-        # dn
-        def calculate_dn_layer(c, i):
+
+        def calculate_dnup_layer(c, i):
             dn_layer_t, up_layer_b = c, up[:, i]
             dn_layer_b = (
                 dn_layer_t * transmission_layer[:, i]
                 + up_layer_b * reflectance_layer[:, i]
                 + sdn[:, i]
             )
-            cnew = dn_layer_b
-            return cnew, cnew
-
-        _, out = jax.lax.scan(
-            calculate_dn_layer, dn_top, jnp.arange(prm.jtot - 1, -1, -1)
-        )
-        out = out.T
-        dn = jnp.concatenate([out[:, ::-1], jnp.expand_dims(dn_top, axis=-1)], axis=1)
-
-        # up
-        def calculate_up_layer(c, i):
-            un_layer_b, dn_layer_t = c, dn[:, i + 1]
             up_layer_t = (
-                un_layer_b * transmission_layer[:, i]
+                up_layer_b * transmission_layer[:, i]
                 + dn_layer_t * reflectance_layer[:, i]
                 + sup[:, i]
             )
-            cnew = up_layer_t
-            return cnew, cnew
+            cnew = dn_layer_b
+            out_layer = (dn_layer_b, up_layer_t)
+            return cnew, out_layer
 
-        _, out = jax.lax.scan(calculate_up_layer, up_bot, jnp.arange(prm.jtot))
-        out = out.T
+        _, out = jax.lax.scan(
+            calculate_dnup_layer, dn_top, jnp.arange(prm.jtot - 1, -1, -1)
+        )
+        outdn, outup = out[0], out[1]
+        outdn = outdn.T
+        dn = jnp.concatenate([outdn[:, ::-1], jnp.expand_dims(dn_top, axis=-1)], axis=1)
+
         up_bot = (dn[:, 0] + rad.incoming * fraction_beam * Tbeam[:, 0]) * rad.soil_refl
-        up = jnp.concatenate([jnp.expand_dims(up_bot, axis=-1), out], axis=1)
+        outup = outup.T
+        up = jnp.concatenate([jnp.expand_dims(up_bot, axis=-1), outup[:, ::-1]], axis=1)
 
         c2new = [up, dn]
         return c2new, None
@@ -351,7 +410,6 @@ def ir_rad_tran_canopy(
     backward_scat = (1 - leafang.integ_exp_diff) * scat
     sdn = ir.IR_source * (1 - leafang.integ_exp_diff)
     sup = ir.IR_source * (1 - leafang.integ_exp_diff)
-    # print(leafang.integ_exp_diff)
 
     def calculate_dn_layer(c, i):
         dn_layer_t, up_layer_b = c, ir.ir_up[:, i]

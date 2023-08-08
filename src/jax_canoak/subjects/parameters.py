@@ -33,6 +33,7 @@ class Para(object):
         meas_ht: Float_0D = 5.0,
         n_hr_per_day: int = 48,
         n_time: int = 200,
+        dt_soil: int = 10,
         lai: Float_1D = jnp.ones(200),
         par_reflect: Float_0D = 0.05,
         par_trans: Float_0D = 0.05,
@@ -86,9 +87,11 @@ class Para(object):
         self.nlayers_atmos = int(self.nlayers_atmos)
 
         # Set up time
-        self.hrs = n_hr_per_day  # half hour periods per day
+        self.hrs = n_hr_per_day  # number of hour periods per day
         self.ntime = n_time
         self.ndays = n_time / n_hr_per_day
+        self.dt_soil = dt_soil  # soil time step
+        self.soil_mtime = floor(3600 * self.hrs / self.dt_soil)
 
         # calculate height of layers in the canopy and atmosphere
         zht1 = jnp.arange(1, self.jktot) * self.dht_canopy
@@ -368,6 +371,7 @@ class Para(object):
             "n_can_layers": self.jtot,
             "n_time": self.ntime,
             "n_hr_per_day": self.hrs,
+            "dt_soil": self.dt_soil,
             "stomata": self.stomata,
             "hypo_amphi": self.hypo_amphi,
             "veg_ht": self.veg_ht,

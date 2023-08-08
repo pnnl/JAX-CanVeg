@@ -5,6 +5,7 @@ from ..shared_utilities.types import Float_0D, Float_1D, Float_ND
 from ..shared_utilities.constants import rgc1000
 
 
+@jnp.vectorize
 def llambda(tak: Float_0D) -> Float_0D:
     """Latent heat vaporization, J kg-1.
 

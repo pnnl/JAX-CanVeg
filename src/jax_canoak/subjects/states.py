@@ -10,6 +10,7 @@ Classes for model states.
 - BoundLayerRes()
 - Qin()
 - Veg()
+- Ps()
 - Soil()
 
 Author: Peishi Jiang
@@ -299,6 +300,9 @@ class SunShadedCan(object):
         gs: Float_2D,
         LE: Float_2D,
         H: Float_2D,
+        Rnet: Float_2D,
+        Lout: Float_2D,
+        closure: Float_2D,
         Tsfc: Float_2D,
         Tsfc_new: Float_2D,
         Tsfc_old: Float_2D,
@@ -308,6 +312,9 @@ class SunShadedCan(object):
         self.gs = gs
         self.LE = LE
         self.H = H
+        self.Rnet = Rnet
+        self.Lout = Lout
+        self.closure = closure
         self.Tsfc = Tsfc
         self.Tsfc_old = Tsfc_old
         self.Tsfc_new = Tsfc_new
@@ -319,6 +326,9 @@ class SunShadedCan(object):
             self.gs,
             self.LE,
             self.H,
+            self.Rnet,
+            self.Lout,
+            self.closure,
             self.Tsfc,
             self.Tsfc_new,
             self.Tsfc_old,
@@ -385,6 +395,72 @@ class Veg(object):
         return cls(*children, **aux_data)
 
 
+class Ps(object):
+    def __init__(
+        self,
+        aphoto: Float_2D,
+        ci: Float_2D,
+        gs_co2: Float_2D,
+        gs_m_s: Float_2D,
+        wj: Float_2D,
+        wc: Float_2D,
+        wp: Float_2D,
+        jsucrose: Float_2D,
+        Ag: Float_2D,
+        x1: Float_2D,
+        x2: Float_2D,
+        x3: Float_2D,
+        p: Float_2D,
+        q: Float_2D,
+        r: Float_2D,
+        rd: Float_2D,
+        rstom: Float_2D,
+    ) -> None:
+        self.aphoto = aphoto
+        self.ci = ci
+        self.gs_co2 = gs_co2
+        self.gs_m_s = gs_m_s
+        self.wj = wj
+        self.wc = wc
+        self.wp = wp
+        self.jsucrose = jsucrose
+        self.Ag = Ag
+        self.x1 = x1
+        self.x2 = x2
+        self.x3 = x3
+        self.p = p
+        self.q = q
+        self.r = r
+        self.rd = rd
+        self.rstom = rstom
+
+    def _tree_flatten(self):
+        children = (
+            self.aphoto,
+            self.ci,
+            self.gs_co2,
+            self.wj,
+            self.wc,
+            self.wp,
+            self.jsucrose,
+            self.Ag,
+            self.x1,
+            self.x2,
+            self.x3,
+            self.p,
+            self.q,
+            self.r,
+            self.rd,
+            self.rstom,
+        )
+        aux_data = {}
+        return (children, aux_data)
+
+    @classmethod
+    def _tree_unflatten(cls, aux_data, children):
+        return cls(*children, **aux_data)
+
+
 class Soil(object):
     def __init__(
         self,
@@ -415,6 +491,7 @@ class Soil(object):
         d2z: Float_1D,
         vol: Float_1D,
         T_soil: Float_2D,
+        T_soil_old: Float_2D,
         T_soil_up_boundary: Float_1D,
         sfc_temperature: Float_1D,
         sfc_temperature_old: Float_1D,
@@ -461,6 +538,7 @@ class Soil(object):
         self.d2z = d2z
         self.vol = vol
         self.T_soil = T_soil
+        self.T_soil_old = T_soil_old
         self.T_soil_up_boundary = T_soil_up_boundary
         self.sfc_temperature = sfc_temperature
         self.sfc_temperature_old = sfc_temperature_old
@@ -509,6 +587,7 @@ class Soil(object):
             self.d2z,
             self.vol,
             self.T_soil,
+            self.T_soil_old,
             self.T_soil_up_boundary,
             self.sfc_temperature,
             self.sfc_temperature_old,
@@ -716,13 +795,18 @@ def initialize_sunshade(para: Para, met: Met) -> SunShadedCan:
     gs = jnp.zeros([ntime, jtot])
     LE = jnp.zeros([ntime, jtot])
     H = jnp.zeros([ntime, jtot])
+    Rnet = jnp.zeros([ntime, jtot])
+    Lout = jnp.zeros([ntime, jtot])
+    closure = jnp.zeros([ntime, jtot])
     Tsfc = jnp.ones([ntime, jtot])
     Tsfc_old = jnp.ones([ntime, jtot])
     Tsfc_new = jnp.ones([ntime, jtot])
 
     Tsfc = dot(met.T_air_K, Tsfc)
 
-    return SunShadedCan(Ps, Resp, gs, LE, H, Tsfc, Tsfc_new, Tsfc_old)
+    return SunShadedCan(
+        Ps, Resp, gs, LE, H, Rnet, Lout, closure, Tsfc, Tsfc_new, Tsfc_old
+    )
 
 
 def initialize_soil(
@@ -860,8 +944,10 @@ def initialize_soil(
     k_conductivity_soil = jnp.outer(K_soil, 1.0 / dz)  # (ntime, n_soil)
     k_conductivity_soil_bound = k_conductivity_soil[:, 0]
     k_conductivity_soil = jnp.concatenate(
-        [k_conductivity_soil[:, :-1], jnp.zeros([para.ntime, 1])], axis=1
-    )
+        # [k_conductivity_soil[:, :-1], jnp.zeros([para.ntime, 1])], axis=1
+        [k_conductivity_soil, jnp.zeros([para.ntime, 1])],
+        axis=1,
+    )  # (ntime, n_soil+1)
     # self.k_conductivity_soil[:,-1]=0
 
     # Energy initialization
@@ -881,6 +967,7 @@ def initialize_soil(
         [T_soil[:, :-1], jnp.expand_dims(T_soil_low_bound, axis=1)],
         axis=1,
     )
+    T_soil_old = T_soil
 
     return Soil(
         dt,
@@ -910,6 +997,7 @@ def initialize_soil(
         d2z,
         vol,
         T_soil,
+        T_soil_old,
         T_soil_up_boundary,
         sfc_temperature,
         sfc_temperature_old,

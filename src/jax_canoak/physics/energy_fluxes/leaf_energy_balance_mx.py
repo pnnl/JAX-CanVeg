@@ -1,21 +1,27 @@
 """
 Leaf energy balance subroutines and runctions, including:
 - compute_qin()
-- energy_balance_amphi()
-- sfc_vpd()
+- leaf_energy()
 
 Author: Peishi Jiang
-Date: 2023.07.07.
+Date: 2023.08.01.
 """
 
-# import jax
-# import jax.numpy as jnp
+import jax
+import jax.numpy as jnp
 
-from ...subjects import ParNir, Ir, Para, Qin
+from ...subjects import ParNir, Ir, Para, Qin, BoundLayerRes
+from ...subjects import Met, SunShadedCan, Prof
+from ...subjects.utils import desdt as fdesdt
+from ...subjects.utils import des2dt as fdes2dt
+from ...subjects.utils import es as fes
+from ...subjects.utils import llambda as fllambda
+
+from ...shared_utilities.utils import dot
 
 # from typing import Tuple
 
-# from ...shared_utilities.types import Float_0D, Float_ND
+from ...shared_utilities.types import Float_2D
 
 
 def compute_qin(quantum: ParNir, nir: ParNir, ir: Ir, prm: Para, qin: Qin) -> Qin:
@@ -40,46 +46,148 @@ def compute_qin(quantum: ParNir, nir: ParNir, ir: Ir, prm: Para, qin: Qin) -> Qi
     vis_sun_abs = quantum.sun_abs / 4.6
     vis_sh_abs = quantum.sh_abs / 4.6
 
+    ir_shade = ir.shade * prm.ep
+    # ir_shade = ir.shade
+
     # noticed in code ir.shade was multiplied by prm.ep twice, eg in
     # fIR_RadTranCanopy_MatrixV2 and here. removed prm.ep in the IR
     # subroutine
-    qin.sun_abs = nir.sun_abs + vis_sun_abs + ir.shade * prm.ep
-    qin.shade_abs = nir.sh_abs + vis_sh_abs + ir.shade * prm.ep
+    qin.sun_abs = nir.sun_abs + vis_sun_abs + ir_shade
+    qin.shade_abs = nir.sh_abs + vis_sh_abs + ir_shade
+    # jax.debug.print("par: {a}", a=vis_sun_abs[0,:])
+    # jax.debug.print("nir: {a}", a=nir.sun_abs[0,:])
+    # jax.debug.print("ir_shade: {a}", a=ir_shade[0,:])
+    # jax.debug.print("ir_up: {a}", a=ir.ir_up[0,:])
+    # jax.debug.print("ir_dn: {a}", a=ir.ir_dn[0,:])
 
     return qin
 
 
-# def sfc_vpd(
-#     tlk: Float_0D,
-#     leleafpt: Float_0D,
-#     latent: Float_0D,
-#     vapor: Float_0D,
-#     rhov_air_z: Float_0D,
-# ) -> Float_0D:
-#     """This function computes the relative humidity at the leaf surface
-#        for application int he Ball Berry Equation.
-#        Latent heat flux, LE, is passed through the function, mol m-2 s-1
-#        and it solves for the humidity at the leaf surface.
+def leaf_energy(
+    boundary_layer_res: BoundLayerRes,
+    qin: Float_2D,
+    met: Met,
+    prof: Prof,
+    radcan: SunShadedCan,
+    prm: Para,
+) -> SunShadedCan:
+    """_summary_
 
-#     Args:
-#         tlk (Float_0D): _description_
-#         leleafpt (Float_0D): _description_
-#         latent (Float_0D): _description_
-#         vapor (Float_0D): _description_
-#         rhov_air_z (Float_0D): _description_
+    Args:
+        boundary_layer_res (BoundLayerRes): _description_
+        Q_In (Qin): _description_
+        met (Met): _description_
+        prof (Prof): _description_
+        rad (SunShadedCan): _description_
+        prm (Para): _description_
 
-#     Returns:
-#         Float_0D: _description_
-#     """
-#     # Saturation vapor pressure at leaf temperature
-#     es_leaf = es(tlk)
+    Returns:
+        SunShadedCan: _description_
+    """
+    gb = 1.0 / boundary_layer_res.vapor
 
-#     # Water vapor density at leaf [kg m-3]
-#     rhov_sfc = (leleafpt / latent) * vapor + rhov_air_z
-#     # jax.debug.print("rhov_air_z: {x}", x=rhov_air_z)
+    def rwater_hypo():
+        return (gb * radcan.gs) / (gb + radcan.gs)
 
-#     e_sfc = 1000 * rhov_sfc * tlk / 2.165  # Pa
-#     vpd_sfc = es_leaf - e_sfc  # Pa
-#     rhum_leaf = 1.0 - vpd_sfc / es_leaf  # 0 to 1.0
+    def rwater_amphi():
+        # gs_1side = radcan.gs/2.
+        rs_1side = 2 / radcan.gs
+        rtop = boundary_layer_res.vapor + rs_1side
+        rbottom = rtop
+        return rtop * rbottom / (rtop + rbottom)
 
-#     return rhum_leaf
+    # gw = (gb * radcan.gs) / (gb + radcan.gs)
+    rwater = jax.lax.switch(prm.stomata, [rwater_hypo, rwater_amphi])
+    gw = 1.0 / rwater
+    # met.P_Pa=1000 * met.P_kPa   # air pressure, Pa
+
+    # Compute products of air temperature, K
+    tk2 = prof.Tair_K[:, : prm.jtot] * prof.Tair_K[:, : prm.jtot]
+    tk3 = tk2 * prof.Tair_K[:, : prm.jtot]
+    tk4 = tk3 * prof.Tair_K[:, : prm.jtot]
+
+    # Longwave emission at air temperature, W m-2
+    llout = prm.epsigma * tk4
+    d2est = fdes2dt(prof.Tair_K[:, : prm.jtot])
+    dest = fdesdt(prof.Tair_K[:, : prm.jtot])
+    est = fes(prof.Tair_K[:, : prm.jtot])
+    vpd_Pa = est - prof.eair_Pa[:, : prm.jtot]
+    llambda = fllambda(prof.Tair_K[:, : prm.jtot])
+    air_density = dot(met.P_kPa, prm.Mair / (prm.rugc * prof.Tair_K[:, : prm.jtot]))
+    vpd_Pa = jnp.clip(vpd_Pa, a_min=0.0, a_max=5000.0)
+    # jax.debug.print("vpd: {a}", a=jnp.isnan(vpd_Pa).sum())
+
+    # gas, heat and thermodynamic coeficients
+    lecoef = dot(1.0 / met.P_Pa, air_density * 0.622 * llambda * gw)
+    hcoef = air_density * prm.Cp / boundary_layer_res.heat
+    hcoef2 = 2 * hcoef
+    repeat = hcoef2 + prm.epsigma8 * tk3
+    llout2 = 2 * llout
+
+    # coefficients analytical solution
+    def calculate_coef_hypo():
+        Acoef1 = lecoef * d2est / (2.0 * repeat)
+        Acoef = Acoef1 / 2.0
+        Bcoef = -repeat - lecoef * dest + Acoef * (-2.0 * qin + 4.0 * llout)
+        Ccoef = Acoef * (qin * qin - 4 * qin * llout + 4 * llout * llout) + lecoef * (
+            vpd_Pa * repeat + dest * (qin - 2 * llout)
+        )
+        return Acoef, Bcoef, Ccoef
+
+    def calculate_coef_amphi():
+        Acoef = lecoef * d2est / (2 * repeat)
+        Bcoef = (
+            -repeat
+            - lecoef * dest
+            - (qin / repeat) * (2 * Acoef)
+            + 2 * Acoef * (2.0 * llout / repeat)
+        )
+        Ccoef = (
+            repeat * lecoef * vpd_Pa
+            + lecoef * dest * (qin - llout2)
+            + lecoef
+            * d2est
+            / 2
+            * (qin * qin - 4 * qin * llout + 4 * llout * llout)
+            / repeat
+        )
+        return Acoef, Bcoef, Ccoef
+
+    Acoef, Bcoef, Ccoef = jax.lax.switch(
+        prm.stomata, [calculate_coef_hypo, calculate_coef_amphi]
+    )
+    # jax.debug.print("Acoef: {a}", a=Acoef[:2,:])
+    # jax.debug.print("Bcoef: {a}", a=Bcoef[:2,:])
+    # jax.debug.print("Ccoef: {a}", a=Ccoef[:2,:])
+
+    #  solve for LE
+    #  a LE^2 + bLE + c = 0
+    # solve for both roots, but LE tends to be second root, le2
+    product = Bcoef * Bcoef - 4.0 * Acoef * Ccoef
+    # le1 = (-Bcoef + jnp.sqrt(Bcoef*Bcoef - 4.*Acoef*Ccoef)) / (2.*Acoef)
+    le2 = (-Bcoef - jnp.sqrt(product)) / (2.0 * Acoef)
+    # jax.debug.print("{a}", a=product.mean(axis=1))
+    LE = jnp.real(le2)
+    del_Tk = (qin - LE - llout2) / repeat
+    Tsfc_K = prof.Tair_K[:, : prm.nlayers] + del_Tk
+    # jax.debug.print("{a}", a=del_Tk.mean())
+
+    # H is sensible heat flux density from both sides of leaf
+    H = hcoef2 * jnp.real(del_Tk)
+
+    # Lout is longwave emitted energy from both sides of leaves
+    Lout = 2 * prm.epsigma * jnp.power(Tsfc_K, 4)
+    Rnet = qin - Lout  # net radiation as a function of longwave energy emitted
+    Tsfc = Tsfc_K
+    # esTsfc=fes(Tsfc_K)
+    closure = Rnet - H - LE  # test energy balance closure
+
+    radcan.LE = LE
+    radcan.H = H
+    radcan.Tsfc = Tsfc
+    radcan.Lout = Lout
+    radcan.Rnet = qin - Lout
+    # radcan.vpd_Pa = vpd_Pa
+    radcan.closure = closure
+
+    return radcan

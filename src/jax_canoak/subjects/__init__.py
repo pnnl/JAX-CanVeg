@@ -1,7 +1,7 @@
 from .parameters import Para
 from .meterology import Met
 from .states import ParNir, Ir, Rnet, SunShadedCan, BoundLayerRes, Qin, Veg, Soil
-from .states import SunAng, LeafAng, Prof
+from .states import SunAng, LeafAng, Prof, Ps
 from .states import initialize_profile_mx  # noqa: F401
 from .states import initialize_model_states  # noqa: F401
 
@@ -47,6 +47,9 @@ tree_util.register_pytree_node(
 )
 tree_util.register_pytree_node(
     Veg, Veg._tree_flatten, Veg._tree_unflatten  # pyright: ignore
+)
+tree_util.register_pytree_node(
+    Ps, Ps._tree_flatten, Ps._tree_unflatten  # pyright: ignore
 )
 tree_util.register_pytree_node(
     Soil, Soil._tree_flatten, Soil._tree_unflatten  # pyright: ignore

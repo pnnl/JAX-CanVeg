@@ -168,6 +168,11 @@ def leaf_angle(sunang: SunAng, prm: Para, num_leaf_class: int = 50) -> LeafAng:
 
     leafang = LeafAng(pdf, Gfunc, thetaSky, Gfunc_Sky, integ_exp_diff)
 
+    # jax.debug.print("exxpdir {a}", a=integ_exp_diff[:2,:])
+    # jax.debug.print("dff_Markov {a}", a=dff_Markov[:2,...])
+    # jax.debug.print("prm.dff {a}", a=prm.dff)
+    # jax.debug.print("prm.markov {a}", a=prm.markov)
+    # jax.debug.print("Gfunc_sky {a}", a=Gfunc_Sky)
     return leafang
 
 
@@ -256,6 +261,8 @@ def Gfunc_diff(thetaSky: Float_1D, thetaLeaf: Float_1D, pdf: Float_1D) -> Float_
         * (1.0 + 2.0 / PI * (jnp.tan(psi[~mask]) - psi[~mask]))
     )
     F = Adiff * pdf  # (ntime, nclass)
+    # jax.debug.print("Adiff {a}", a=Adiff)
+    # jax.debug.print("pdf {a}", a=pdf)
     Gfunc_Sky = jax.vmap(jnp.trapz, in_axes=[0, None])(F, thetaLeaf)
     return Gfunc_Sky
 
