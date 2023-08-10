@@ -4,6 +4,7 @@ Photosynthesis/stomatal conductance/respiratin, including:
 - temp_func()
 - specificity()
 - tboltz()
+- soil_respiration()
 
 Author: Peishi Jiang
 Date: 2023.08.01.
@@ -12,6 +13,7 @@ Date: 2023.08.01.
 import jax
 import jax.numpy as jnp
 
+from typing import Tuple
 from ...shared_utilities.types import Float_2D, Float_1D, Float_0D
 from ...subjects import Para, Ps
 from ...subjects.utils import es
@@ -602,3 +604,30 @@ def tboltz(
     numm = rate * hkin * jnp.exp(eakin * (dtlopt) / (prodt))
     denom = hkin - eakin * (1.0 - jnp.exp(hkin * (dtlopt) / (prodt)))
     return numm / denom
+
+
+def soil_respiration(
+    Ts: Float_1D, base_respiration: Float_0D = 8.0
+) -> Tuple[Float_1D, Float_1D]:
+    """Compute soil respiration
+
+    Args:
+        Ts (Float_0D): _description_
+        base_respiration (Float_0D, optional): _description_. Defaults to 8..
+    """
+    # After Hanson et al. 1993. Tree Physiol. 13, 1-15
+    # reference soil respiration at 20 C, with value of about 5 umol m-2 s-1
+    # from field studies
+
+    # assume Q10 of 1.4 based on Mahecha et al Science 2010, Ea = 25169
+    respiration_mole = base_respiration * jnp.exp(
+        (25169.0 / 8.314) * ((1.0 / 295.0) - 1.0 / (Ts + 273.16))
+    )
+
+    # soil wetness factor from the Hanson model, assuming constant and wet soils
+    respiration_mole *= 0.86
+
+    # convert soilresp to mg m-2 s-1 from umol m-2 s-1
+    respiration_mg = respiration_mole * 0.044
+
+    return respiration_mole, respiration_mg

@@ -10,7 +10,7 @@ Date: 2023.06.28.
 import jax
 import jax.numpy as jnp
 
-from ...subjects import Para, SunAng, LeafAng
+from ...subjects import Para, SunAng, LeafAng, Lai
 from ...shared_utilities.types import Float_0D, Float_1D
 from ...shared_utilities.types import Int_0D, Int_1D
 from ...shared_utilities.constants import PI
@@ -110,7 +110,9 @@ def angle(
 
 
 # @jax.jit
-def leaf_angle(sunang: SunAng, prm: Para, num_leaf_class: int = 50) -> LeafAng:
+def leaf_angle(
+    sunang: SunAng, prm: Para, lai: Lai, num_leaf_class: int = 50
+) -> LeafAng:
     # leafang = LeafAng(prm.ntime, prm.jtot, num_leaf_class)
     # estimate leaf angle for 50 classes between 0 and pi/2
     # at midpoint between each angle class.  This is a big improvement over
@@ -154,7 +156,9 @@ def leaf_angle(sunang: SunAng, prm: Para, num_leaf_class: int = 50) -> LeafAng:
 
     # compute probability of beam transfer with a markov function for clumped leaves
     dff_Markov = (
-        prm.dff * prm.markov
+        # prm.dff * prm.markov
+        lai.dff
+        * prm.markov
     )  # the new LAI profile data of Belane (ntime, nlayers)  # noqa: E501
     dff_Markov = jnp.expand_dims(dff_Markov, axis=-1)  # (ntime, nlayers, 1)
     dff_Markov = jnp.tile(dff_Markov, num_leaf_class)  # (ntime, nlayers, nclass)

@@ -11,7 +11,8 @@ Date: 2023.07.30.
 import jax
 import jax.numpy as jnp
 
-# import equinox
+import equinox
+
 # from functools import partial
 
 # from typing import Tuple
@@ -50,8 +51,23 @@ def uz(met: Met, prm: Para) -> Float_2D:
     return wnd
 
 
-# @partial(jax.jit, static_argnames=["mask_turbulence"])
 # @equinox.filter_jit
+# def boundary_resistance2(
+#     prof: Prof,
+#     # met: Met,
+#     TLF: Float_2D,
+#     prm: Para,
+#     mask_turbulence: HashableArrayWrapper,
+# ) -> BoundLayerRes:
+#     heat = jnp.zeros([prm.ntime, prm.jtot])
+#     vapor = jnp.zeros([prm.ntime, prm.jtot])
+#     co2 = jnp.zeros([prm.ntime, prm.jtot])
+#     boundary_layer_res = BoundLayerRes(heat, vapor, co2)
+#     return boundary_layer_res
+
+
+# @partial(jax.jit, static_argnames=["mask_turbulence"])
+@equinox.filter_jit
 def boundary_resistance(
     prof: Prof,
     met: Met,

@@ -16,6 +16,7 @@ import jax.numpy as jnp
 from typing import Tuple
 
 from ...subjects import SunAng, LeafAng, ParNir, Para, Ir, SunShadedCan, Soil, Met
+from ...subjects import Lai
 from ...shared_utilities.types import Float_0D, Float_1D
 from ...shared_utilities.types import HashableArrayWrapper
 from ...shared_utilities.utils import dot, add
@@ -162,6 +163,7 @@ def rad_tran_canopy(
     leafang: LeafAng,
     rad: ParNir,
     prm: Para,
+    lai: Lai,
     mask_night: HashableArrayWrapper,
     niter: int,
 ) -> ParNir:
@@ -202,7 +204,8 @@ def rad_tran_canopy(
     exp_direct = jnp.exp(
         dot(
             leafang.Gfunc / sunang.sin_beta,  # (ntime,)
-            -(prm.dff * prm.markov),  # (ntime, jtot)
+            # -(prm.dff * prm.markov),  # (ntime, jtot)
+            -(lai.dff * prm.markov),  # (ntime, jtot)
         )
     )  # (ntime, jtot)
     exp_direct = jnp.concatenate(

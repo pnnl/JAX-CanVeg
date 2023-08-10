@@ -4,10 +4,10 @@ import matplotlib.pyplot as plt
 # from ..subjects import ParNir, Ir, Para
 
 
-def plot_rad(rad, prm, waveband: str, ax=None):
+def plot_rad(rad, prm, lai, waveband: str, ax=None):
     if ax is None:
         fig, ax = plt.subplots(1, 1, figsize=(10, 8))
-    sumlai = jnp.mean(prm.sumlai, 0)
+    sumlai = jnp.mean(lai.sumlai, 0)
     ax.plot(jnp.mean(rad.up_flux[:, : prm.jtot], 0), sumlai, label="up")
     # ax=gca;
     # set(ax, 'ydir','reverse');
@@ -26,10 +26,10 @@ def plot_rad(rad, prm, waveband: str, ax=None):
 
 
 # def plot_ir(ir: Ir, prm: Para, ax=None):
-def plot_ir(ir, prm, ax=None):
+def plot_ir(ir, prm, lai, ax=None):
     if ax is None:
         fig, ax = plt.subplots(1, 1, figsize=(10, 8))
-    sumlai = jnp.mean(prm.sumlai, 0)
+    sumlai = jnp.mean(lai.sumlai, 0)
     ax.plot(jnp.nanmean(ir.ir_up[:, : prm.jtot], 0), sumlai, "+-", label="up")
     # ax=gca;
     # set(ax, 'ydir','reverse');
@@ -110,4 +110,33 @@ def plot_soiltemp(soil, prm, ax=None):
         fig, ax = plt.subplots(1, 1, figsize=(10, 8))
     im = ax.imshow(soil.T_soil[:, :-2].T, cmap="copper_r", aspect="auto")
     ax.set(xlabel="Time", ylabel="Soil layer")
+    plt.colorbar(im)
+
+
+def plot_prof(prof, axes=None):
+    if axes is None:
+        fig, axes = plt.subplots(3, 2, figsize=(10, 10))
+    ax = axes[0, 0]
+    im = ax.imshow(prof.Ps.T, aspect="auto")
+    ax.set(title="Ps")
+    plt.colorbar(im)
+    ax = axes[0, 1]
+    im = ax.imshow(prof.LE.T, aspect="auto")
+    ax.set(title="LE")
+    plt.colorbar(im)
+    ax = axes[1, 0]
+    im = ax.imshow(prof.H.T, aspect="auto")
+    ax.set(title="H")
+    plt.colorbar(im)
+    ax = axes[1, 1]
+    im = ax.imshow(prof.Rnet.T, aspect="auto")
+    ax.set(title="Rnet")
+    plt.colorbar(im)
+    ax = axes[2, 0]
+    im = ax.imshow(prof.Tsfc.T, aspect="auto")
+    ax.set(title="Tsfc")
+    plt.colorbar(im)
+    ax = axes[2, 1]
+    im = ax.imshow(prof.Tair_K.T, aspect="auto")
+    ax.set(title="Tair_K")
     plt.colorbar(im)

@@ -10,6 +10,7 @@ Classes for model states.
 - BoundLayerRes()
 - Qin()
 - Veg()
+- Lai()
 - Ps()
 - Soil()
 
@@ -28,9 +29,10 @@ from .utils import soil_sfc_res
 
 # from ..physics.energy_fluxes.soil_energy_balance_mx import soil_sfc_res
 from ..shared_utilities.types import Float_2D, Float_1D, Float_0D
+from ..shared_utilities.utils import dot, minus
 
 
-dot = jax.vmap(lambda x, y: x * y, in_axes=(None, 1), out_axes=1)
+# dot = jax.vmap(lambda x, y: x * y, in_axes=(None, 1), out_axes=1)
 
 
 class Prof(object):
@@ -42,10 +44,12 @@ class Prof(object):
         Tair_K: Float_2D,
         Told_K: Float_2D,
         eair_Pa: Float_2D,
+        eair_old_Pa: Float_2D,
         wind: Float_2D,
         Tsfc: Float_2D,
         H: Float_2D,
         LE: Float_2D,
+        Rnet: Float_2D,
         Ps: Float_2D,
     ) -> None:
         self.zht = zht
@@ -54,10 +58,12 @@ class Prof(object):
         self.Tair_K = Tair_K
         self.Told_K = Told_K
         self.eair_Pa = eair_Pa
+        self.eair_old_Pa = eair_old_Pa
         self.wind = wind
         self.Tsfc = Tsfc
         self.H = H
         self.LE = LE
+        self.Rnet = Rnet
         self.Ps = Ps
 
     def _tree_flatten(self):
@@ -68,10 +74,12 @@ class Prof(object):
             self.Tair_K,
             self.Told_K,
             self.eair_Pa,
+            self.eair_old_Pa,
             self.wind,
             self.Tsfc,
             self.H,
             self.LE,
+            self.Rnet,
             self.Ps,
         )
         aux_data = {}
@@ -233,7 +241,7 @@ class Ir(object):
         shade: Float_2D,
         shade_top: Float_2D,
         shade_bottom: Float_2D,
-        balance: Float_1D,
+        balance: Float_2D,
     ) -> None:
         self.ir_in = ir_in
         self.ir_dn = ir_dn
@@ -387,6 +395,31 @@ class Veg(object):
 
     def _tree_flatten(self):
         children = (self.Ps, self.Rd, self.H, self.LE, self.Tsfc)
+        aux_data = {}
+        return (children, aux_data)
+
+    @classmethod
+    def _tree_unflatten(cls, aux_data, children):
+        return cls(*children, **aux_data)
+
+
+class Lai(object):
+    def __init__(
+        self,
+        lai: Float_1D,
+        dff: Float_2D,
+        sumlai: Float_2D,
+        dff_clmp: Float_2D,
+        adens: Float_2D,
+    ) -> None:
+        self.lai = lai
+        self.dff = dff
+        self.sumlai = sumlai
+        self.dff_clmp = dff_clmp
+        self.adens = adens
+
+    def _tree_flatten(self):
+        children = (self.lai, self.dff, self.sumlai, self.dff_clmp, self.adens)
         aux_data = {}
         return (children, aux_data)
 
@@ -560,10 +593,10 @@ class Soil(object):
 
     def _tree_flatten(self):
         children = (
-            self.dt,
-            self.n_soil,
-            self.depth,
-            self.mtime,
+            # self.dt,
+            # self.n_soil,
+            # self.depth,
+            # self.mtime,
             self.water_content_15cm,
             self.water_content_litter,
             self.bulkdensity,
@@ -607,12 +640,24 @@ class Soil(object):
             self.resistance_h2o,
             self.T_soil_low_bound,
         )
-        aux_data = {}
+        aux_data = {
+            "dt": self.dt,
+            "n_soil": self.n_soil,
+            "depth": self.depth,
+            "mtime": self.mtime,
+        }
         return (children, aux_data)
 
     @classmethod
     def _tree_unflatten(cls, aux_data, children):
-        return cls(*children, **aux_data)
+        # return cls(*children, **aux_data)
+        return cls(
+            aux_data["dt"],
+            aux_data["n_soil"],
+            aux_data["depth"],
+            aux_data["mtime"],
+            *children
+        )
 
 
 def initialize_profile_mx(met: Met, para: Para):
@@ -624,16 +669,19 @@ def initialize_profile_mx(met: Met, para: Para):
     Tair_K = jnp.ones([ntime, nlayers])
     Told_K = jnp.ones([ntime, nlayers])
     eair_Pa = jnp.ones([ntime, nlayers])
+    eair_old_Pa = jnp.ones([ntime, nlayers])
     wind = jnp.zeros([ntime, jtot])
     Tsfc = jnp.zeros([ntime, jtot])
     H = jnp.zeros([ntime, jtot])
     LE = jnp.zeros([ntime, jtot])
+    Rnet = jnp.zeros([ntime, jtot])
     Ps = jnp.zeros([ntime, jtot])
 
     co2 = dot(met.CO2, co2)
     Tair_K = dot(met.T_air_K, Tair_K)
     Told_K = dot(met.T_air_K, Told_K)
     eair_Pa = dot(met.eair_Pa, eair_Pa)
+    eair_old_Pa = dot(met.eair_Pa, eair_old_Pa)
 
     prof = Prof(
         zht,
@@ -642,10 +690,12 @@ def initialize_profile_mx(met: Met, para: Para):
         Tair_K,
         Told_K,
         eair_Pa,
+        eair_old_Pa,
         wind,
         Tsfc,
         H,
         LE,
+        Rnet,
         Ps,
     )
     return prof
@@ -677,7 +727,10 @@ def initialize_model_states(met: Met, para: Para):
     # Shade
     shade = initialize_sunshade(para, met)
 
-    return soil, quantum, nir, ir, veg, qin, rnet, sun, shade
+    # Lai
+    lai = initialize_lai(para, met)
+
+    return soil, quantum, nir, ir, veg, qin, rnet, sun, shade, lai
 
 
 def initialize_parnir(para: Para, wavebnd: str) -> ParNir:
@@ -739,13 +792,16 @@ def initialize_ir(para: Para) -> Ir:
     ir_in = jnp.zeros(ntime)
     ir_dn = jnp.ones([ntime, jktot])
     ir_up = jnp.ones([ntime, jktot])
-    IR_source_sun = jnp.zeros([ntime, jktot])
-    IR_source_shade = jnp.zeros([ntime, jktot])
-    IR_source = jnp.zeros([ntime, jktot])
+    # IR_source_sun = jnp.zeros([ntime, jktot])
+    # IR_source_shade = jnp.zeros([ntime, jktot])
+    # IR_source = jnp.zeros([ntime, jktot])
+    IR_source_sun = jnp.zeros([ntime, jtot])
+    IR_source_shade = jnp.zeros([ntime, jtot])
+    IR_source = jnp.zeros([ntime, jtot])
     shade = jnp.zeros([ntime, jtot])
     shade_top = jnp.zeros([ntime, jktot])
     shade_bottom = jnp.zeros([ntime, jktot])
-    balance = jnp.zeros(ntime)
+    balance = jnp.zeros([ntime, jtot])
     ir = Ir(
         ir_in,
         ir_dn,
@@ -807,6 +863,22 @@ def initialize_sunshade(para: Para, met: Met) -> SunShadedCan:
     return SunShadedCan(
         Ps, Resp, gs, LE, H, Rnet, Lout, closure, Tsfc, Tsfc_new, Tsfc_old
     )
+
+
+def initialize_lai(para: Para, met: Met) -> Lai:
+    lai = met.lai
+    dff = jnp.ones([para.ntime, para.nlayers]) / para.nlayers  # (ntime,nlayers)
+    dff = dot(lai, dff)  # (ntime, nlayers)
+    # TODO: double check!
+    # self.sumlai = jax.lax.cumsum(self.dff, axis=1, reverse=True) #(ntime,nlayers)
+    sumlai = minus(lai, jax.lax.cumsum(dff, axis=1))  # (ntime, nlayers)
+    sumlai = jnp.clip(sumlai, a_min=0.0)  # (ntime, nlayers)
+    dff_clmp = dff / para.markov  # (ntime, nlayers)
+
+    # divide by height of the layers in the canopy
+    adens = dff[:, : para.nlayers] / para.dht_canopy  # (ntime, nlayers)
+
+    return Lai(lai, dff, sumlai, dff_clmp, adens)
 
 
 def initialize_soil(

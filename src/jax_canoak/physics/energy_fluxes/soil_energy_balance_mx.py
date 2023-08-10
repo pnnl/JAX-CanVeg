@@ -55,13 +55,6 @@ def soil_energy_balance(
     Returns:
         Soil: _description_
     """
-    # n_soil_1, n_soil_2 = soil.n_soil + 1., soil.n_soil + 2
-    # a_soil = jnp.zeros([prm.ntime, n_soil_2])
-    # b_soil = jnp.zeros([prm.ntime, n_soil_2])
-    # c_soil = jnp.zeros([prm.ntime, n_soil_2])
-    # d_soil = jnp.zeros([prm.ntime, n_soil_2])
-    # water_content_sfc=met.soilmoisture  # at the soil surface
-
     # radiation balance at soil in PAR band, W m-2
     soil_par = (
         quantum.beam_flux[:, 0] + quantum.dn_flux[:, 0] - quantum.up_flux[:, 0]
@@ -103,6 +96,9 @@ def soil_energy_balance(
 
     # kcsoil is the convective transfer coeff for the soil. (W m-2 K-1)
     kcsoil = (prm.Cp * met.air_density) / Rh_soil
+    # jax.debug.print("kcsoil: {a}", a=kcsoil[10])
+    # jax.debug.print("Rh_soil: {a}", a=Rh_soil[10])
+    # jax.debug.print("air_density: {a}", a=met.air_density[10])
     # soil surface conductance to water vapor transfer
     kv_soil = 1.0 / (Rv_soil + soil.resistance_h2o)
 
@@ -133,7 +129,7 @@ def soil_energy_balance(
     tmparray = jnp.concatenate(
         [
             jnp.zeros([1]),
-            soil.T_soil[1 : prm.ntime, 0] - soil.T_soil_old[0 : prm.ntime - 1, 0],
+            soil.T_soil[1 : prm.ntime, 0] - soil.T_soil_old[: prm.ntime - 1, 0],
         ]
     )
 
@@ -192,6 +188,12 @@ def soil_energy_balance(
 
     # dT = (Q -LE - Gsoil -  ep sigma Ta^4)/( rho Cp gh + 4 ep sigma Ta^3)
     del_Tk = (soil_Qin - soil.evap - soil.gsoil - soil.llout) / repeat
+    # jax.debug.print("soil Qin: {a}", a=soil_Qin[10])
+    # jax.debug.print("soil evap: {a}", a=soil.evap[10])
+    # jax.debug.print("soil gsoil: {a}", a=soil.gsoil[10])
+    # jax.debug.print("soil llout: {a}", a=soil.llout[10])
+    # jax.debug.print("repeat: {a}", a=repeat[10])
+    # jax.debug.print("soil T: {a}", a=soil.T_soil[10,:])
     soil.sfc_temperature = soil_T_air + del_Tk
     # soil.T_Kelvin=soil.sfc_temperature
     lout_sfc = prm.epsoil * prm.sigma * jnp.power(soil.sfc_temperature, 4)
@@ -203,7 +205,7 @@ def soil_energy_balance(
     return soil
 
 
-@equinox.filter_jit
+# @equinox.filter_jit
 def finite_difference_matrix(soil: Soil, prm: Para) -> Soil:
     """Convert Soil Physics with Basic from Campbell for soil heat flux
 
@@ -226,6 +228,7 @@ def finite_difference_matrix(soil: Soil, prm: Para) -> Soil:
         Soil: _description_
     """
     soil_mtime = prm.soil_mtime
+    # soil_mtime = 10
     # tolerance = 1.e-2
 
     # pre allocate space for coefficients
@@ -337,6 +340,15 @@ def finite_difference_matrix(soil: Soil, prm: Para) -> Soil:
         update_tsoil,
         soil.T_soil,
     )
+
     soil.T_soil = carry
+
+    # Update T_soil_old
+    soil.T_soil_old = soil.T_soil
+
+    # Update the soil heat flux
+    soil.gsoil = soil.k_conductivity_soil[:, 0] * (
+        soil.T_soil[:, 0] - soil.T_soil[:, 1]
+    )
 
     return soil

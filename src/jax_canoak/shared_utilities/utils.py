@@ -1,9 +1,10 @@
 import jax
-
-# import numpy as np
 import jax.numpy as jnp
 
-from jax_canoak.shared_utilities.types import Float_0D, Float_1D, Float_2D
+from ..shared_utilities.types import Float_0D, Float_1D, Float_2D
+
+# from jax_canoak.subjects import Para, Met
+# from jax_canoak.shared_utilities.types import Float_0D, Float_1D, Float_2D
 
 # Subroutine to compute scalar concentrations from source estimates
 # and the Lagrangian dispersion matrix

@@ -1,18 +1,19 @@
 """
-A class for meterology variables.
+A class for model general parameters.
 
 Author: Peishi Jiang
 Date: 2023.7.24.
 """
 
-import jax
+# import jax
 import jax.numpy as jnp
 
 from math import floor
 
 # from typing import Array
-from ..shared_utilities.types import Float_0D, Float_1D
-from ..shared_utilities.utils import dot, minus
+from ..shared_utilities.types import Float_0D
+
+# from ..shared_utilities.utils import dot, minus
 
 # dot = jax.vmap(lambda x, y: x * y, in_axes=(None, 1), out_axes=1)
 
@@ -34,7 +35,7 @@ class Para(object):
         n_hr_per_day: int = 48,
         n_time: int = 200,
         dt_soil: int = 10,
-        lai: Float_1D = jnp.ones(200),
+        # lai: Float_1D = jnp.ones(200),
         par_reflect: Float_0D = 0.05,
         par_trans: Float_0D = 0.05,
         par_soil_refl: Float_0D = 0.05,
@@ -232,43 +233,29 @@ class Para(object):
         # Dispersion Matrix Lagrangian model
         self.npart = npart  # number of random walk particles, use about 10,000 for testing, up to 1M for smoother profiles  # noqa: E501, E501
 
-        # Set LAI
-        # # Initialize the lai states
-        # self.dff = jnp.zeros([self.ntime, self.nlayers])
-        # self.sumlai = jnp.zeros([self.ntime, self.nlayers])
-        # self.dff_clmp = jnp.zeros([self.ntime, self.nlayers])
-        self.lai = lai
-        self.dff = (
-            jnp.ones([self.ntime, self.nlayers]) / self.nlayers
-        )  # (ntime,nlayers)
-        self.dff = dot(lai, self.dff)  # (ntime, nlayers)
-        # TODO: double check!
-        # self.sumlai = jax.lax.cumsum(self.dff, axis=1, reverse=True) #(ntime,nlayers)
-        self.sumlai = minus(lai, jax.lax.cumsum(self.dff, axis=1))  # (ntime, nlayers)
-        self.sumlai = jnp.clip(self.sumlai, a_min=0.0)  # (ntime, nlayers)
-        self.dff_clmp = self.dff / self.markov  # (ntime, nlayers)
+        # # Set LAI
+        # # # Initialize the lai states
+        # # self.dff = jnp.zeros([self.ntime, self.nlayers])
+        # # self.sumlai = jnp.zeros([self.ntime, self.nlayers])
+        # # self.dff_clmp = jnp.zeros([self.ntime, self.nlayers])
+        # self.lai = lai
+        # self.dff = (
+        #     jnp.ones([self.ntime, self.nlayers]) / self.nlayers
+        # )  # (ntime,nlayers)
+        # self.dff = dot(lai, self.dff)  # (ntime, nlayers)
+        # # TODO: double check!
+        # # self.sumlai = jax.lax.cumsum(self.dff, axis=1, reverse=True)#(ntime,nlayers)
+        # self.sumlai = minus(lai, jax.lax.cumsum(self.dff, axis=1))  # (ntime, nlayers)
+        # self.sumlai = jnp.clip(self.sumlai, a_min=0.0)  # (ntime, nlayers)
+        # self.dff_clmp = self.dff / self.markov  # (ntime, nlayers)
 
-    # def set_time(self, days: Float_1D) -> None:
-    #     self.ntime=len(days)   # number of 30 minute runs
-    #     self.ndays=self.ntime/self.hrs      # number of days
-
-    # def set_lai(self, lai: Float_1D) -> None:
-    #     assert self.ntime == lai.size
-    #     # self.dff = 1./ self.nlayers
-    #     self.dff = (
-    #         jnp.ones([self.ntime, self.nlayers]) / self.nlayers
-    #     )  # (ntime,nlayers)
-    #     self.dff = dot(lai, self.dff)  # (ntime, nlayers)
-    #     # TODO: double check!
-    #     # self.sumlai = jax.lax.cumsum(self.dff, axis=1,reverse=True) #(ntime,nlayers)
-    #     self.sumlai = minus(lai, jax.lax.cumsum(self.dff, axis=1))  # (ntime, nlayers)
-    #     self.sumlai = jnp.clip(self.sumlai, a_min=0.0)  # (ntime, nlayers)
-    #     self.dff_clmp = self.dff / self.markov  # (ntime, nlayers)
+        # # divide by height of the layers in the canopy
+        # self.adens=self.dff[:, :self.nlayers] / self.dht_canopy
 
     def _tree_flatten(self):
         children = (
             # States as inputs
-            self.lai,
+            # self.lai,
             self.par_reflect,
             self.par_trans,
             self.par_soil_refl,
@@ -288,11 +275,12 @@ class Para(object):
             self.dht_atmos,
             self.nlayers_atmos,  # noqa: E501
             self.ndays,
-            self.dff,
-            self.sumlai,
-            self.dff_clmp,
             self.zht,
             self.delz,
+            # self.dff,
+            # self.sumlai,
+            # self.dff_clmp,
+            # self.adens,
             # self.par_reflect,
             # self.par_trans,
             # self.par_absorbed,
@@ -395,7 +383,7 @@ class Para(object):
         #     "nir_trans": children[5],
         #     "nir_soil_refl": children[6],
         # }
-        aux_data["lai"] = children[0]
+        # aux_data["lai"] = children[0]
         aux_data["par_reflect"] = children[1]
         aux_data["par_trans"] = children[2]
         aux_data["par_soil_refl"] = children[3]
