@@ -385,16 +385,23 @@ class Qin(object):
 
 class Veg(object):
     def __init__(
-        self, Ps: Float_1D, Rd: Float_1D, H: Float_1D, LE: Float_1D, Tsfc: Float_1D
+        self,
+        Ps: Float_1D,
+        Rd: Float_1D,
+        H: Float_1D,
+        LE: Float_1D,
+        Rnet: Float_1D,
+        Tsfc: Float_1D,
     ) -> None:
         self.Ps = Ps
         self.Rd = Rd
         self.H = H
         self.LE = LE
+        self.Rnet = Rnet
         self.Tsfc = Tsfc
 
     def _tree_flatten(self):
-        children = (self.Ps, self.Rd, self.H, self.LE, self.Tsfc)
+        children = (self.Ps, self.Rd, self.H, self.LE, self.Rnet, self.Tsfc)
         aux_data = {}
         return (children, aux_data)
 
@@ -823,8 +830,9 @@ def initialize_veg(para: Para) -> Veg:
     Rd = jnp.zeros(ntime)
     H = jnp.zeros(ntime)
     LE = jnp.zeros(ntime)
+    Rnet = jnp.zeros(ntime)
     Tsfc = jnp.zeros(ntime)
-    return Veg(Ps, Rd, H, LE, Tsfc)
+    return Veg(Ps, Rd, H, LE, Rnet, Tsfc)
 
 
 def initialize_qin(para: Para) -> Qin:

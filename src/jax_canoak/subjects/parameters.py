@@ -92,7 +92,7 @@ class Para(object):
         self.ntime = n_time
         self.ndays = n_time / n_hr_per_day
         self.dt_soil = dt_soil  # soil time step
-        self.soil_mtime = floor(3600 * self.hrs / self.dt_soil)
+        self.soil_mtime = floor(3600 * 24 / self.hrs / self.dt_soil)
 
         # calculate height of layers in the canopy and atmosphere
         zht1 = jnp.arange(1, self.jktot) * self.dht_canopy

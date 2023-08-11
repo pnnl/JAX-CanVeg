@@ -31,8 +31,11 @@ from jax_canoak.physics.carbon_fluxes import angle_mx, leaf_angle_mx
 
 
 import matplotlib.pyplot as plt
-from jax_canoak.shared_utilities import plot_ir, plot_rad, plot_canopy1
-from jax_canoak.shared_utilities import plot_soil, plot_soiltemp, plot_prof
+from jax_canoak.shared_utilities.plot import plot_dij, plot_prof2, plot_daily
+
+# from jax_canoak.shared_utilities import plot_ir, plot_rad, plot_canopy1, plot_dij
+# from jax_canoak.shared_utilities import plot_soil, plot_soiltemp, plot_prof
+# from jax_canoak.shared_utilities import plot_totalenergy
 
 jax.config.update("jax_enable_x64", True)
 
@@ -43,7 +46,7 @@ n_time = forcing_data.shape[0]
 # lai = 3.6
 lai = 5.0
 forcing_data = jnp.concatenate([forcing_data, jnp.ones([n_time, 1]) * lai], axis=1)
-plot = False
+plot = True
 
 # ---------------------------------------------------------------------------- #
 #                     Model parameter/properties settings                      #
@@ -91,6 +94,8 @@ para = Para(
 #                     Generate or read the Dispersion matrix                   #
 # ---------------------------------------------------------------------------- #
 dij = disp_canveg(para)
+# dij = np.loadtxt('Dij_Alfalfa.csv', delimiter=',')
+# dij = jnp.array(dij)
 
 
 # ---------------------------------------------------------------------------- #
@@ -203,7 +208,9 @@ def iteration(c, i):
     )
 
     # Compute soil fluxes
-    soil = soil_energy_balance_mx(quantum, nir, ir, met, prof, para, soil)
+    soil = soil_energy_balance_mx(
+        quantum, nir, ir, met, prof, para, soil
+    )  # type: ignore
 
     # Compute profiles of C's, zero layer jtot+1 as that is not a dF/dz or
     # source/sink level
@@ -301,20 +308,98 @@ finals, _ = jax.lax.scan(iteration, initials, xs=None, length=15)
 
 met, prof, ir, qin, sun, shade, soil, veg = finals
 
+# Compute canopy integrated fluxes
+veg.Ps = jnp.sum(
+    (
+        quantum.prob_beam[:, : para.nlayers] * sun.Ps
+        + quantum.prob_shade[:, : para.nlayers] * shade.Ps
+    )
+    * lai.dff,
+    axis=1,
+)
+veg.Rd = jnp.sum(
+    (
+        quantum.prob_beam[:, : para.nlayers] * sun.Resp
+        + quantum.prob_shade[:, : para.nlayers] * shade.Resp
+    )
+    * lai.dff,
+    axis=1,
+)
+veg.LE = jnp.sum(
+    (
+        quantum.prob_beam[:, : para.nlayers] * sun.LE
+        + quantum.prob_shade[:, : para.nlayers] * shade.LE
+    )
+    * lai.dff,
+    axis=1,
+)
+veg.H = jnp.sum(
+    (
+        quantum.prob_beam[:, : para.nlayers] * sun.H
+        + quantum.prob_shade[:, : para.nlayers] * shade.H
+    )
+    * lai.dff,
+    axis=1,
+)
+veg.gs = jnp.sum(
+    (
+        quantum.prob_beam[:, : para.nlayers] * sun.gs
+        + quantum.prob_shade[:, : para.nlayers] * shade.gs
+    )
+    * lai.dff,
+    axis=1,
+)
+veg.Rnet = jnp.sum(
+    (
+        quantum.prob_beam[:, : para.nlayers] * sun.Rnet
+        + quantum.prob_shade[:, : para.nlayers] * shade.Rnet
+    )
+    * lai.dff,
+    axis=1,
+)
+veg.Tsfc = jnp.sum(
+    (
+        quantum.prob_beam[:, : para.nlayers] * sun.Tsfc
+        + quantum.prob_shade[:, : para.nlayers] * shade.Tsfc
+    )
+    * lai.dff,
+    axis=1,
+)
+veg.Tsfc = veg.Tsfc / lai.lai
+# Veg.vpd=sum(quantum.prob_beam(:,1:prm.nlayers) .* Sun.vpd_Pa(:,1:prm.nlayers) +...
+#     quantum.prob_shade(:,1:prm.nlayers) .*Shade.vpd_Pa(:,1:prm.nlayers),2) * prm.dff;
+# Veg.vpd=Veg.vpd/prm.LAI;
+
+# Net radiation budget at top of the canopy
+can_rnet = (
+    quantum.beam_flux[:, para.jtot] / 4.6
+    + quantum.dn_flux[:, para.jtot] / 4.6
+    - quantum.up_flux[:, para.jtot] / 4.6
+    + nir.beam_flux[:, para.jtot]
+    + nir.dn_flux[:, para.jtot]
+    - nir.up_flux[:, para.jtot]
+    + ir.ir_dn[:, para.jtot]
+    + -ir.ir_up[:, para.jtot]
+)
+
 # ---------------------------------------------------------------------------- #
 #                     Plot                                              #
 # ---------------------------------------------------------------------------- #
 if plot:
-    plot_rad(quantum, para, lai, "par")
-    plot_rad(nir, para, lai, "nir")
-    plot_ir(ir, para, lai)
-    fig, axes = plt.subplots(2, 1, figsize=(10, 10))
-    plot_canopy1(sun, qin, para, "sun", axes[0])
-    plot_canopy1(shade, qin, para, "shade", axes[1])
+    # plot_rad(quantum, para, lai, "par")
+    # plot_rad(nir, para, lai, "nir")
+    # plot_ir(ir, para, lai)
+    # fig, axes = plt.subplots(2, 1, figsize=(10, 10))
+    # plot_canopy1(sun, qin, para, "sun", axes[0])
+    # plot_canopy1(shade, qin, para, "shade", axes[1])
     # plot_canopy2(sun, para, "sun")
     # plot_canopy2(shade, para, "shade")
     # plot_leafang(leaf_ang, para)
-    plot_soil(soil, para)
-    plot_soiltemp(soil, para)
-    plot_prof(prof)
+    plot_dij(dij, para)
+    # plot_soil(soil, para)
+    # plot_soiltemp(soil, para)
+    # plot_totalenergy(soil, veg, can_rnet)
+    # plot_prof1(prof)
+    plot_prof2(prof, para)
+    plot_daily(met, soil, veg, para)
     plt.show()

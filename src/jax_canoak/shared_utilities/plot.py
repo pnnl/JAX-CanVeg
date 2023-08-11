@@ -1,6 +1,8 @@
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 
+import pandas as pd
+
 # from ..subjects import ParNir, Ir, Para
 
 
@@ -113,7 +115,28 @@ def plot_soiltemp(soil, prm, ax=None):
     plt.colorbar(im)
 
 
-def plot_prof(prof, axes=None):
+def plot_totalenergy(soil, veg, cantop_rnet, axes=None):
+    if axes is None:
+        fig, axes = plt.subplots(1, 2, figsize=(15, 8))
+    ax = axes[0]
+    ax.scatter(
+        soil.rnet + veg.Rnet, soil.evap + veg.LE + soil.heat + veg.H + soil.gsoil
+    )
+    ax.set(ylabel="Heat+Evap+Gsoil", xlabel="Rnet", title="Total energy balance")
+    ax = axes[1]
+    ax.scatter(soil.rnet + veg.Rnet, cantop_rnet)
+    ax.set(ylabel="Rnet calculated, top of canopy", xlabel="can rnet")
+
+
+def plot_dij(dij, prm, ax=None):
+    if ax is None:
+        fig, ax = plt.subplots(1, 1, figsize=(10, 8))
+    for i in range(dij.shape[1]):
+        ax.plot(dij[: prm.zht.size, i], prm.zht)
+    ax.set(ylabel="Height [m]", xlabel="Dij [s/m]")
+
+
+def plot_prof1(prof, axes=None):
     if axes is None:
         fig, axes = plt.subplots(3, 2, figsize=(10, 10))
     ax = axes[0, 0]
@@ -140,3 +163,48 @@ def plot_prof(prof, axes=None):
     im = ax.imshow(prof.Tair_K.T, aspect="auto")
     ax.set(title="Tair_K")
     plt.colorbar(im)
+
+
+def plot_prof2(prof, prm, axes=None):
+    if axes is None:
+        fig, axes = plt.subplots(1, 2, figsize=(15, 8))
+    # Tair ~ ht
+    ax = axes[0]
+    ax.plot(jnp.nanmean(prof.Tair_K, 0), prm.zht[: prm.nlayers_atmos])
+    ax.set(xlabel="Tair [degK]", ylabel="Ht [m]")
+    # eair ~ ht
+    ax = axes[1]
+    ax.plot(jnp.nanmean(prof.eair_Pa, 0), prm.zht[: prm.nlayers_atmos])
+    ax.set(xlabel="eair [Pa]", ylabel="Ht [m]")
+
+
+def plot_daily(met, soil, veg, prm, axes=None):
+    if axes is None:
+        fig, axes = plt.subplots(1, 2, figsize=(15, 8))
+    # Tsfc, Tair
+    ax = axes[0]
+    tsfc_mean = compute_daily_average(soil.sfc_temperature, met.hhour)
+    tair_mean = compute_daily_average(met.T_air_K, met.hhour)
+    ax.plot(tsfc_mean.index, tsfc_mean.values, label="tsfc")
+    ax.plot(tair_mean.index, tair_mean.values, label="tair")
+    ax.set(xlabel="Hr", ylabel="Temperature [degK]")
+    ax.legend()
+
+    # Energy fluxes
+    Rnet_mean = compute_daily_average(soil.rnet + veg.Rnet, met.hhour)
+    LE_mean = compute_daily_average(soil.evap + veg.LE, met.hhour)
+    H_mean = compute_daily_average(soil.heat + veg.H, met.hhour)
+    G_mean = compute_daily_average(soil.gsoil, met.hhour)
+    ax = axes[1]
+    ax.plot(Rnet_mean.index, Rnet_mean.values, label="Rnet")
+    ax.plot(LE_mean.index, LE_mean.values, label="LE")
+    ax.plot(H_mean.index, H_mean.values, label="H")
+    ax.plot(G_mean.index, G_mean.values, label="G")
+    ax.set(xlabel="Hr", ylabel="Energy fluxes [W m-2]")
+    ax.legend()
+
+
+def compute_daily_average(values, hhours):
+    d = pd.DataFrame([hhours, values]).T.astype(float)
+    d = d.groupby(0).mean()
+    return d

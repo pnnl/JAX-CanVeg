@@ -130,6 +130,7 @@ def soil_energy_balance(
         [
             jnp.zeros([1]),
             soil.T_soil[1 : prm.ntime, 0] - soil.T_soil_old[: prm.ntime - 1, 0],
+            # soil.T_soil[1 : prm.ntime, 0] - soil.T_soil[: prm.ntime - 1, 0],
         ]
     )
 
@@ -199,7 +200,8 @@ def soil_energy_balance(
     lout_sfc = prm.epsoil * prm.sigma * jnp.power(soil.sfc_temperature, 4)
 
     # Sensible heat flux density over soil, W m-2
-    soil.heat = del_Tk * kcsoil
+    # soil.heat = del_Tk * kcsoil
+    soil.heat = soil_Qin - lout_sfc - soil.evap - soil.gsoil
     soil.rnet = soil_Qin - lout_sfc
 
     return soil
@@ -228,7 +230,7 @@ def finite_difference_matrix(soil: Soil, prm: Para) -> Soil:
         Soil: _description_
     """
     soil_mtime = prm.soil_mtime
-    # soil_mtime = 10
+    # soil_mtime = 180
     # tolerance = 1.e-2
 
     # pre allocate space for coefficients

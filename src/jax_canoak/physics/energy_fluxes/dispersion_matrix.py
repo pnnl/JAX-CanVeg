@@ -31,11 +31,13 @@ def disp_canveg(
     hh = prm.veg_ht  #  canopy height (m)
     dd = prm.dht
 
-    dij = np.zeros([prm.jktot3, prm.jktot])
+    # dij = np.zeros([prm.jktot3, prm.jktot])
+    dij = np.zeros([prm.nlayers_atmos + 1, prm.jktot])
     # Generate the Dij file
     disp_mx(
         int(prm.jktot),
-        int(prm.jktot3),
+        # int(prm.jktot3),
+        int(prm.nlayers_atmos + 1),
         float(timemax),
         float(prm.npart),
         float(ustar),
