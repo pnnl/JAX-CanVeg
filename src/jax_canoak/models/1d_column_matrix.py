@@ -87,6 +87,7 @@ para = Para(
     meas_ht=meas_ht,
     n_hr_per_day=n_hr_per_day,
     n_time=n_time,
+    npart=1000000,
 )
 
 

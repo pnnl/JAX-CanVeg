@@ -266,7 +266,7 @@ void DISPERSION_MATRIX(
 	double timescale;
 	double xmod,zmod;
 
-    double nlev[sze];
+    long nlev[sze];
     double wwmean[sze3];
     double consum[sze3];
     double conc[sze3];
@@ -323,7 +323,9 @@ void DISPERSION_MATRIX(
 		// turb.sigma_h= 1.5;        // z/L =1.0 
 
 
-		turb.sigma_zo = 0.1496;         // sigmaw over u* at z equal zero for exponential profile
+		// turb.sigma_zo = 0.1496;         // sigmaw over u* at z equal zero for exponential profile
+        // Modify the following code based on matlab version
+		turb.sigma_zo = 0.25;         // sigmaw over u* at z equal zero for exponential profile, Brunet 2020 BLM review
 
 		turb.sigma_sur= turb.sigma_zo * turb.sigma_h * ustar;  // sigma w at zero for linear profile
 
@@ -354,6 +356,7 @@ turb.laglen = turb.sigma_h * ustar * TL(HH, HH, DD, ustar);          // Lagrangi
 
 parcel.sumn = 0;
 
+printf("Altogher: %f particles \n", npart) ;
 for (I = 1; I <= domain.nlevel; I++)
 {
         /*
@@ -367,6 +370,8 @@ for (I = 1; I <= domain.nlevel; I++)
         // parcel.sumn += domain.nlev[I];
         nlev[I] =(int) npart / domain.nlevel;
         parcel.sumn += nlev[I];
+        // printf(" ilevel %6i Particle  %7li  height %f time steps %i \n",ilevel, IT, parcel.z, I) ;
+        // printf("%li particles at layer %i \n", nlev[I], I) ;
 }
 
 /*
@@ -446,10 +451,10 @@ for (I = 1; I <= domain.nlevel; I++)
 	parcel.z = (double)ilevel * domain.delta_z;   // initial height at the level
 
 
-if (zmod==0)
-{
-printf(" ilevel %6i Particle  %7li  height %f time steps %i \n",ilevel, IT, parcel.z, I) ;
-}
+// if (zmod==0)
+// {
+// printf(" ilevel %6i Particle  %7li  height %f time steps %i \n",ilevel, IT, parcel.z, I) ;
+// }
 
 // the initial vertical velocity
 
