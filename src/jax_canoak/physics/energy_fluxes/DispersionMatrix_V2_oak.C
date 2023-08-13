@@ -1,5 +1,3 @@
-#include <pybind11/pybind11.h>
-#include <pybind11/numpy.h>
 #include <stdio.h>
 #include <math.h>
 #include <float.h>
@@ -10,6 +8,8 @@
 #define PI  3.14159        // Pi
 // #define sze 41             // number of canopy layers plus one
 // #define sze3 121           // number of atmospheric layers plus one
+#define sze 51             // number of canopy layers plus one
+#define sze3 101           // number of atmospheric layers plus one
 
 // constants for the Random Number Generator
 #define IA 16807
@@ -19,7 +19,6 @@
 #define IR 2836
 #define MASK 123459876
 
-namespace py = pybind11;
 
 /* =================================================================
 
@@ -159,10 +158,10 @@ namespace py = pybind11;
 // Declare subroutines
 
 
-	double SIGMA (double Z, double HH, double ustar);  // vertical profile of standard deviation of w
-	double DW2DZ (double Z, double HH, double ustar);  // vertical profile of variance of w
-	double TL (double Z, double HH, double DD, double ustar);     // vertical profile of Lagrangian Time scale
-	void FILEOUT (double HH, double DD, double ustar);          // output information and data
+	double SIGMA (double Z);  // vertical profile of standard deviation of w
+	double DW2DZ (double Z);  // vertical profile of variance of w
+	double TL (double Z);     // vertical profile of Lagrangian Time scale
+	void FILEOUT ();          // output information and data
 	double RANDGEN ();        // random number generator
 	double MIN(double x, double y);  // minimum of two numbers
 	int Time_sec();					 // time routine
@@ -179,14 +178,14 @@ namespace py = pybind11;
 			// double random;  // random number
 			double random;  // random number
 			long seed;
-		} random_int;
 		// } random;
+		} random_ins;
 
 		struct domain_description
         {
 			long nlevel;			// number of canopy layers
 			long upper_boundary;    // upper boundary, number of canopy heights
-			// long nlev[sze];
+			long nlev[sze];
 			
 			double delta_z;        // distance between layers, m
 		
@@ -208,14 +207,14 @@ namespace py = pybind11;
 			double sum_var_rand;  // sum variance of random number
 			double sum_random;    // sum random numbers
 	
-			// double wwmean[sze3];
-    		// double consum[sze3];
-			// double conc[sze3];
-			// double DIJ[sze3][sze];
+			double wwmean[sze3];
+    		double consum[sze3];
+			double conc[sze3];
+			double DIJ[sze3][sze];
 	
 
 			long move;     // number of movement steps
-			// long partadd[sze3];
+			long partadd[sze3+1];
 			long sumn;
 		
 
@@ -236,13 +235,21 @@ namespace py = pybind11;
 
 
 long IZF; 
+
+
 time_t ltime, start, finish;
 
 
 // Declare Constants
+
 // const double npart = 5000.;             // Number of parcels 1000000
-// const double timemax = 5000.0;           // time of parcel run
-// const double ustar = 1.00;                //  friction velocity (m s-1) old u* was 0.405
+const double npart = 10000.;             // Number of parcels 1000000
+const double timemax = 5000.0;           // time of parcel run
+
+
+const double ustar = 1.00;                //  friction velocity (m s-1) old u* was 0.405
+const double HH = 0.8;                    //  canopy height (m) 
+const double DD = 0.48;					// zero plane displacement	
 // const double HH = 24.;                    //  canopy height (m) 
 // const double DD = 18.;					// zero plane displacement	
 
@@ -250,13 +257,11 @@ time_t ltime, start, finish;
 
 
         FILE *fptr1;
-// main()
-void DISPERSION_MATRIX(
-    int sze, int sze3, double npart, double timemax, double ustar, double HH, double DD, const char dij_fname[],
-    py::array_t<double, py::array::c_style> DIJ_np
-)
+int main()
 {
 
+
+	
 	// declare variables
 
 	int I, part, ihigh, ilevel, nn, ihigh1;
@@ -266,41 +271,32 @@ void DISPERSION_MATRIX(
 	double timescale;
 	double xmod,zmod;
 
-    long nlev[sze];
-    double wwmean[sze3];
-    double consum[sze3];
-    double conc[sze3];
-    // double DIJ[sze3][sze];
-    long partadd[sze3+1];
 
-    auto DIJ = DIJ_np.mutable_unchecked<2>();
 
-    // Initialize some values
-    for (I = 0; I <= sze3 ; I++){
-        partadd[I] = 0;
-        wwmean[I] = 0.;
-        consum[I] = 0.;
-        conc[I] = 0.;
-    }
-    for (I = 0; I <= sze ; I++){
-        nlev[I] = 0;
-    }
+
 
         //   Thomson dispersion matrix  
-        fptr1=fopen(dij_fname,"w");
+
 	    //    fptr1=fopen("c:\\wbw_mod\\DIJ5000O.oak","w");  //neutral
-	    //    fptr1=fopen("./DIJ2.txt","w");  //neutral
+	       fptr1=fopen("DIJ-raw.txt","w");  //neutral
+
             //  fptr1=fopen("c:\\wbw_mod\\DIJ5000O._C","w");  //neutral
+
 			// fptr1=fopen("c:\\wbw_mod\\DIJ5000O._1","w");  //neutral u*=0.1 m s-1
+
 			// fptr1=fopen("c:\\wbw_mod\\DIJ5000O.250","w"); // z/L = -0.25
+
 			// fptr1=fopen("c:\\wbw_mod\\DIJ5000O.500","w"); // z/L = -0.50
+
 			// fptr1=fopen("c:\\wbw_mod\\DIJ5000O.100","w"); // z/L = -1.00
+
 		    // fptr1=fopen("c:\\wbw_mod\\DIJ5000O.200","w"); // z/L = -2.00
+
 	        // fptr1=fopen("c:\\wbw_mod\\DIJ5000O.300","w"); // z/L = -3.00
         
-		random_int.low=-5.;
-		random_int.high=5.;
-		random_int.delta=random_int.high-random_int.low;
+		random_ins.low=-5.;
+		random_ins.high=5.;
+		random_ins.delta=random_ins.high-random_ins.low;
 
 		// domain.nlevel=40; 
 		domain.nlevel=sze-1; 
@@ -313,8 +309,9 @@ void DISPERSION_MATRIX(
 
 		// domain.upper_boundary = 3;           // upper bound,three times canopy height, 72 m 
 		// ihigh = domain.upper_boundary * domain.nlevel;    // number of vertical layers 
-        ihigh = sze3-1;
-
+		// domain.upper_boundary = 3;           // upper bound,three times canopy height, 72 m 
+		// ihigh = domain.upper_boundary * domain.nlevel;    // number of vertical layers 
+		ihigh = sze3-1;    // number of vertical layers 
 
 		turb.sigma_h = 1.25;       //  sigma w > HH  */
 
@@ -335,8 +332,7 @@ void DISPERSION_MATRIX(
 
 
 		// turb.sigma_zo = 0.1496;         // sigmaw over u* at z equal zero for exponential profile
-        // Modify the following code based on matlab version
-		turb.sigma_zo = 0.25;         // sigmaw over u* at z equal zero for exponential profile, Brunet 2020 BLM review
+		turb.sigma_zo = 0.25;         // sigmaw over u* at z equal zero for exponential profile
 
 		turb.sigma_sur= turb.sigma_zo * turb.sigma_h * ustar;  // sigma w at zero for linear profile
 
@@ -345,7 +341,6 @@ void DISPERSION_MATRIX(
 
         printf("%f, %f, %f, %f, \n", turb.sigma_sur, turb.del_sigma, HH, DD);
 
-
 	
 
 
@@ -353,7 +348,7 @@ void DISPERSION_MATRIX(
 // seed random number with time 
 
    srand(Time_sec());
-   random_int.seed=(long)rand();
+   random_ins.seed=(long)rand();
 
 /*
 ***************************************************************
@@ -363,14 +358,15 @@ void DISPERSION_MATRIX(
 
 
 
-parcel.delta_t = .1 * TL(HH, HH, DD, ustar);                         // time step */
-turb.laglen = turb.sigma_h * ustar * TL(HH, HH, DD, ustar);          // Lagrangian length scale */
+parcel.delta_t = .1 * TL(HH);                         // time step */
+turb.laglen = turb.sigma_h * ustar * TL(HH);          // Lagrangian length scale */
+
+// printf("TL z: %f %f %f \n", ustar, turb.sigma_h, domain.delta_z) ;
+printf("parcel z: %f %f %f \n", parcel.z, parcel.delta_t, domain.delta_z) ;
 
 
 parcel.sumn = 0;
 
-printf("Altogher: %f particles \n", npart) ;
-printf("others - a: %ld, %i  \n", domain.nlevel, ihigh) ;
 for (I = 1; I <= domain.nlevel; I++)
 {
         /*
@@ -380,13 +376,12 @@ for (I = 1; I <= domain.nlevel; I++)
         *****************************************************
         */
 
-        // domain.nlev[I] =(int) npart / domain.nlevel;
-        // parcel.sumn += domain.nlev[I];
-        nlev[I] =(int) npart / domain.nlevel;
-        parcel.sumn += nlev[I];
-        // printf(" ilevel %6i Particle  %7li  height %f time steps %i \n",ilevel, IT, parcel.z, I) ;
-        // printf("%li particles at layer %i \n", nlev[I], I) ;
+        domain.nlev[I] =(int) npart / domain.nlevel;
+        parcel.sumn += domain.nlev[I];
 }
+printf("Altogher: %f particles \n", npart) ;
+printf("others - a: %ld, %i, %i \n", domain.nlevel, ihigh, domain.nlev[1]) ;
+printf("parcel sumn -- check a-0: %li %li \n", parcel.sumn, parcel.partadd[sze3]) ;
 
 /*
 '       nn is the number of time increments that the particle travels
@@ -396,8 +391,7 @@ for (I = 1; I <= domain.nlevel; I++)
 */
 
         nn = (int)(timemax / parcel.delta_t);
-// printf("parcel sumn -- check a-0: %li %li %f \n", parcel.sumn, partadd[sze3], parcel.sum_random) ;
-// printf("parcel z: %i \n", parcel.z) ;
+// printf("parcel sumn -- check a-0: %li %li %f \n", parcel.sumn, parcel.partadd[sze3], parcel.sum_random) ;
 
 /*
 '    ****************************************************************
@@ -423,7 +417,7 @@ for (I = 1; I <= domain.nlevel; I++)
 
       
 
-                timescale = TL(HH, HH, DD, ustar);
+                timescale = TL(HH);
 
 /*
         Release of particles is carried out separately for each layer,
@@ -444,19 +438,26 @@ for (I = 1; I <= domain.nlevel; I++)
 */
 
 
+        // if (ilevel==1)
+        // {
+        //     printf("parcel sumn -- check a-0: %li %li %i \n", parcel.sumn, parcel.partadd[sze3], part) ;
+        // };
+
     for(I = 1; I <=ihigh; I++)
-    consum[I] = 0;
-    // parcel.consum[I] = 0;
+    parcel.consum[I] = 0;
 
 
+    // if (ilevel==1) 
+    // {
+    //     printf("parcel sumn -- check a-1: %li %li %li %i \n", parcel.sumn, parcel.partadd[200], parcel.move, part) ;
+    // };
 
 /*
 ****************************************************************
       at each level NLEV(LEVEL) particles are released
 ****************************************************************
 */
-        // for (part = 1; part <= domain.nlev[ilevel]; part++)
-        for (part = 1; part <= nlev[ilevel]; part++)
+        for (part = 1; part <= domain.nlev[ilevel]; part++)
         {
 
         IT++;
@@ -469,25 +470,33 @@ for (I = 1; I <= domain.nlevel; I++)
     // if (ilevel==1) {
     //     printf("%f, %f \n", parcel.z, domain.delta_z);
     // }
+        // if ((ilevel==2) and (part==1)) 
+        // {
+        //     printf("parcel z: %f %f %f \n", parcel.z, parcel.delta_t, domain.delta_z) ;
+        // }
 
 
 // if (zmod==0)
 // {
-// printf(" ilevel %6i Particle  %7li  height %f time steps %i \n",ilevel, IT, parcel.z, I) ;
+// printf(" ilevel %6i Particle  %7i  height %f time steps %i \n",ilevel, IT, parcel.z, I) ;
 // }
 
 // the initial vertical velocity
 
        
 
-        random_int.random=RANDGEN();
-        // random_int.random=1.;
+        random_ins.random=RANDGEN();
+        // random_ins.random=1.;
 
 
 //       vertical velocity, WW
 
 
-        parcel.w = SIGMA(parcel.z, HH, ustar) * random_int.random;
+        parcel.w = SIGMA(parcel.z) * random_ins.random;
+        // parcel.w = SIGMA(parcel.z+domain.delta_z) * random_ins.random;
+        // if (ilevel==1) {
+        //     printf("parcel.w: %f \n", parcel.w);
+        // }
 
         /*
         number of particle movements
@@ -497,11 +506,15 @@ for (I = 1; I <= domain.nlevel; I++)
 
         /* compute mean and variance of w and random number */
 
-        parcel.sum_random += random_int.random;
+        parcel.sum_random += random_ins.random;
         parcel.sum_w += parcel.w;
-        // parcel.wwmean[ilevel] += parcel.w;
-        wwmean[ilevel] += parcel.w;
-        parcel.sum_var_rand += random_int.random*random_int.random;
+        parcel.wwmean[ilevel] += parcel.w;
+        parcel.sum_var_rand += random_ins.random*random_ins.random;
+
+        if ((ilevel==2) and (part==1)) 
+        {
+            printf("parcel sum_w 0: %i %f %f \n", parcel.move, parcel.sum_w, parcel.w) ;
+        };
 
 
 
@@ -516,14 +529,19 @@ for (I = 1; I <= domain.nlevel; I++)
 
         // I=0;
         I=1;
-
-
         do
          {
 
+
        // Compute the vertical position and reflect z if it is zero
 	   // Need to reflect also at top in future, but need deeper domain
+        if ((ilevel==1) and (part==1) and (I==1)) 
+        {
+            // printf("parcel w: %f %f %f %f %f %f \n", parcel.w, parcel.std_w, parcel.var_w, parcel.term1, parcel.term2, parcel.term3) ;
+            printf("parcel w: %f %f %f \n", timescale, parcel.z, parcel.delta_t) ;
+        }
 	   
+        // Matlab version update the z at the end of the while loop
         //   parcel.z += parcel.w * parcel.delta_t;
 
           if(parcel.z <= 0)  // reflect particle if at ground 
@@ -533,6 +551,11 @@ for (I = 1; I <= domain.nlevel; I++)
           }
 
           IZF = (int)MIN((int)(parcel.z / domain.delta_z) + 1, ihigh1);
+
+        // if (ilevel==1) 
+        // {
+        //     printf("IZF: %i \n", IZF) ;
+        // };
 
 /*
 
@@ -545,8 +568,7 @@ for (I = 1; I <= domain.nlevel; I++)
     source with length x or ut, as does Wilson et al.
 */
        
-        // parcel.consum[IZF] += parcel.delta_t;
-        consum[IZF] += parcel.delta_t;
+        parcel.consum[IZF] += parcel.delta_t;
 
 /*       Compute the new vertical velocity.
        Introduce the bias velocity for the case of inhomogeneous
@@ -556,23 +578,29 @@ for (I = 1; I <= domain.nlevel; I++)
        is less apt to leave. (see Wilson et al. Thompson etc.)
 */
 
-                random_int.random= RANDGEN();
-                // random_int.random= 1.;
+                random_ins.random= RANDGEN();
+                // random_ins.random= 1.;
 
                 /*
                 wnew = -wold dt/Tl) + 1/2 dvarw/dz (1+w^2/varw)+
                  (2 varw dt/Tl)du
                 */
 
-                timescale = TL(parcel.z, HH, DD, ustar);
-                parcel.std_w = SIGMA(parcel.z, HH, ustar);
+                timescale = TL(parcel.z);
+                parcel.std_w = SIGMA(parcel.z);
                 parcel.var_w = parcel.std_w * parcel.std_w;
                 parcel.term1 = -parcel.w * parcel.delta_t / timescale;
-                parcel.term2 = .5 * DW2DZ(parcel.z, HH, ustar) * (1. + (parcel.w * parcel.w) / parcel.var_w) * parcel.delta_t;
-                parcel.term3 = pow((2. * parcel.var_w * parcel.delta_t / timescale),.5) * random_int.random;
+                parcel.term2 = .5 * DW2DZ(parcel.z) * (1. + (parcel.w * parcel.w) / parcel.var_w) * parcel.delta_t;
+                parcel.term3 = pow((2. * parcel.var_w * parcel.delta_t / timescale),.5) * random_ins.random;
 
 				         			
                 parcel.w += parcel.term1 + parcel.term2 + parcel.term3;
+
+        if ((ilevel==1) and (part==1) and (I==1)) 
+        {
+            // printf("parcel w: %f %f %f %f %f %f \n", parcel.w, parcel.std_w, parcel.var_w, parcel.term1, parcel.term2, parcel.term3) ;
+            printf("parcel w-2: %f %f %f \n", timescale, parcel.z, parcel.delta_t) ;
+        }
 
 
 /*    ****************************************************************
@@ -584,35 +612,44 @@ for (I = 1; I <= domain.nlevel; I++)
                 mean vertical velocity
                 */
 
-                // parcel.wwmean[IZF] += parcel.w;
-                wwmean[IZF] += parcel.w;
+                parcel.wwmean[IZF] += parcel.w;
 
                 parcel.move += 1;
-                parcel.sum_random += random_int.random;
+                parcel.sum_random += random_ins.random;
                 parcel.sum_w += parcel.w;
-                parcel.sum_var_rand += random_int.random*random_int.random;
+                parcel.sum_var_rand += random_ins.random*random_ins.random;
 
-        // if ((ilevel==1) and (part==1)) 
-        // {
-        //     printf("parcel sum_random : %f %i %f %f %i \n", parcel.sum_random, IZF, parcel.z, domain.delta_z, ihigh1) ;
-        // };
 
                 I++;
-
           parcel.z += parcel.w * parcel.delta_t;
+
+        if ((ilevel==1) and (part==1) and (I==2)) 
+        {
+            printf("parcel sum_w : %i %f %f \n", parcel.move, parcel.sum_w, parcel.w) ;
+            printf("while: %f %li \n", parcel.z, IZF);
+        };
 
                
                 } while (I <=nn && IZF <= ihigh); /*  NEXT I  Particle-position  and end of while */
 
+        if ((ilevel==1) and (part==1)) 
+        {
+            // printf("parcel sumn -- check a0: %li %li %f \n", parcel.sumn, parcel.partadd[IZF], parcel.sum_random) ;
+            printf("I: %li %li \n", I, IZF);
+        };
+               parcel.partadd[IZF] += 1;
+
         // if (ilevel==1) 
         // {
-        //     printf("parcel sumn -- check a0: %li %li %f \n", parcel.sumn, partadd[IZF], parcel.sum_random) ;
+        //     printf("parcel sumn -- check a-1: %li %li %li %i \n", parcel.sumn, parcel.partadd[IZF], IZF, part) ;
         // };
-            //    parcel.partadd[IZF] += 1;
-               partadd[IZF] += 1;
 
         }  //  next particle 
 
+    // if (ilevel==1) 
+    // {
+    //     printf("parcel sumn -- check b: %li \n", parcel.sumn) ;
+    // };
 
     // if (ilevel==1) 
     // {
@@ -626,26 +663,21 @@ for (I = 1; I <= domain.nlevel; I++)
     */
 
         for (I = 1; I <= ihigh; I++)
-        // parcel.conc[I] = parcel.consum[I];
-        conc[I] = consum[I];
+        parcel.conc[I] = parcel.consum[I];
+
 
        // Compute the dispersion matrix then reset concentrations 
 		
 		for (I=1; I<= ihigh;I++)
-        // parcel.DIJ[I][ilevel] = (parcel.conc[I] - parcel.conc[ihigh]) / (domain.delta_z * domain.nlev[ilevel]);
-        // DIJ[I][ilevel] = (conc[I] - conc[ihigh]) / (domain.delta_z * nlev[ilevel]);
-        DIJ(I,ilevel) = (conc[I] - conc[ihigh]) / (domain.delta_z * nlev[ilevel]);
+// printf(" %i %i \n",I, ilevel) ;
+        parcel.DIJ[I][ilevel] = (parcel.conc[I] - parcel.conc[ihigh]) / (domain.delta_z * domain.nlev[ilevel]);
 	
 
 
 		for (I = 1; I<=ihigh ;I++)
 		{
 		// printf(" %6.2f   %6i\n", parcel.DIJ[I][ilevel], I);
-		// fprintf(fptr1,"%7.2f %6i \n", parcel.DIJ[I][ilevel],I);
-		// printf(" %6.2f   %6i\n", DIJ[I][ilevel], I);
-		// fprintf(fptr1,"%7.2f %6i \n", DIJ[I][ilevel],I);
-		// printf(" %6.2f   %6i\n", DIJ(I,ilevel), I);
-		fprintf(fptr1,"%7.2f %6i \n", DIJ(I,ilevel),I);
+		fprintf(fptr1,"%7.2f %6i \n", parcel.DIJ[I][ilevel],I);
 		}
 
 
@@ -662,12 +694,15 @@ for (I = 1; I <= domain.nlevel; I++)
 
 	
 
-		// FILEOUT(HH, DD, ustar);
+
+
+
+		FILEOUT();
 
 } // end of main 
 
 
-double DW2DZ (double Z, double HH, double ustar)
+double DW2DZ (double Z)
 {
 
 	double y, dsigw2dz;
@@ -711,7 +746,7 @@ double DW2DZ (double Z, double HH, double ustar)
 }
 
 
-void FILEOUT(double HH, double DD, double ustar)
+void FILEOUT()
 {
 	int I;
 
@@ -723,21 +758,29 @@ void FILEOUT(double HH, double DD, double ustar)
 		
 		
 		fprintf(fptr1,"var random mean random \n");
-		fprintf(fptr1,"%f , %ld \n",parcel.sum_var_rand,parcel.sumn);
+		// fprintf(fptr1,"%f , %f \n",parcel.sum_var_rand,parcel.sumn);
+		fprintf(fptr1,"%f , %ldf \n",parcel.sum_var_rand,parcel.sumn);
 
 		fprintf(fptr1, " z/h  Tl  sig w \n");
 
-		for(I=1;I <=40; I++)
-		fprintf(fptr1,"%5i,  %7.4f , %7.4f \n",I,TL((float)I, HH, DD, ustar),SIGMA((float)I, HH, ustar));
+		for(I=1;I <=sze-1; I++)
+		fprintf(fptr1,"%5i,  %7.4f , %7.4f \n",I,TL((float)I),SIGMA((float)I));
 		
 		printf(" \n");
+		// printf(" %6i \n", parcel.move);
 		printf(" %6li \n", parcel.move);
 		printf("mean r:  %f \n ", parcel.sum_random);
 		printf("var. r:  %f \n ", parcel.sum_var_rand);
 		printf("mean w:  %f \n ", parcel.sum_w);
 
+		printf(" wwmean \n");
+		for(I=1;I <=sze-1; I++)
+		fprintf(fptr1, "%7.4f \n",parcel.wwmean[I]);
+
 return;
 }
+
+
 
 double RANDGEN ()
 {
@@ -778,13 +821,13 @@ double y, f_fnc, oper, random_1, random_2, random_sqrd;
         //random_1 = (double)rand()/RAND_MAX;   // RAND_MAX is defined in stdlib
         //random_2 = (double)rand()/RAND_MAX;
 
-			random_1=RAN0(&random_int.seed);
-			random_2=RAN0(&random_int.seed);
+			random_1=RAN0(&random_ins.seed);
+			random_2=RAN0(&random_ins.seed);
 
         // Value of x between high and low limits
 		
 
-        y = random_int.low + random_1 * random_int.delta;
+        y = random_ins.low + random_1 * random_ins.delta;
 
         random_sqrd = y * y;
 
@@ -804,7 +847,11 @@ double y, f_fnc, oper, random_1, random_2, random_sqrd;
         return y;
         }
 
-double SIGMA (double Z, double HH, double ustar)
+
+
+
+
+double SIGMA (double Z)
 {
 double y, sigw;
 /*
@@ -827,8 +874,6 @@ if (Z < HH)
 
 // exponential model, computed as function of sigw/u* and z/h
 // need to convert to sigma w so final multiplication by u* is needed
-
-     
 		// sigw=turb.sigma_zo*exp(2.132 *Z/HH);
         // y=sigw*ustar;  // multiply by ustar to compute sigma w
 
@@ -840,7 +885,10 @@ if (Z < HH)
 	return y;
 }
 
-double TL (double Z, double HH, double DD, double ustar)
+
+
+
+double TL (double Z)
 {
 double y, A1;
 
@@ -866,17 +914,16 @@ double y, A1;
                 // factor of 2 comes from (1 - d/h)^-1/2; (1-0.75)^-1/2  
                 
 
-        // // The following is the old implementation
-        // A1=0.6*sqrt(SIGMA(Z, HH, ustar)/ustar*turb.sigma_h)* 2.;
+
+        // The following is the old implementation in C code
+        // A1=0.6*sqrt(SIGMA(Z)/ustar*turb.sigma_h)* 2.;
         // if (Z <= HH)
         // {
-        //     // The factor 0.25 = 1 - d/h = 1 - 0.75
-        //     y = A1* HH*0.25*turb.sigma_h/SIGMA(Z, HH, ustar);
+        //         y = A1* HH*0.25*turb.sigma_h/SIGMA(Z);
         // }
         // else
         // {
-        //     // u* Tl/h = A1 * (z-d)/h;  z > h	
-        //     y = A1 * (Z-DD)/ustar;
+        //         y = A1 * (Z-DD)/ustar;
         // }
 
         // Using the matlab version here
@@ -891,6 +938,7 @@ double y, A1;
             
         return y;
         }
+
 
 double MIN (double z, double x)
 {
@@ -911,6 +959,7 @@ int Time_sec()
 		// printf("Time_sec: %d\n", t); 
 		return (*gmtime(&t)).tm_sec;
 }
+
 
 double RAN0(long *idum)
 {
@@ -939,11 +988,10 @@ double RAN0(long *idum)
 	*idum ^= MASK;
 	return ans;
 }
- 
 
-PYBIND11_MODULE(dispersion, m) {
-    m.doc() = "pybind11 plugin CONC"; // optional module docstring
-    m.def("disp_mx", &DISPERSION_MATRIX, "Subroutine to calculate the dispersion_matrix",
-    py::arg("sze"), py::arg("sze3"), py::arg("npart"), py::arg("timemax"), 
-    py::arg("ustar"), py::arg("HH"), py::arg("DD"), py::arg("dij_fname"), py::arg("dij_np"));
-}
+
+
+
+
+      
+ 
