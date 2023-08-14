@@ -13,8 +13,9 @@ import jax.numpy as jnp
 import numpy as np
 
 import equinox as eqx
-from jax_canoak.subjects import Para, Met
+from jax_canoak.subjects import Para
 
+from jax_canoak.subjects import initialize_met
 from jax_canoak.subjects import initialize_profile_mx, initialize_model_states
 from jax_canoak.subjects import update_profile_mx, calculate_veg_mx
 
@@ -42,13 +43,6 @@ from jax_canoak.shared_utilities.plot import plot_veg_temp
 
 jax.config.update("jax_enable_x64", True)
 
-f_forcing = "../shared_utilities/forcings/AlfMetBouldinInput.csv"
-forcing_data = np.loadtxt(f_forcing, delimiter=",")
-forcing_data = jnp.array(forcing_data)
-n_time = forcing_data.shape[0]
-# lai = 3.6
-lai = 5.0
-forcing_data = jnp.concatenate([forcing_data, jnp.ones([n_time, 1]) * lai], axis=1)
 plot = True
 
 # ---------------------------------------------------------------------------- #
@@ -64,15 +58,19 @@ leafangle = 1
 n_can_layers = 50
 meas_ht = 5.0
 n_hr_per_day = 48
-n_time = n_time
+lai = 5.0
 
 
 # ---------------------------------------------------------------------------- #
 #                     Set the model forcings                                   #
 # ---------------------------------------------------------------------------- #
+f_forcing = "../shared_utilities/forcings/AlfMetBouldinInput.csv"
+forcing_data = np.loadtxt(f_forcing, delimiter=",")
+forcing_data = jnp.array(forcing_data)
+n_time = forcing_data.shape[0]
 zl0 = jnp.zeros(n_time)
-# met = Met(forcing_data, n_time)
-met = Met(forcing_data, n_time, zl0)
+forcing_data = jnp.concatenate([forcing_data, jnp.ones([n_time, 1]) * lai], axis=1)
+met = initialize_met(forcing_data, n_time, zl0)
 
 
 # ---------------------------------------------------------------------------- #
@@ -236,7 +234,8 @@ def iteration(c, i):
     zL = -(0.4 * 9.8 * HH * para.meas_ht) / (
         met.air_density * 1005 * met.T_air_K * jnp.power(met.ustar, 3.0)
     )
-    met.zL = jnp.clip(zL, a_min=-3, a_max=0.25)
+    zL = jnp.clip(zL, a_min=-3, a_max=0.25)
+    met = eqx.tree_at(lambda t: t.zL, met, zL)
 
     # # Compute the vegetation overall photosynthesis and respiration
     # veg_Ps = jnp.sum(
@@ -261,7 +260,7 @@ def iteration(c, i):
 
 
 initials = [met, prof, ir, qin, sun, shade, soil]
-finals, _ = jax.lax.scan(iteration, initials, xs=None, length=15)
+finals, _ = jax.lax.scan(iteration, initials, xs=None, length=30)
 
 met, prof, ir, qin, sun, shade, soil = finals
 

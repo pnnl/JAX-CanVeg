@@ -7,73 +7,35 @@ Date: 2023.7.24.
 
 import jax.numpy as jnp
 
+import equinox as eqx
+
 # from .parameters import Para
 from ..shared_utilities.types import Float_2D, Int_0D, Float_0D, Float_1D
 from .utils import es as fes
 from .utils import llambda, desdt, des2dt
 
-Mair = 28.97
-rugc = 8.314  # J mole-1 K-1
+Mair_default = 28.97  # the molecular weight of air
+rugc_default = 8.314  # J mole-1 K-1
 
 
-class Met(object):
-    def __init__(
-        self,
-        data: Float_2D,
-        ntime: Int_0D,
-        zL: Float_1D,
-        Mair: Float_0D = Mair,
-        rugc: Float_0D = rugc,
-    ) -> None:
-        assert data.shape[0] == ntime
-        self.ntime = ntime
-        self.Mair, self.rugc = Mair, rugc
-        self.day = jnp.array(data[:, 0])  # day of year
-        self.hhour = jnp.array(data[:, 1])  # hour
-        # self.T_air_K = jnp.array(data[:, 2]) + 273.15  # air temperature, K
-        self.T_air = jnp.array(data[:, 2])  # air temperature, degC
-        self.rglobal = jnp.array(data[:, 3])  # global shortwave radiation, W m-2
-        self.eair = jnp.array(data[:, 4])  # vapor pressure, kPa
-        self.wind = jnp.array(data[:, 5])  # wind velocity, m/s
-        self.CO2 = jnp.array(data[:, 6])  # CO2, ppm
-        self.P_kPa = jnp.array(data[:, 7])  # atmospheric pressure, kPa
-        self.ustar = jnp.array(data[:, 8])  # friction velocity, m/s
-        self.Tsoil = jnp.array(data[:, 9])  # soil temperature, C...16 cm
-        self.soilmoisture = jnp.array(data[:, 10])  # soil moisture, fraction
-        self.zcanopy = jnp.array(data[:, 11])  # aerodynamic canopy height
-        self.lai = jnp.array(data[:, 12])  # leaf area index [-]
-
-        # Some operations to ensure stability
-        self.wind = jnp.clip(self.wind, a_min=0.75)
-        self.ustar = jnp.clip(self.ustar, a_min=0.75)
-        self.rglobal = jnp.clip(self.rglobal, a_min=0.0)
-
-        # self.zL = jnp.zeros(self.day.size)  # z/L initial value at 0
-        self.zL = zL
-
-        # # Calculate other meterological forcings/states
-        # self.parin = (
-        #     4.6 * self.rglobal / 2.0
-        # )  # visible, or photosynthetic photon flux density, umol m-2 s-1  # noqa: E501
-        # self.eair_Pa = self.eair * 1000  # vapor pressure, Pa
-        # self.P_Pa = self.P_kPa * 1000  # pressure, Pa
-
-        # # Compute gas and model coefficients that are used repeatedly
-        # self.es = fes(self.T_air_K)  # saturation vapor pressure, Pa
-        # self.vpd_Pa = self.es - self.eair_Pa  # atmospheric vapor pressure deficit, Pa
-        # self.air_density = (
-        #     self.P_kPa * Mair / (rugc * self.T_air_K)
-        # )  # air density, kg m-3  # noqa: E501
-        # self.air_density_mole = (
-        #     1000.0 * self.air_density / Mair
-        # )  # air density, moles m-3
-        # self.dest = desdt(
-        #     self.T_air_K
-        # )  # slope saturation vapor pressure Temperature Pa K-1  # noqa: E501
-        # self.d2est = des2dt(self.T_air_K)  # second derivative es(T)
-        # self.llambda = jnp.vectorize(llambda)(
-        #     self.T_air_K
-        # )  # latent heat of vaporization, J kg-1  # noqa: E501
+class Met(eqx.Module):
+    ntime: Int_0D
+    Mair: Float_0D
+    rugc: Float_0D
+    zL: Float_1D
+    day: Float_1D
+    hhour: Float_1D
+    T_air: Float_1D
+    rglobal: Float_1D
+    eair: Float_1D
+    wind: Float_1D
+    CO2: Float_1D
+    P_kPa: Float_1D
+    ustar: Float_1D
+    Tsoil: Float_1D
+    soilmoisture: Float_1D
+    zcanopy: Float_1D
+    lai: Float_1D
 
     @property
     def T_air_K(self):
@@ -102,7 +64,7 @@ class Met(object):
     @property
     def air_density(self):
         # air density, kg m-3
-        return self.P_kPa * self.Mair / (rugc * self.T_air_K)
+        return self.P_kPa * self.Mair / (self.rugc * self.T_air_K)
 
     @property
     def air_density_mole(self):
@@ -121,38 +83,56 @@ class Met(object):
         # latent heat of vaporization, J kg-1
         return jnp.vectorize(llambda)(self.T_air_K)
 
-    def _tree_flatten(self):
-        children = (
-            self.day,
-            self.hhour,
-            self.T_air,
-            self.rglobal,
-            self.eair,
-            self.wind,
-            self.CO2,
-            self.P_kPa,
-            self.ustar,
-            self.Tsoil,
-            self.soilmoisture,
-            self.soilmoisture,
-            self.zcanopy,
-            self.lai,
-            # self.parin,
-            # self.P_Pa,
-            # self.es,
-            # self.vpd_Pa,
-            # self.air_density,
-            # self.air_density_mole,
-            # self.dest,
-            # self.d2est,
-            # self.llambda,
-            self.zL,
-        )
-        aux_data = {"ntime": self.ntime, "Mair": self.Mair, "rugc": self.rugc}
-        return (children, aux_data)
 
-    @classmethod
-    def _tree_unflatten(cls, aux_data, children):
-        data = jnp.stack(children[:13]).T
-        # aux_data['zL'] = children[-1]
-        return cls(data, zL=children[-1], **aux_data)
+def initialize_met(
+    data: Float_2D,
+    ntime: Int_0D,
+    zL0: Float_1D,
+    Mair: Float_0D = Mair_default,
+    rugc: Float_0D = rugc_default,
+) -> Met:
+    day = jnp.array(data[:, 0])  # day of year
+    hhour = jnp.array(data[:, 1])  # hour
+    # self.T_air_K = jnp.array(data[:, 2]) + 273.15  # air temperature, K
+    T_air = jnp.array(data[:, 2])  # air temperature, degC
+    rglobal = jnp.array(data[:, 3])  # global shortwave radiation, W m-2
+    eair = jnp.array(data[:, 4])  # vapor pressure, kPa
+    wind = jnp.array(data[:, 5])  # wind velocity, m/s
+    CO2 = jnp.array(data[:, 6])  # CO2, ppm
+    P_kPa = jnp.array(data[:, 7])  # atmospheric pressure, kPa
+    ustar = jnp.array(data[:, 8])  # friction velocity, m/s
+    Tsoil = jnp.array(data[:, 9])  # soil temperature, C...16 cm
+    soilmoisture = jnp.array(data[:, 10])  # soil moisture, fraction
+    zcanopy = jnp.array(data[:, 11])  # aerodynamic canopy height
+    lai = jnp.array(data[:, 12])  # leaf area index [-]
+
+    # Some operations to ensure stability
+    wind = jnp.clip(wind, a_min=0.75)
+    ustar = jnp.clip(ustar, a_min=0.1)
+    rglobal = jnp.clip(rglobal, a_min=0.0)
+
+    # Convert the following int and float to jax.ndarray
+    ntime = jnp.array(ntime)
+    Mair = jnp.array(Mair)
+    rugc = jnp.array(rugc)
+
+    met = Met(
+        ntime,
+        Mair,
+        rugc,
+        zL0,
+        day,
+        hhour,
+        T_air,
+        rglobal,
+        eair,
+        wind,
+        CO2,
+        P_kPa,
+        ustar,
+        Tsoil,
+        soilmoisture,
+        zcanopy,
+        lai,
+    )
+    return met
