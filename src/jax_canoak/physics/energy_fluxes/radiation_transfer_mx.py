@@ -12,6 +12,8 @@ Date: 2023.07.27.
 import jax
 import jax.numpy as jnp
 
+import equinox as eqx
+
 # from functools import partial
 from typing import Tuple
 
@@ -221,12 +223,12 @@ def rad_tran_canopy(
     # )
 
     # rad.prob_beam(:,prm.jtot)=ones;
-    rad.prob_beam = jnp.concatenate(
+    prob_beam = jnp.concatenate(
         [prm.markov * P0[:, : prm.jtot], jnp.ones([prm.ntime, 1])], axis=1
     )  # (ntime, jktot)
-    rad.prob_beam = jnp.clip(rad.prob_beam, a_max=1.0)
-    rad.prob_beam = rad.prob_beam.at[mask_night.val, :].set(0.0)
-    rad.prob_shade = 1 - rad.prob_beam
+    prob_beam = jnp.clip(prob_beam, a_max=1.0)
+    prob_beam = prob_beam.at[mask_night.val, :].set(0.0)
+    # rad.prob_shade = 1 - rad.prob_beam
 
     # Calculate beam PAR that is transmitted downward
     # (ntime, jtot)
@@ -251,45 +253,6 @@ def rad_tran_canopy(
     )
     up_init = jnp.zeros([prm.ntime, prm.jktot])
 
-    # Now, let's iterate...
-    # def calculate_dnup(c2, j):
-    #     up, dn = c2[0], c2[1]
-    #     dn_top, up_bot = dn[:, -1], up[:, 0]
-    #     # dn
-    #     def calculate_dn_layer(c, i):
-    #         dn_layer_t, up_layer_b = c, up[:, i]
-    #         dn_layer_b = (
-    #             dn_layer_t * transmission_layer[:, i]
-    #             + up_layer_b * reflectance_layer[:, i]
-    #             + sdn[:, i]
-    #         )
-    #         cnew = dn_layer_b
-    #         return cnew, cnew
-
-    #     _, out = jax.lax.scan(
-    #         calculate_dn_layer, dn_top, jnp.arange(prm.jtot - 1, -1, -1)
-    #     )
-    #     out = out.T
-    #     dn = jnp.concatenate([out[:, ::-1], jnp.expand_dims(dn_top, axis=-1)], axis=1)
-
-    #     # up
-    #     def calculate_up_layer(c, i):
-    #         un_layer_b, dn_layer_t = c, dn[:, i + 1]
-    #         up_layer_t = (
-    #             un_layer_b * transmission_layer[:, i]
-    #             + dn_layer_t * reflectance_layer[:, i]
-    #             + sup[:, i]
-    #         )
-    #         cnew = up_layer_t
-    #         return cnew, cnew
-
-    #     _, out = jax.lax.scan(calculate_up_layer, up_bot, jnp.arange(prm.jtot))
-    #     out = out.T
-    #     up_bot = (dn[:, 0] + rad.incoming * fraction_beam * Tbeam[:, 0])*rad.soil_refl
-    #     up = jnp.concatenate([jnp.expand_dims(up_bot, axis=-1), out], axis=1)
-
-    #     c2new = [up, dn]
-    #     return c2new, None
     def calculate_dnup(c2, j):
         up, dn = c2[0], c2[1]
         dn_top, up_bot = dn[:, -1], up[:, 0]
@@ -328,30 +291,29 @@ def rad_tran_canopy(
     up, dn = carry[0], carry[1]
 
     # upward diffuse radiation flux density, on the horizontal
-    rad.up_flux = up
+    up_flux = up
 
     # downward beam radiation flux density, incident on the horizontal
-    rad.beam_flux = dot(rad.incoming * fraction_beam, Tbeam)
+    beam_flux = dot(rad.incoming * fraction_beam, Tbeam)
 
     # downward diffuse radiation flux density on the horizontal
-    rad.dn_flux = dn
+    dn_flux = dn
 
-    # total downward radiation, incident on the horizontal
-    rad.total = rad.beam_flux + rad.dn_flux
+    # # total downward radiation, incident on the horizontal
+    # rad.total = rad.beam_flux + rad.dn_flux
 
     # amount of radiation absorbed on the sun and shade leaves
-    rad.sh_abs = (
-        rad.dn_flux[:, : prm.jtot] + rad.up_flux[:, : prm.jtot]
-    ) * rad.absorbed
-    # normal = dot(
-    #     leafang.Gfunc / sunang.sin_beta, rad.beam_flux[:, : prm.jtot]
-    # )  # (ntime, jtot)  # noqa: E501
-    normal = rad.beam_flux[:, prm.jtot] * leafang.Gfunc / sunang.sin_beta  # (ntime,)
-    # jax.debug.print("{a}", a=rad.beam_flux[:, prm.jtot].mean())
+    sh_abs = (dn_flux[:, : prm.jtot] + up_flux[:, : prm.jtot]) * rad.absorbed
+    normal = beam_flux[:, prm.jtot] * leafang.Gfunc / sunang.sin_beta  # (ntime,)
     normal = jnp.clip(normal, a_min=0.0)
     sun_normal_abs = normal * rad.absorbed
-    # rad.sun_abs = sun_normal_abs + rad.sh_abs
-    rad.sun_abs = add(sun_normal_abs, rad.sh_abs)
+    sun_abs = add(sun_normal_abs, rad.sh_abs)
+
+    rad = eqx.tree_at(
+        lambda t: (t.prob_beam, t.beam_flux, t.up_flux, t.dn_flux, t.sh_abs, t.sun_abs),
+        rad,
+        (prob_beam, beam_flux, up_flux, dn_flux, sh_abs, sun_abs),
+    )
 
     return rad
 
@@ -390,18 +352,18 @@ def ir_rad_tran_canopy(
         Ir: _description_
     """  # noqa: E501
     # Set upper boundary condition
-    ir.ir_dn = jnp.concatenate(
+    ir_dn = jnp.concatenate(
         [ir.ir_dn[:, : prm.jtot], jnp.expand_dims(ir.ir_in, axis=1)], axis=1
     )
-    ir.ir_up = jnp.concatenate(
+    ir_up = jnp.concatenate(
         [ir.ir_up[:, : prm.jtot], jnp.expand_dims(ir.ir_in, axis=1)], axis=1
     )
 
     # Compute IR radiative source flux as a function of leaf temperature weighted
     # according to sunlit and shaded fractions
-    ir.IR_source_sun = rad.prob_beam[:, : prm.jtot] * jnp.power(sun.Tsfc, 4.0)
-    ir.IR_source_shade = rad.prob_shade[:, : prm.jtot] * jnp.power(shade.Tsfc, 4.0)
-    ir.IR_source = prm.epsigma * (ir.IR_source_sun + ir.IR_source_shade)
+    IR_source_sun = rad.prob_beam[:, : prm.jtot] * jnp.power(sun.Tsfc, 4.0)
+    IR_source_shade = rad.prob_shade[:, : prm.jtot] * jnp.power(shade.Tsfc, 4.0)
+    IR_source = prm.epsigma * (IR_source_sun + IR_source_shade)
 
     # Compute downward IR from the Top down
     # following Bonan and consider forward and backward scattering of IR, scat=(1-ep)/2
@@ -411,11 +373,11 @@ def ir_rad_tran_canopy(
 
     forward_scat = leafang.integ_exp_diff + (1 - leafang.integ_exp_diff) * scat
     backward_scat = (1 - leafang.integ_exp_diff) * scat
-    sdn = ir.IR_source * (1 - leafang.integ_exp_diff)
-    sup = ir.IR_source * (1 - leafang.integ_exp_diff)
+    sdn = IR_source * (1 - leafang.integ_exp_diff)
+    sup = IR_source * (1 - leafang.integ_exp_diff)
 
     def calculate_dn_layer(c, i):
-        dn_layer_t, up_layer_b = c, ir.ir_up[:, i]
+        dn_layer_t, up_layer_b = c, ir_up[:, i]
         dn_layer_b = (
             dn_layer_t * forward_scat[:, i]
             + up_layer_b * backward_scat[:, i]
@@ -426,20 +388,19 @@ def ir_rad_tran_canopy(
         return cnew, cnew
 
     _, out = jax.lax.scan(
-        calculate_dn_layer, ir.ir_dn[:, -1], jnp.arange(prm.jtot - 1, -1, -1)
+        calculate_dn_layer, ir_dn[:, -1], jnp.arange(prm.jtot - 1, -1, -1)
     )
     out = out.T
-    ir.ir_dn = jnp.concatenate([out[:, ::-1], ir.ir_dn[:, -1:]], axis=1)
-    # ir.ir_dn = jnp.concatenate([out, ir.ir_dn[:,-1:]], axis=1)
+    ir_dn = jnp.concatenate([out[:, ::-1], ir_dn[:, -1:]], axis=1)
 
     # Compute upward IR from the bottom up with the lower boundary condition based on
     # soil temperature
-    up_bot = (1 - prm.epsoil) * ir.ir_dn[:, 0] + prm.epsoil * prm.sigma * jnp.power(
+    up_bot = (1 - prm.epsoil) * ir_dn[:, 0] + prm.epsoil * prm.sigma * jnp.power(
         soil.sfc_temperature, 4
     )
 
     def calculate_up_layer(c, i):
-        un_layer_b, dn_layer_t = c, ir.ir_dn[:, i + 1]
+        un_layer_b, dn_layer_t = c, ir_dn[:, i + 1]
         up_layer_t = (
             un_layer_b * forward_scat[:, i]
             + dn_layer_t * backward_scat[:, i]
@@ -451,15 +412,28 @@ def ir_rad_tran_canopy(
 
     _, out = jax.lax.scan(calculate_up_layer, up_bot, jnp.arange(prm.jtot))
     out = out.T
-    ir.ir_up = jnp.concatenate([jnp.expand_dims(up_bot, axis=-1), out], axis=1)
+    ir_up = jnp.concatenate([jnp.expand_dims(up_bot, axis=-1), out], axis=1)
 
     # IR shade on top + bottom of leaves
-    ir.shade = ir.ir_up[:, : prm.jtot] + ir.ir_dn[:, : prm.jtot]
+    ir_shade = ir_up[:, : prm.jtot] + ir_dn[:, : prm.jtot]
 
     # Bonan shows IR Balance for ground area
-    ir.balance = (1 - leafang.integ_exp_diff) * (
-        (ir.ir_up[:, : prm.jtot] + ir.ir_dn[:, 1 : prm.jktot]) * prm.ep
-        - 2 * ir.IR_source
+    ir_balance = (1 - leafang.integ_exp_diff) * (
+        (ir_up[:, : prm.jtot] + ir_dn[:, 1 : prm.jktot]) * prm.ep - 2 * IR_source
+    )
+
+    ir = eqx.tree_at(
+        lambda t: (
+            t.ir_dn,
+            t.ir_up,
+            t.IR_source_sun,
+            t.IR_source_shade,
+            t.IR_source,
+            t.shade,
+            t.balance,
+        ),
+        ir,
+        (ir_dn, ir_up, IR_source_sun, IR_source_shade, IR_source, ir_shade, ir_balance),
     )
 
     return ir

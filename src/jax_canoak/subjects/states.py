@@ -22,483 +22,184 @@ import jax
 import jax.numpy as jnp
 from math import floor
 
+import equinox as eqx
+
+# from ..physics.energy_fluxes import conc_mx
+
 from .meterology import Met
 from .parameters import Para
-
-from .utils import soil_sfc_res
+from .utils import soil_sfc_res, conc_mx
+from .utils import llambda as flambda
 
 # from ..physics.energy_fluxes.soil_energy_balance_mx import soil_sfc_res
 from ..shared_utilities.types import Float_2D, Float_1D, Float_0D
 from ..shared_utilities.utils import dot, minus
+from ..shared_utilities.constants import PI
 
 
 # dot = jax.vmap(lambda x, y: x * y, in_axes=(None, 1), out_axes=1)
 
 
-class Prof(object):
-    def __init__(
-        self,
-        zht: Float_1D,
-        delz: Float_1D,
-        co2: Float_2D,
-        Tair_K: Float_2D,
-        Told_K: Float_2D,
-        eair_Pa: Float_2D,
-        eair_old_Pa: Float_2D,
-        wind: Float_2D,
-        Tsfc: Float_2D,
-        H: Float_2D,
-        LE: Float_2D,
-        Rnet: Float_2D,
-        Ps: Float_2D,
-    ) -> None:
-        self.zht = zht
-        self.delz = delz
-        self.co2 = co2
-        self.Tair_K = Tair_K
-        self.Told_K = Told_K
-        self.eair_Pa = eair_Pa
-        self.eair_old_Pa = eair_old_Pa
-        self.wind = wind
-        self.Tsfc = Tsfc
-        self.H = H
-        self.LE = LE
-        self.Rnet = Rnet
-        self.Ps = Ps
-
-    def _tree_flatten(self):
-        children = (
-            self.zht,
-            self.delz,
-            self.co2,
-            self.Tair_K,
-            self.Told_K,
-            self.eair_Pa,
-            self.eair_old_Pa,
-            self.wind,
-            self.Tsfc,
-            self.H,
-            self.LE,
-            self.Rnet,
-            self.Ps,
-        )
-        aux_data = {}
-        return (children, aux_data)
-
-    @classmethod
-    def _tree_unflatten(cls, aux_data, children):
-        return cls(*children, **aux_data)
+class Prof(eqx.Module):
+    zht: Float_1D
+    delz: Float_1D
+    co2: Float_2D
+    Tair_K: Float_2D
+    Told_K: Float_2D
+    eair_Pa: Float_2D
+    eair_old_Pa: Float_2D
+    wind: Float_2D
+    Tsfc: Float_2D
+    H: Float_2D
+    LE: Float_2D
+    Rnet: Float_2D
+    Ps: Float_2D
 
 
-class SunAng(object):
-    def __init__(
-        self,
-        sin_beta: Float_1D,
-        beta_rad: Float_1D,
-        beta_deg: Float_1D,
-        theta_rad: Float_1D,
-        theta_deg: Float_1D,
-    ) -> None:
-        self.sin_beta = sin_beta
-        self.beta_rad = beta_rad
-        self.beta_deg = beta_deg
-        self.theta_rad = theta_rad
-        self.theta_deg = theta_deg
+class SunAng(eqx.Module):
+    sin_beta: Float_1D
+    beta_rad: Float_1D
 
-    def _tree_flatten(self):
-        children = (
-            self.sin_beta,
-            self.beta_rad,
-            self.beta_deg,
-            self.theta_rad,
-            self.theta_deg,
-        )
-        aux_data = {}
-        return (children, aux_data)
+    @property
+    def beta_deg(self):
+        return self.beta_rad * 180 / PI
 
-    @classmethod
-    def _tree_unflatten(cls, aux_data, children):
-        return cls(*children, **aux_data)
+    @property
+    def theta_rad(self):
+        return PI / 2.0 - self.beta_rad
+
+    @property
+    def theta_deg(self):
+        return self.theta_rad * 180.0 / PI
 
 
-class LeafAng(object):
-    def __init__(
-        self,
-        pdf: Float_1D,
-        Gfunc: Float_1D,
-        thetaSky: Float_1D,
-        Gfunc_Sky: Float_1D,
-        integ_exp_diff: Float_2D,
-    ) -> None:
-        self.pdf = pdf
-        self.Gfunc = Gfunc
-        self.thetaSky = thetaSky
-        self.Gfunc_Sky = Gfunc_Sky
-        self.integ_exp_diff = integ_exp_diff
-
-    def _tree_flatten(self):
-        children = (
-            self.pdf,
-            self.Gfunc,
-            self.thetaSky,
-            self.Gfunc_Sky,
-            self.integ_exp_diff,
-        )
-        aux_data = {}
-        return (children, aux_data)
-
-    @classmethod
-    def _tree_unflatten(cls, aux_data, children):
-        return cls(*children, **aux_data)
+class LeafAng(eqx.Module):
+    pdf: Float_1D
+    Gfunc: Float_1D
+    thetaSky: Float_1D
+    Gfunc_Sky: Float_1D
+    integ_exp_diff: Float_2D
 
 
-class ParNir(object):
-    def __init__(
-        self,
-        sh_abs: Float_2D,
-        sun_abs: Float_2D,
-        sun: Float_2D,
-        dn_flux: Float_2D,
-        up_flux: Float_2D,
-        sun_normal: Float_2D,
-        sh_flux: Float_2D,
-        incoming: Float_2D,
-        beam_flux: Float_2D,
-        total: Float_2D,
-        inbeam: Float_2D,
-        indiffuse: Float_2D,
-        prob_beam: Float_2D,
-        prob_shade: Float_2D,
-        sun_lai: Float_2D,
-        shade_lai: Float_2D,
-        reflect: Float_0D,
-        trans: Float_0D,
-        soil_refl: Float_0D,
-        absorbed: Float_0D,
-    ) -> None:
-        self.sh_abs = sh_abs
-        self.sun_abs = sun_abs
-        self.sun = sun
-        self.dn_flux = dn_flux
-        self.up_flux = up_flux
-        self.sun_normal = sun_normal
-        self.sh_flux = sh_flux
-        self.incoming = incoming
-        self.beam_flux = beam_flux
-        self.total = total
-        # self.inbeam = jnp.zeros(ntime) + 999.
-        self.inbeam = inbeam
-        self.indiffuse = indiffuse
-        self.prob_beam = prob_beam
-        self.prob_shade = prob_shade
-        self.sun_lai = sun_lai
-        self.shade_lai = shade_lai
-        self.reflect = reflect
-        self.trans = trans
-        self.soil_refl = soil_refl
-        self.absorbed = absorbed
+class ParNir(eqx.Module):
+    sh_abs: Float_2D
+    sun_abs: Float_2D
+    sun: Float_2D
+    dn_flux: Float_2D
+    up_flux: Float_2D
+    sun_normal: Float_2D
+    sh_flux: Float_2D
+    beam_flux: Float_2D
+    inbeam: Float_2D
+    indiffuse: Float_2D
+    prob_beam: Float_2D
+    sun_lai: Float_2D
+    shade_lai: Float_2D
+    reflect: Float_0D
+    trans: Float_0D
+    soil_refl: Float_0D
 
-    def _tree_flatten(self):
-        children = (
-            self.sh_abs,
-            self.sun_abs,
-            self.sun,
-            self.dn_flux,
-            self.up_flux,
-            self.sun_normal,
-            self.sh_flux,
-            self.incoming,
-            self.beam_flux,
-            self.total,
-            self.inbeam,
-            self.indiffuse,
-            self.prob_beam,
-            self.prob_shade,
-            self.sun_lai,
-            self.shade_lai,
-            self.reflect,
-            self.trans,
-            self.soil_refl,
-            self.absorbed,
-        )
-        aux_data = {}
-        return (children, aux_data)
+    @property
+    def total(self):
+        return self.up_flux + self.dn_flux
 
-    @classmethod
-    def _tree_unflatten(cls, aux_data, children):
-        return cls(*children, **aux_data)
+    @property
+    def incoming(self):
+        return self.inbeam + self.indiffuse
+
+    @property
+    def prob_shade(self):
+        return 1 - self.prob_beam
+
+    @property
+    def absorbed(self):
+        return 1 - self.reflect - self.trans
 
 
-class Ir(object):
-    def __init__(
-        self,
-        ir_in: Float_1D,
-        ir_dn: Float_2D,
-        ir_up: Float_2D,
-        IR_source_sun: Float_2D,
-        IR_source_shade: Float_2D,
-        IR_source: Float_2D,
-        shade: Float_2D,
-        shade_top: Float_2D,
-        shade_bottom: Float_2D,
-        balance: Float_2D,
-    ) -> None:
-        self.ir_in = ir_in
-        self.ir_dn = ir_dn
-        self.ir_up = ir_up
-        self.IR_source_sun = IR_source_sun
-        self.IR_source_shade = IR_source_shade
-        self.IR_source = IR_source
-        self.shade = shade
-        self.shade_top = shade_top
-        self.shade_bottom = shade_bottom
-        self.balance = balance
-
-    def _tree_flatten(self):
-        children = (
-            self.ir_in,
-            self.ir_dn,
-            self.ir_up,
-            self.IR_source_sun,
-            self.IR_source_shade,
-            self.IR_source,
-            self.shade,
-            self.shade_top,
-            self.shade_bottom,
-            self.balance,
-        )
-        aux_data = {}
-        return (children, aux_data)
-
-    @classmethod
-    def _tree_unflatten(cls, aux_data, children):
-        return cls(*children, **aux_data)
+class Ir(eqx.Module):
+    ir_in: Float_1D
+    ir_dn: Float_2D
+    ir_up: Float_2D
+    IR_source_sun: Float_2D
+    IR_source_shade: Float_2D
+    IR_source: Float_2D
+    shade: Float_2D
+    shade_top: Float_2D
+    shade_bottom: Float_2D
+    balance: Float_2D
 
 
-class Rnet(object):
-    def __init__(
-        self,
-        sun: Float_2D,
-        sh: Float_2D,
-        sun_top: Float_2D,
-        sh_top: Float_2D,
-        sh_bottom: Float_2D,
-    ) -> None:
-        self.sun = sun
-        self.sh = sh
-        self.sun_top = sun_top
-        self.sh_top = sh_top
-        self.sh_bottom = sh_bottom
-
-    def _tree_flatten(self):
-        children = (self.sun, self.sh, self.sun_top, self.sh_top, self.sh_bottom)
-        aux_data = {}
-        return (children, aux_data)
-
-    @classmethod
-    def _tree_unflatten(cls, aux_data, children):
-        return cls(*children, **aux_data)
+class Rnet(eqx.Module):
+    sun: Float_2D
+    sh: Float_2D
+    sun_top: Float_2D
+    sh_top: Float_2D
+    sh_bottom: Float_2D
 
 
-class SunShadedCan(object):
-    def __init__(
-        self,
-        Ps: Float_2D,
-        Resp: Float_2D,
-        gs: Float_2D,
-        LE: Float_2D,
-        H: Float_2D,
-        Rnet: Float_2D,
-        Lout: Float_2D,
-        closure: Float_2D,
-        Tsfc: Float_2D,
-        Tsfc_new: Float_2D,
-        Tsfc_old: Float_2D,
-    ) -> None:
-        self.Ps = Ps
-        self.Resp = Resp
-        self.gs = gs
-        self.LE = LE
-        self.H = H
-        self.Rnet = Rnet
-        self.Lout = Lout
-        self.closure = closure
-        self.Tsfc = Tsfc
-        self.Tsfc_old = Tsfc_old
-        self.Tsfc_new = Tsfc_new
-
-    def _tree_flatten(self):
-        children = (
-            self.Ps,
-            self.Resp,
-            self.gs,
-            self.LE,
-            self.H,
-            self.Rnet,
-            self.Lout,
-            self.closure,
-            self.Tsfc,
-            self.Tsfc_new,
-            self.Tsfc_old,
-        )
-        aux_data = {}
-        return (children, aux_data)
-
-    @classmethod
-    def _tree_unflatten(cls, aux_data, children):
-        return cls(*children, **aux_data)
+class SunShadedCan(eqx.Module):
+    Ps: Float_2D
+    Resp: Float_2D
+    gs: Float_2D
+    vpd_Pa: Float_2D
+    LE: Float_2D
+    H: Float_2D
+    Rnet: Float_2D
+    Lout: Float_2D
+    closure: Float_2D
+    Tsfc: Float_2D
+    Tsfc_new: Float_2D
+    Tsfc_old: Float_2D
 
 
-class BoundLayerRes(object):
-    def __init__(self, heat: Float_2D, vapor: Float_2D, co2: Float_2D) -> None:
-        self.heat = heat
-        self.vapor = vapor
-        self.co2 = co2
-        # self.heat = jnp.zeros([ntime, jtot])
-        # self.vapor = jnp.zeros([ntime, jtot])
-        # self.co2 = jnp.zeros([ntime, jtot])
-
-    def _tree_flatten(self):
-        children = (self.heat, self.vapor, self.co2)
-        aux_data = {}
-        return (children, aux_data)
-
-    @classmethod
-    def _tree_unflatten(cls, aux_data, children):
-        return cls(*children, **aux_data)
+class BoundLayerRes(eqx.Module):
+    heat: Float_2D
+    vapor: Float_2D
+    co2: Float_2D
 
 
-class Qin(object):
-    def __init__(self, sun_abs: Float_2D, shade_abs: Float_2D) -> None:
-        self.sun_abs = sun_abs
-        self.shade_abs = shade_abs
-
-    def _tree_flatten(self):
-        children = (self.sun_abs, self.shade_abs)
-        aux_data = {}
-        return (children, aux_data)
-
-    @classmethod
-    def _tree_unflatten(cls, aux_data, children):
-        return cls(*children, **aux_data)
+class Qin(eqx.Module):
+    sun_abs: Float_2D
+    shade_abs: Float_2D
 
 
-class Veg(object):
-    def __init__(
-        self,
-        Ps: Float_1D,
-        Rd: Float_1D,
-        H: Float_1D,
-        LE: Float_1D,
-        Rnet: Float_1D,
-        Tsfc: Float_1D,
-    ) -> None:
-        self.Ps = Ps
-        self.Rd = Rd
-        self.H = H
-        self.LE = LE
-        self.Rnet = Rnet
-        self.Tsfc = Tsfc
-
-    def _tree_flatten(self):
-        children = (self.Ps, self.Rd, self.H, self.LE, self.Rnet, self.Tsfc)
-        aux_data = {}
-        return (children, aux_data)
-
-    @classmethod
-    def _tree_unflatten(cls, aux_data, children):
-        return cls(*children, **aux_data)
+class Veg(eqx.Module):
+    Ps: Float_1D
+    gs: Float_1D
+    Rd: Float_1D
+    H: Float_1D
+    LE: Float_1D
+    Rnet: Float_1D
+    Tsfc: Float_1D
+    vpd: Float_1D
 
 
-class Lai(object):
-    def __init__(
-        self,
-        lai: Float_1D,
-        dff: Float_2D,
-        sumlai: Float_2D,
-        dff_clmp: Float_2D,
-        adens: Float_2D,
-    ) -> None:
-        self.lai = lai
-        self.dff = dff
-        self.sumlai = sumlai
-        self.dff_clmp = dff_clmp
-        self.adens = adens
-
-    def _tree_flatten(self):
-        children = (self.lai, self.dff, self.sumlai, self.dff_clmp, self.adens)
-        aux_data = {}
-        return (children, aux_data)
-
-    @classmethod
-    def _tree_unflatten(cls, aux_data, children):
-        return cls(*children, **aux_data)
+class Lai(eqx.Module):
+    lai: Float_1D
+    dff: Float_2D
+    sumlai: Float_2D
+    dff_clmp: Float_2D
+    adens: Float_2D
 
 
-class Ps(object):
-    def __init__(
-        self,
-        aphoto: Float_2D,
-        ci: Float_2D,
-        gs_co2: Float_2D,
-        gs_m_s: Float_2D,
-        wj: Float_2D,
-        wc: Float_2D,
-        wp: Float_2D,
-        jsucrose: Float_2D,
-        Ag: Float_2D,
-        x1: Float_2D,
-        x2: Float_2D,
-        x3: Float_2D,
-        p: Float_2D,
-        q: Float_2D,
-        r: Float_2D,
-        rd: Float_2D,
-        rstom: Float_2D,
-    ) -> None:
-        self.aphoto = aphoto
-        self.ci = ci
-        self.gs_co2 = gs_co2
-        self.gs_m_s = gs_m_s
-        self.wj = wj
-        self.wc = wc
-        self.wp = wp
-        self.jsucrose = jsucrose
-        self.Ag = Ag
-        self.x1 = x1
-        self.x2 = x2
-        self.x3 = x3
-        self.p = p
-        self.q = q
-        self.r = r
-        self.rd = rd
-        self.rstom = rstom
-
-    def _tree_flatten(self):
-        children = (
-            self.aphoto,
-            self.ci,
-            self.gs_co2,
-            self.wj,
-            self.wc,
-            self.wp,
-            self.jsucrose,
-            self.Ag,
-            self.x1,
-            self.x2,
-            self.x3,
-            self.p,
-            self.q,
-            self.r,
-            self.rd,
-            self.rstom,
-        )
-        aux_data = {}
-        return (children, aux_data)
-
-    @classmethod
-    def _tree_unflatten(cls, aux_data, children):
-        return cls(*children, **aux_data)
+class Ps(eqx.Module):
+    aphoto: Float_2D
+    ci: Float_2D
+    gs_co2: Float_2D
+    gs_m_s: Float_2D
+    wj: Float_2D
+    wc: Float_2D
+    wp: Float_2D
+    jsucrose: Float_2D
+    Ag: Float_2D
+    x1: Float_2D
+    x2: Float_2D
+    x3: Float_2D
+    p: Float_2D
+    q: Float_2D
+    r: Float_2D
+    rd: Float_2D
+    rstom: Float_2D
 
 
 class Soil(object):
@@ -708,6 +409,189 @@ def initialize_profile_mx(met: Met, para: Para):
     return prof
 
 
+def update_profile_mx(
+    met: Met,
+    para: Para,
+    prof: Prof,
+    quantum: ParNir,
+    sun: SunShadedCan,
+    shade: SunShadedCan,
+    soil: Soil,
+    lai: Lai,
+    dij: Float_2D,
+) -> Prof:
+    Ps = (
+        quantum.prob_beam[:, : para.nlayers] * sun.Ps
+        + quantum.prob_shade[:, : para.nlayers] * shade.Ps
+    ) * lai.adens
+    LE = (
+        quantum.prob_beam[:, : para.nlayers] * sun.LE
+        + quantum.prob_shade[:, : para.nlayers] * shade.LE
+    ) * lai.adens
+    H = (
+        quantum.prob_beam[:, : para.nlayers] * sun.H
+        + quantum.prob_shade[:, : para.nlayers] * shade.H
+    ) * lai.adens
+    Rnet = (
+        quantum.prob_beam[:, : para.nlayers] * sun.Rnet
+        + quantum.prob_shade[:, : para.nlayers] * shade.Rnet
+    ) * lai.adens
+    Tsfc = (
+        quantum.prob_beam[:, : para.nlayers] * sun.Tsfc
+        + quantum.prob_shade[:, : para.nlayers] * shade.Tsfc
+    )
+
+    # Compute scalar profiles
+    # it needs information on source/sink, Dij, soil boundary flux and factor for units
+    fact_heatcoef = met.air_density * para.Cp
+    soilflux = soil.heat  # assume soil heat flux is 20 W m-2 until soil sub is working
+    Tair_K = conc_mx(
+        H,
+        soilflux,
+        prof.delz,
+        dij,
+        met.ustar,
+        met.zL,
+        met.T_air_K,
+        para.jtot,
+        para.nlayers_atmos,
+        fact_heatcoef,
+    )
+    Told_K = prof.Told_K
+
+    # with larger Dij value I need to filter new T profiles
+    Tair_K = 0.25 * Tair_K + 0.75 * Told_K
+    Told_K = Tair_K
+
+    # Compute vapor pressure profiles
+    soilflux = soil.evap  # W m-2
+    # in fConcMatrix fact.lecoef is in the denominator insteat of multiplier
+    # if we divide W m -2 = J m-2 s-1 by Lambda we have g m-2 s-1
+    # need to convert g to Pa
+    # eair =rhovair R Tk/mv  Jones
+    fact_lecoef = (
+        flambda(Tair_K[:, para.jktot - 1])
+        * 18.01
+        / (1000 * 8.314 * Tair_K[:, para.jktot - 1])
+    )  # noqa: E501
+    eair_Pa = conc_mx(
+        LE,
+        soil.evap,
+        prof.delz,
+        dij,
+        met.ustar,
+        met.zL,
+        met.eair_Pa,
+        para.jtot,
+        para.nlayers_atmos,
+        fact_lecoef,
+    )
+    eair_old_Pa = prof.eair_old_Pa
+    eair_Pa = 0.25 * eair_Pa + 0.75 * eair_old_Pa
+    eair_old_Pa = eair_Pa
+
+    # # TODO: Compute CO2 profiles
+    # fact_co2=(28.97/44)*met.air_density_mole
+    # Rsoil = SoilRespiration(
+    #    Veg.Ps,soil.T_soil(:,10),met.soilmoisture,met.zcanopy,Veg.Rd,prm)
+    # soilflux=Rsoil.Respiration;
+    # [prof.co2]=fConcMatrix(-prof.Ps,soilflux, prof.delz, Dij,met,met.CO2,prm,fact.co2)
+
+    # Update
+    prof = eqx.tree_at(
+        lambda t: (
+            t.Ps,
+            t.LE,
+            t.H,
+            t.Rnet,
+            t.Tsfc,
+            t.Tair_K,
+            t.Told_K,
+            t.eair_Pa,
+            t.eair_old_Pa,
+        ),
+        prof,
+        (Ps, LE, H, Rnet, Tsfc, Tair_K, Told_K, eair_Pa, eair_old_Pa),
+    )
+
+    return prof
+
+
+def calculate_veg_mx(
+    para: Para, lai: Lai, quantum: ParNir, sun: SunShadedCan, shade: SunShadedCan
+) -> Veg:
+    veg_Ps = jnp.sum(
+        (
+            quantum.prob_beam[:, : para.nlayers] * sun.Ps
+            + quantum.prob_shade[:, : para.nlayers] * shade.Ps
+        )
+        * lai.dff,
+        axis=1,
+    )
+    veg_Rd = jnp.sum(
+        (
+            quantum.prob_beam[:, : para.nlayers] * sun.Resp
+            + quantum.prob_shade[:, : para.nlayers] * shade.Resp
+        )
+        * lai.dff,
+        axis=1,
+    )
+    veg_LE = jnp.sum(
+        (
+            quantum.prob_beam[:, : para.nlayers] * sun.LE
+            + quantum.prob_shade[:, : para.nlayers] * shade.LE
+        )
+        * lai.dff,
+        axis=1,
+    )
+    veg_H = jnp.sum(
+        (
+            quantum.prob_beam[:, : para.nlayers] * sun.H
+            + quantum.prob_shade[:, : para.nlayers] * shade.H
+        )
+        * lai.dff,
+        axis=1,
+    )
+    veg_gs = jnp.sum(
+        (
+            quantum.prob_beam[:, : para.nlayers] * sun.gs
+            + quantum.prob_shade[:, : para.nlayers] * shade.gs
+        )
+        * lai.dff,
+        axis=1,
+    )
+    veg_Rnet = jnp.sum(
+        (
+            quantum.prob_beam[:, : para.nlayers] * sun.Rnet
+            + quantum.prob_shade[:, : para.nlayers] * shade.Rnet
+        )
+        * lai.dff,
+        axis=1,
+    )
+    veg_Tsfc = jnp.sum(
+        (
+            quantum.prob_beam[:, : para.nlayers] * sun.Tsfc
+            + quantum.prob_shade[:, : para.nlayers] * shade.Tsfc
+        )
+        * lai.dff,
+        axis=1,
+    )
+    veg_Tsfc = veg_Tsfc / lai.lai
+    veg_vpd = jnp.sum(
+        (
+            quantum.prob_beam[:, : para.nlayers] * sun.vpd_Pa
+            + quantum.prob_shade[:, : para.nlayers] * shade.vpd_Pa
+        )
+        * lai.dff,
+        axis=1,
+    )
+    veg_vpd = veg_vpd / lai.lai
+
+    veg = Veg(veg_Ps, veg_gs, veg_Rd, veg_H, veg_LE, veg_Rnet, veg_Tsfc, veg_vpd)
+
+    return veg
+
+
 def initialize_model_states(met: Met, para: Para):
     # Soil
     soil = initialize_soil(para, met)
@@ -719,12 +603,13 @@ def initialize_model_states(met: Met, para: Para):
     # IR
     ir = initialize_ir(para)
 
-    # Veg
-    veg = initialize_veg(para)
+    # # Veg
+    # veg = initialize_veg(para)
 
     # Qin
     qin = initialize_qin(para)
 
+    # TODO: remove RNet since it is not used
     # RNet
     rnet = initialize_rnet(para)
 
@@ -737,7 +622,7 @@ def initialize_model_states(met: Met, para: Para):
     # Lai
     lai = initialize_lai(para, met)
 
-    return soil, quantum, nir, ir, veg, qin, rnet, sun, shade, lai
+    return soil, quantum, nir, ir, qin, rnet, sun, shade, lai
 
 
 def initialize_parnir(para: Para, wavebnd: str) -> ParNir:
@@ -750,25 +635,25 @@ def initialize_parnir(para: Para, wavebnd: str) -> ParNir:
     up_flux = jnp.zeros([ntime, jktot])
     sun_normal = jnp.zeros([ntime, jktot])
     sh_flux = jnp.zeros([ntime, jktot])
-    incoming = jnp.zeros(ntime)
+    # incoming = jnp.zeros(ntime)
     beam_flux = jnp.zeros([ntime, jktot])
-    total = jnp.zeros([ntime, jktot])
+    # total = jnp.zeros([ntime, jktot])
     inbeam = jnp.zeros(ntime)
     indiffuse = jnp.zeros(ntime)
     prob_beam = jnp.zeros([ntime, jktot])
-    prob_shade = jnp.ones([ntime, jktot])
+    # prob_shade = jnp.ones([ntime, jktot])
     sun_lai = jnp.zeros([ntime, jktot])
     shade_lai = jnp.zeros([ntime, jktot])
     if wavebnd == "par":
-        reflect = para.par_reflect
-        trans = para.par_trans
-        soil_refl = para.par_soil_refl
-        absorbed = para.par_absorbed
+        reflect = jnp.array(para.par_reflect)
+        trans = jnp.array(para.par_trans)
+        soil_refl = jnp.array(para.par_soil_refl)
+        # absorbed = jnp.array(para.par_absorbed)
     elif wavebnd == "nir":
-        reflect = para.nir_reflect
-        trans = para.nir_trans
-        soil_refl = para.nir_soil_refl
-        absorbed = para.nir_absorbed
+        reflect = jnp.array(para.nir_reflect)
+        trans = jnp.array(para.nir_trans)
+        soil_refl = jnp.array(para.nir_soil_refl)
+        # absorbed = jnp.array(para.nir_absorbed)
     rad = ParNir(
         sh_abs,
         sun_abs,
@@ -777,19 +662,19 @@ def initialize_parnir(para: Para, wavebnd: str) -> ParNir:
         up_flux,
         sun_normal,
         sh_flux,
-        incoming,
+        # incoming,
         beam_flux,
-        total,
+        # total,
         inbeam,
         indiffuse,
         prob_beam,
-        prob_shade,
+        # prob_shade,
         sun_lai,
         shade_lai,
         reflect,  # pyright: ignore
         trans,  # pyright: ignore
         soil_refl,  # pyright: ignore
-        absorbed,  # pyright: ignore
+        # absorbed,  # pyright: ignore
     )
     return rad
 
@@ -827,12 +712,14 @@ def initialize_ir(para: Para) -> Ir:
 def initialize_veg(para: Para) -> Veg:
     ntime = para.ntime
     Ps = jnp.zeros(ntime)
+    gs = jnp.zeros(ntime)
     Rd = jnp.zeros(ntime)
     H = jnp.zeros(ntime)
     LE = jnp.zeros(ntime)
     Rnet = jnp.zeros(ntime)
     Tsfc = jnp.zeros(ntime)
-    return Veg(Ps, Rd, H, LE, Rnet, Tsfc)
+    vpd = jnp.zeros(ntime)
+    return Veg(Ps, gs, Rd, H, LE, Rnet, Tsfc, vpd)
 
 
 def initialize_qin(para: Para) -> Qin:
@@ -857,6 +744,7 @@ def initialize_sunshade(para: Para, met: Met) -> SunShadedCan:
     Ps = jnp.zeros([ntime, jtot])
     Resp = jnp.zeros([ntime, jtot])
     gs = jnp.zeros([ntime, jtot])
+    vpd_Pa = jnp.zeros([ntime, jtot])
     LE = jnp.zeros([ntime, jtot])
     H = jnp.zeros([ntime, jtot])
     Rnet = jnp.zeros([ntime, jtot])
@@ -869,7 +757,7 @@ def initialize_sunshade(para: Para, met: Met) -> SunShadedCan:
     Tsfc = dot(met.T_air_K, Tsfc)
 
     return SunShadedCan(
-        Ps, Resp, gs, LE, H, Rnet, Lout, closure, Tsfc, Tsfc_new, Tsfc_old
+        Ps, Resp, gs, vpd_Pa, LE, H, Rnet, Lout, closure, Tsfc, Tsfc_new, Tsfc_old
     )
 
 

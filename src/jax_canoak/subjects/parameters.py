@@ -42,7 +42,7 @@ class Para(object):
         nir_reflect: Float_0D = 0.60,
         nir_trans: Float_0D = 0.20,
         nir_soil_refl: Float_0D = 0.10,
-        npart: int = 500000,
+        npart: int = 1000000,
     ) -> None:
         self.time_zone = time_zone  # time zone
         self.lat_deg = latitude  # latitude

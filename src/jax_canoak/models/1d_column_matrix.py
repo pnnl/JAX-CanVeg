@@ -3,7 +3,7 @@ One-dimensional hydrobiogeochemical modeling of CANOAK/Canveg.
 Modified from CANOAK's matlab code.
 
 Author: Peishi Jiang
-Date: 2023.07.24.
+Date: 2023.08.13.
 """
 
 import jax
@@ -12,11 +12,13 @@ import jax.numpy as jnp
 # import h5py
 import numpy as np
 
-# import equinox
+import equinox as eqx
 from jax_canoak.subjects import Para, Met
 
 from jax_canoak.subjects import initialize_profile_mx, initialize_model_states
-from jax_canoak.subjects.utils import llambda as flambda
+from jax_canoak.subjects import update_profile_mx, calculate_veg_mx
+
+# from jax_canoak.subjects.utils import llambda as flambda
 from jax_canoak.shared_utilities.types import HashableArrayWrapper
 from jax_canoak.shared_utilities.utils import dot
 from jax_canoak.physics import energy_carbon_fluxes_mx
@@ -26,16 +28,17 @@ from jax_canoak.physics.energy_fluxes import rad_tran_canopy_mx, sky_ir_v2_mx
 
 # from jax_canoak.physics.energy_fluxes import rad_tran_canopy_mx, sky_ir_mx
 from jax_canoak.physics.energy_fluxes import compute_qin_mx, ir_rad_tran_canopy_mx
-from jax_canoak.physics.energy_fluxes import uz_mx, soil_energy_balance_mx, conc_mx
+from jax_canoak.physics.energy_fluxes import uz_mx, soil_energy_balance_mx
 from jax_canoak.physics.carbon_fluxes import angle_mx, leaf_angle_mx
 
 
 import matplotlib.pyplot as plt
-from jax_canoak.shared_utilities.plot import plot_dij, plot_prof2, plot_daily
+from jax_canoak.shared_utilities.plot import plot_dij, plot_daily
+from jax_canoak.shared_utilities.plot import plot_veg_temp
 
 # from jax_canoak.shared_utilities import plot_ir, plot_rad, plot_canopy1, plot_dij
 # from jax_canoak.shared_utilities import plot_soil, plot_soiltemp, plot_prof
-# from jax_canoak.shared_utilities import plot_totalenergy
+# from jax_canoak.shared_utilities import plot_totalenergyplot_prof
 
 jax.config.update("jax_enable_x64", True)
 
@@ -87,14 +90,14 @@ para = Para(
     meas_ht=meas_ht,
     n_hr_per_day=n_hr_per_day,
     n_time=n_time,
-    npart=1000000,
+    npart=int(1e6),
 )
 
 
 # ---------------------------------------------------------------------------- #
 #                     Generate or read the Dispersion matrix                   #
 # ---------------------------------------------------------------------------- #
-dij = disp_canveg(para)
+dij = disp_canveg(para, timemax=5000.0)
 # dij = np.loadtxt('Dij_Alfalfa.csv', delimiter=',')
 # dij = jnp.array(dij)
 
@@ -102,9 +105,7 @@ dij = disp_canveg(para)
 # ---------------------------------------------------------------------------- #
 #                     Initialize model states                        #
 # ---------------------------------------------------------------------------- #
-soil, quantum, nir, ir, veg, qin, rnet, sun, shade, lai = initialize_model_states(
-    met, para
-)
+soil, quantum, nir, ir, qin, rnet, sun, shade, lai = initialize_model_states(met, para)
 
 
 # ---------------------------------------------------------------------------- #
@@ -119,10 +120,14 @@ sun_ang = angle_mx(para.lat_deg, para.long_deg, para.time_zone, met.day, met.hho
 ratrad, par_beam, par_diffuse, nir_beam, nir_diffuse = diffuse_direct_radiation_mx(
     sun_ang.sin_beta, met.rglobal, met.parin, met.P_kPa
 )
-quantum.inbeam, quantum.indiffuse = par_beam, par_diffuse
-quantum.incoming = quantum.inbeam + quantum.indiffuse
-nir.inbeam, nir.indiffuse = nir_beam, nir_diffuse
-nir.incoming = nir.inbeam + nir.indiffuse
+quantum = eqx.tree_at(
+    lambda t: (t.inbeam, t.indiffuse), quantum, (par_beam, par_diffuse)
+)
+nir = eqx.tree_at(lambda t: (t.inbeam, t.indiffuse), nir, (nir_beam, nir_diffuse))
+# quantum.inbeam, quantum.indiffuse = par_beam, par_diffuse
+# quantum.incoming = quantum.inbeam + quantum.indiffuse
+# nir.inbeam, nir.indiffuse = nir_beam, nir_diffuse
+# nir.incoming = nir.inbeam + nir.indiffuse
 
 # ---------------------------------------------------------------------------- #
 #                     Compute leaf angle                                       #
@@ -134,9 +139,10 @@ leaf_ang = leaf_angle_mx(sun_ang, para, lai)
 #                     Initialize IR fluxes with air temperature                #
 # ---------------------------------------------------------------------------- #
 # ir.ir_in = sky_ir_mx(met.T_air_K, ratrad, para.sigma)
-ir.ir_in = sky_ir_v2_mx(met, ratrad, para.sigma)
-ir.ir_dn = dot(ir.ir_in, ir.ir_dn)
-ir.ir_up = dot(ir.ir_in, ir.ir_up)
+ir_in = sky_ir_v2_mx(met, ratrad, para.sigma)
+ir_dn = dot(ir_in, ir.ir_dn)
+ir_up = dot(ir_in, ir.ir_up)
+ir = eqx.tree_at(lambda t: (t.ir_in, t.ir_dn, t.ir_up), ir, (ir_in, ir_dn, ir_up))
 
 
 # ---------------------------------------------------------------------------- #
@@ -185,13 +191,14 @@ nir = rad_tran_canopy_mx(
 # loop again and apply updated Tsfc info until convergence
 # This is where things should be jitted as a whole
 def iteration(c, i):
-    met, prof, ir, qin, sun, shade, soil, veg = c
+    met, prof, ir, qin, sun, shade, soil = c
     # jax.debug.print("T soil: {a}", a=soil.T_soil[10,:])
     jax.debug.print("T sfc: {a}", a=soil.sfc_temperature[10])
 
     # Update canopy wind profile with iteration of z/l and use in boundary layer
     # resistance computations
-    prof.wind = uz_mx(met, para)
+    wind = uz_mx(met, para)
+    prof = eqx.tree_at(lambda t: t.wind, prof, wind)
 
     # Compute IR fluxes with Bonan's algorithms of Norman model
     ir = ir_rad_tran_canopy_mx(leaf_ang, ir, quantum, soil, sun, shade, para)
@@ -215,58 +222,7 @@ def iteration(c, i):
 
     # Compute profiles of C's, zero layer jtot+1 as that is not a dF/dz or
     # source/sink level
-    prof.Ps = (
-        quantum.prob_beam[:, : para.nlayers] * sun.Ps
-        + quantum.prob_shade[:, : para.nlayers] * shade.Ps
-    ) * lai.adens
-    prof.LE = (
-        quantum.prob_beam[:, : para.nlayers] * sun.LE
-        + quantum.prob_shade[:, : para.nlayers] * shade.LE
-    ) * lai.adens
-    prof.H = (
-        quantum.prob_beam[:, : para.nlayers] * sun.H
-        + quantum.prob_shade[:, : para.nlayers] * shade.H
-    ) * lai.adens
-    prof.Rnet = (
-        quantum.prob_beam[:, : para.nlayers] * sun.Rnet
-        + quantum.prob_shade[:, : para.nlayers] * shade.Rnet
-    ) * lai.adens
-    prof.Tsfc = (
-        quantum.prob_beam[:, : para.nlayers] * sun.Tsfc
-        + quantum.prob_shade[:, : para.nlayers] * shade.Tsfc
-    )
-
-    # Compute scalar profiles
-    # it needs information on source/sink, Dij, soil boundary flux and factor for units
-    fact_heatcoef = met.air_density * para.Cp
-    soilflux = soil.heat  # assume soil heat flux is 20 W m-2 until soil sub is working
-    prof.Tair_K = conc_mx(
-        prof.H, soilflux, prof.delz, dij, met, met.T_air_K, para, fact_heatcoef
-    )
-
-    # with larger Dij value I need to filter new T profiles
-    prof.Tair_K = 0.25 * prof.Tair_K + 0.75 * prof.Told_K
-    prof.Told_K = prof.Tair_K
-
-    # Compute vapor pressure profiles
-    soilflux = soil.evap  # W m-2
-    # in fConcMatrix fact.lecoef is in the denominator insteat of multiplier
-    # if we divide W m -2 = J m-2 s-1 by Lambda we have g m-2 s-1
-    # need to convert g to Pa
-    # eair =rhovair R Tk/mv  Jones
-    fact_lecoef = (
-        flambda(prof.Tair_K[:, para.jktot - 1])
-        * 18.01
-        / (1000 * 8.314 * prof.Tair_K[:, para.jktot - 1])
-    )  # noqa: E501
-    prof.eair_Pa = conc_mx(
-        prof.LE, soil.evap, prof.delz, dij, met, met.eair_Pa, para, fact_lecoef
-    )
-    prof.eair_Pa = 0.25 * prof.eair_Pa + 0.75 * prof.eair_old_Pa
-    prof.eair_old_Pa = prof.eair_Pa
-
-    # # TODO: Compute CO2 profiles
-    # fact_co2=(28.97/44)*met.air_density_mole
+    prof = update_profile_mx(met, para, prof, quantum, sun, shade, soil, lai, dij)
 
     # compute met.zL from HH and met.ustar
     HH = jnp.sum(
@@ -282,94 +238,35 @@ def iteration(c, i):
     )
     met.zL = jnp.clip(zL, a_min=-3, a_max=0.25)
 
-    # Compute the vegetation overall photosynthesis and respiration
-    veg.Ps = jnp.sum(
-        (
-            quantum.prob_beam[:, : para.nlayers] * sun.Ps
-            + quantum.prob_shade[:, : para.nlayers] * shade.Ps
-        )
-        * lai.dff[:, : para.nlayers],
-        axis=1,
-    )
-    veg.Rd = jnp.sum(
-        (
-            quantum.prob_beam[:, : para.nlayers] * sun.Resp
-            + quantum.prob_shade[:, : para.nlayers] * shade.Resp
-        )
-        * lai.dff[:, : para.nlayers],
-        axis=1,
-    )
+    # # Compute the vegetation overall photosynthesis and respiration
+    # veg_Ps = jnp.sum(
+    #     (
+    #         quantum.prob_beam[:, : para.nlayers] * sun.Ps
+    #         + quantum.prob_shade[:, : para.nlayers] * shade.Ps
+    #     )
+    #     * lai.dff[:, : para.nlayers],
+    #     axis=1,
+    # )
+    # veg_Rd = jnp.sum(
+    #     (
+    #         quantum.prob_beam[:, : para.nlayers] * sun.Resp
+    #         + quantum.prob_shade[:, : para.nlayers] * shade.Resp
+    #     )
+    #     * lai.dff[:, : para.nlayers],
+    #     axis=1,
+    # )
 
-    cnew = [met, prof, ir, qin, sun, shade, soil, veg]
+    cnew = [met, prof, ir, qin, sun, shade, soil]
     return cnew, None
 
 
-initials = [met, prof, ir, qin, sun, shade, soil, veg]
+initials = [met, prof, ir, qin, sun, shade, soil]
 finals, _ = jax.lax.scan(iteration, initials, xs=None, length=15)
 
-met, prof, ir, qin, sun, shade, soil, veg = finals
+met, prof, ir, qin, sun, shade, soil = finals
 
 # Compute canopy integrated fluxes
-veg.Ps = jnp.sum(
-    (
-        quantum.prob_beam[:, : para.nlayers] * sun.Ps
-        + quantum.prob_shade[:, : para.nlayers] * shade.Ps
-    )
-    * lai.dff,
-    axis=1,
-)
-veg.Rd = jnp.sum(
-    (
-        quantum.prob_beam[:, : para.nlayers] * sun.Resp
-        + quantum.prob_shade[:, : para.nlayers] * shade.Resp
-    )
-    * lai.dff,
-    axis=1,
-)
-veg.LE = jnp.sum(
-    (
-        quantum.prob_beam[:, : para.nlayers] * sun.LE
-        + quantum.prob_shade[:, : para.nlayers] * shade.LE
-    )
-    * lai.dff,
-    axis=1,
-)
-veg.H = jnp.sum(
-    (
-        quantum.prob_beam[:, : para.nlayers] * sun.H
-        + quantum.prob_shade[:, : para.nlayers] * shade.H
-    )
-    * lai.dff,
-    axis=1,
-)
-veg.gs = jnp.sum(
-    (
-        quantum.prob_beam[:, : para.nlayers] * sun.gs
-        + quantum.prob_shade[:, : para.nlayers] * shade.gs
-    )
-    * lai.dff,
-    axis=1,
-)
-veg.Rnet = jnp.sum(
-    (
-        quantum.prob_beam[:, : para.nlayers] * sun.Rnet
-        + quantum.prob_shade[:, : para.nlayers] * shade.Rnet
-    )
-    * lai.dff,
-    axis=1,
-)
-veg.Tsfc = jnp.sum(
-    (
-        quantum.prob_beam[:, : para.nlayers] * sun.Tsfc
-        + quantum.prob_shade[:, : para.nlayers] * shade.Tsfc
-    )
-    * lai.dff,
-    axis=1,
-)
-veg.Tsfc = veg.Tsfc / lai.lai
-# Veg.vpd=sum(quantum.prob_beam(:,1:prm.nlayers) .* Sun.vpd_Pa(:,1:prm.nlayers) +...
-#     quantum.prob_shade(:,1:prm.nlayers) .*Shade.vpd_Pa(:,1:prm.nlayers),2) * prm.dff;
-# Veg.vpd=Veg.vpd/prm.LAI;
+veg = calculate_veg_mx(para, lai, quantum, sun, shade)
 
 # Net radiation budget at top of the canopy
 can_rnet = (
@@ -396,11 +293,12 @@ if plot:
     # plot_canopy2(sun, para, "sun")
     # plot_canopy2(shade, para, "shade")
     # plot_leafang(leaf_ang, para)
+    plot_veg_temp(sun, shade, para)
     plot_dij(dij, para)
     # plot_soil(soil, para)
     # plot_soiltemp(soil, para)
     # plot_totalenergy(soil, veg, can_rnet)
     # plot_prof1(prof)
-    plot_prof2(prof, para)
+    # plot_prof2(prof, para)
     plot_daily(met, soil, veg, para)
     plt.show()

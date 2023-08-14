@@ -9,7 +9,7 @@ Date: 2023.07.14.
 # import jax
 # import jax.numpy as jnp
 
-import equinox
+import equinox as eqx
 
 # from functools import partial
 
@@ -25,7 +25,7 @@ from .carbon_fluxes import leaf_ps_mx
 
 
 # @partial(jax.jit, static_argnames=["mask_turbulence"])
-@equinox.filter_jit
+@eqx.filter_jit
 def energy_carbon_fluxes(
     sun: SunShadedCan,
     shade: SunShadedCan,
@@ -84,8 +84,10 @@ def energy_carbon_fluxes(
         prof.eair_Pa[:, : prm.jtot],
         prm,
     )
-    # jax.debug.print("{a}", a=ps.gs_m_s)
-    sun.Ps, sun.gs, sun.Resp = ps.aphoto, ps.gs_m_s, ps.rd
+    # sun.Ps, sun.gs, sun.Resp = ps.aphoto, ps.gs_m_s, ps.rd
+    sun = eqx.tree_at(
+        lambda t: (t.Ps, t.gs, t.Resp), sun, (ps.aphoto, ps.gs_m_s, ps.rd)
+    )
 
     # Compute energy balance on the top of sunlit leaves
     # pass and use prm if leaf is amphistomatous or hypostomatous
@@ -107,7 +109,10 @@ def energy_carbon_fluxes(
         prof.eair_Pa[:, : prm.jtot],
         prm,
     )
-    shade.Ps, shade.gs, shade.Resp = ps.aphoto, ps.gs_m_s, ps.rd
+    # shade.Ps, shade.gs, shade.Resp = ps.aphoto, ps.gs_m_s, ps.rd
+    shade = eqx.tree_at(
+        lambda t: (t.Ps, t.gs, t.Resp), shade, (ps.aphoto, ps.gs_m_s, ps.rd)
+    )
     shade = leaf_energy_mx(boundary_layer_res, qin.shade_abs, met, prof, shade, prm)
 
     return sun, shade

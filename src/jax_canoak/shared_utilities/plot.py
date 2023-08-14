@@ -49,6 +49,15 @@ def plot_ir(ir, prm, lai, ax=None):
     return ax
 
 
+def plot_veg_temp(sun, shade, prm, ax=None):
+    if ax is None:
+        fig, ax = plt.subplots(1, 1, figsize=(10, 8))
+    ax.plot(jnp.nanmean(sun.Tsfc, 0), prm.zht[: prm.jtot], label="Sun")
+    ax.plot(jnp.nanmean(shade.Tsfc, 0), prm.zht[: prm.jtot], label="Shade")
+    ax.set(xlabel="Temperature [degK]", ylabel="canopy layers")
+    ax.legend()
+
+
 def plot_canopy1(can, qin, prm, sunorshade: str, ax=None):
     if ax is None:
         fig, ax = plt.subplots(1, 1, figsize=(10, 8))

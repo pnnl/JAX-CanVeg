@@ -86,18 +86,18 @@ def angle(
     # Calculate solar elevation, radians
     beta_rad = jnp.arcsin(sin_beta)
 
-    # Calculate solar elevation, degrees
-    beta_deg = beta_rad * 180 / PI
+    # # Calculate solar elevation, degrees
+    # beta_deg = beta_rad * 180 / PI
 
-    theta_rad = PI / 2.0 - beta_rad
-    theta_deg = theta_rad * 180.0 / PI
+    # theta_rad = PI / 2.0 - beta_rad
+    # theta_deg = theta_rad * 180.0 / PI
 
     sun_ang = SunAng(
         sin_beta,
         beta_rad,
-        beta_deg,
-        theta_rad,
-        theta_deg,
+        # beta_deg,
+        # theta_rad,
+        # theta_deg,
     )
     # sun_ang.sin_beta = sin_beta
     # sun_ang.beta_rad = beta_rad

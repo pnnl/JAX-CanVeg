@@ -10,6 +10,8 @@ Date: 2023.08.01.
 import jax
 import jax.numpy as jnp
 
+import equinox as eqx
+
 from ...subjects import ParNir, Ir, Para, Qin, BoundLayerRes
 from ...subjects import Met, SunShadedCan, Prof
 from ...subjects.utils import desdt as fdesdt
@@ -52,13 +54,12 @@ def compute_qin(quantum: ParNir, nir: ParNir, ir: Ir, prm: Para, qin: Qin) -> Qi
     # noticed in code ir.shade was multiplied by prm.ep twice, eg in
     # fIR_RadTranCanopy_MatrixV2 and here. removed prm.ep in the IR
     # subroutine
-    qin.sun_abs = nir.sun_abs + vis_sun_abs + ir_shade
-    qin.shade_abs = nir.sh_abs + vis_sh_abs + ir_shade
-    # jax.debug.print("par: {a}", a=vis_sun_abs[0,:])
-    # jax.debug.print("nir: {a}", a=nir.sun_abs[0,:])
-    # jax.debug.print("ir_shade: {a}", a=ir_shade[0,:])
-    # jax.debug.print("ir_up: {a}", a=ir.ir_up[0,:])
-    # jax.debug.print("ir_dn: {a}", a=ir.ir_dn[0,:])
+    # qin.sun_abs = nir.sun_abs + vis_sun_abs + ir_shade
+    # qin.shade_abs = nir.sh_abs + vis_sh_abs + ir_shade
+    sun_abs = nir.sun_abs + vis_sun_abs + ir_shade
+    shade_abs = nir.sh_abs + vis_sh_abs + ir_shade
+
+    qin = eqx.tree_at(lambda t: (t.sun_abs, t.shade_abs), qin, (sun_abs, shade_abs))
 
     return qin
 
@@ -182,12 +183,17 @@ def leaf_energy(
     # esTsfc=fes(Tsfc_K)
     closure = Rnet - H - LE  # test energy balance closure
 
-    radcan.LE = LE
-    radcan.H = H
-    radcan.Tsfc = Tsfc
-    radcan.Lout = Lout
-    radcan.Rnet = qin - Lout
+    radcan = eqx.tree_at(
+        lambda t: (t.LE, t.H, t.Tsfc, t.Lout, t.Rnet, t.vpd_Pa, t.closure),
+        radcan,
+        (LE, H, Tsfc, Lout, Rnet, vpd_Pa, closure),
+    )
+    # radcan.LE = LE
+    # radcan.H = H
+    # radcan.Tsfc = Tsfc
+    # radcan.Lout = Lout
+    # radcan.Rnet = qin - Lout
     # radcan.vpd_Pa = vpd_Pa
-    radcan.closure = closure
+    # radcan.closure = closure
 
     return radcan

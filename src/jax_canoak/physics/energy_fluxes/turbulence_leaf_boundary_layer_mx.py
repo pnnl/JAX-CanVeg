@@ -11,7 +11,7 @@ Date: 2023.07.30.
 import jax
 import jax.numpy as jnp
 
-import equinox
+import equinox as eqx
 
 # from functools import partial
 
@@ -51,23 +51,8 @@ def uz(met: Met, prm: Para) -> Float_2D:
     return wnd
 
 
-# @equinox.filter_jit
-# def boundary_resistance2(
-#     prof: Prof,
-#     # met: Met,
-#     TLF: Float_2D,
-#     prm: Para,
-#     mask_turbulence: HashableArrayWrapper,
-# ) -> BoundLayerRes:
-#     heat = jnp.zeros([prm.ntime, prm.jtot])
-#     vapor = jnp.zeros([prm.ntime, prm.jtot])
-#     co2 = jnp.zeros([prm.ntime, prm.jtot])
-#     boundary_layer_res = BoundLayerRes(heat, vapor, co2)
-#     return boundary_layer_res
-
-
 # @partial(jax.jit, static_argnames=["mask_turbulence"])
-@equinox.filter_jit
+@eqx.filter_jit
 def boundary_resistance(
     prof: Prof,
     met: Met,
@@ -99,10 +84,10 @@ def boundary_resistance(
     Returns:
         BoundLayerRes: _description_
     """  # noqa: E501
-    heat = jnp.zeros([prm.ntime, prm.jtot])
-    vapor = jnp.zeros([prm.ntime, prm.jtot])
-    co2 = jnp.zeros([prm.ntime, prm.jtot])
-    boundary_layer_res = BoundLayerRes(heat, vapor, co2)
+    # heat = jnp.zeros([prm.ntime, prm.jtot])
+    # vapor = jnp.zeros([prm.ntime, prm.jtot])
+    # co2 = jnp.zeros([prm.ntime, prm.jtot])
+    # boundary_layer_res = BoundLayerRes(heat, vapor, co2)
 
     Sh_heat = jnp.zeros([prm.ntime, prm.jtot])
     Sh_vapor = jnp.zeros([prm.ntime, prm.jtot])
@@ -186,9 +171,14 @@ def boundary_resistance(
         jnp.power(prof.Tair_K[:, : prm.jtot] / 273.16, 1.81),
     )
 
-    boundary_layer_res.heat = prm.lleaf / (ddh_T_P * Sh_heat)
-    boundary_layer_res.vapor = prm.lleaf / (ddv_T_P * Sh_vapor)
-    boundary_layer_res.co2 = prm.lleaf / (ddc_T_P * Sh_CO2)
+    # boundary_layer_res.heat = prm.lleaf / (ddh_T_P * Sh_heat)
+    # boundary_layer_res.vapor = prm.lleaf / (ddv_T_P * Sh_vapor)
+    # boundary_layer_res.co2 = prm.lleaf / (ddc_T_P * Sh_CO2)
+
+    heat = prm.lleaf / (ddh_T_P * Sh_heat)
+    vapor = prm.lleaf / (ddv_T_P * Sh_vapor)
+    co2 = prm.lleaf / (ddc_T_P * Sh_CO2)
+    boundary_layer_res = BoundLayerRes(heat, vapor, co2)
 
     # jax.debug.print("{a}", a=boundary_layer_res.co2)
 
