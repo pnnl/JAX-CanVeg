@@ -18,7 +18,7 @@ from ...shared_utilities.types import Float_2D, Float_1D, Float_0D
 from ...subjects import Para, Ps
 from ...subjects.utils import es
 
-# from ...shared_utilities.utils import dot
+from ...shared_utilities.utils import dot, add
 
 PI2 = 3.1415926 * 2
 
@@ -205,13 +205,17 @@ def leaf_ps(
     # correction for dark respiration
     rdzref = prm.vcopt * 0.004657
     rd = temp_func(rdzref, prm.erd, tprime25, prm.rugc, prm.tk_25, Tlk)
+    # jax.debug.print("rd: {a}", a=rd.mean(axis=0))
+    # jax.debug.print("rdzref: {a}", a=rdzref)
+    # jax.debug.print("Tlk: {a}", a=Tlk.mean(axis=0))
 
     # Reduce respiration by 40% in light according to Amthor
     @jnp.vectorize
-    def func1(rd_e):
-        return jax.lax.cond(rd_e > 10.0, lambda: rd_e * 0.4, lambda: rd_e)
+    def func1(rd_e, Iphoton_e):
+        return jax.lax.cond(Iphoton_e > 10.0, lambda: rd_e * 0.4, lambda: rd_e)
 
-    rd = func1(rd)
+    rd = func1(rd, Iphoton)
+    # jax.debug.print("rd: {a}", a=rd.mean(axis=0))
 
     # Apply temperature correction to JMAX and vcmax
     jmax = tboltz(prm.jmopt, prm.ejm, prm.toptjm, prm.rugc, prm.hkin, Tlk)
@@ -631,3 +635,38 @@ def soil_respiration(
     respiration_mg = respiration_mole * 0.044
 
     return respiration_mole, respiration_mg
+
+
+def soil_respiration_alfalfa(
+    Ac: Float_1D,
+    Tsoil: Float_1D,
+    soilmoisture: Float_1D,
+    veght: Float_1D,
+    Rd: Float_1D,
+    prm: Para,
+) -> Float_1D:
+    x = jnp.array([Ac + Rd, Tsoil, soilmoisture, veght])  # (4, ntime)
+
+    b1 = jnp.array(
+        [-1.51316616076344, 0.673139978230031, -59.2947930385706, -3.33294857624960]
+    )
+    b2 = jnp.array(
+        [1.38034307225825, 3.73823712105636, 59.9066980644239, 1.36701108005293]
+    )
+    b3 = jnp.array(
+        [2.14475255616910, 19.9136298988773, 0.000987230986585085, 0.0569682453563841]
+    )
+
+    temp = x / add(b3, x)
+    temp = dot(b2, temp)
+    phi = add(b1, temp)  # (4, ntime)
+    phisum = phi.sum(axis=0)  # (ntime,)
+
+    b0_0 = 4.846927939437475
+    b0_1 = 2.22166756601498
+    b0_2 = -0.0281417120818586
+
+    # Reco-Rd = Rsoil
+    resp = b0_0 + b0_1 * phisum + b0_2 * phisum * phisum - Rd
+
+    return resp

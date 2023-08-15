@@ -192,9 +192,11 @@ def plot_daily(met, soil, veg, prm, axes=None):
         fig, axes = plt.subplots(1, 2, figsize=(15, 8))
     # Tsfc, Tair
     ax = axes[0]
-    tsfc_mean = compute_daily_average(soil.sfc_temperature, met.hhour)
+    vegtsfc_mean = compute_daily_average(veg.Tsfc, met.hhour)
+    soiltsfc_mean = compute_daily_average(soil.sfc_temperature, met.hhour)
     tair_mean = compute_daily_average(met.T_air_K, met.hhour)
-    ax.plot(tsfc_mean.index, tsfc_mean.values, label="tsfc")
+    ax.plot(vegtsfc_mean.index, vegtsfc_mean.values, label="veg-tsfc")
+    ax.plot(soiltsfc_mean.index, soiltsfc_mean.values, label="soil-tsfc")
     ax.plot(tair_mean.index, tair_mean.values, label="tair")
     ax.set(xlabel="Hr", ylabel="Temperature [degK]")
     ax.legend()

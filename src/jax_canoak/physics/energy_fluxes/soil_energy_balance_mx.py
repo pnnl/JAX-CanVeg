@@ -9,7 +9,7 @@ Date: 2023.07.25.
 import jax
 import jax.numpy as jnp
 
-import equinox
+import equinox as eqx
 
 # from typing import Tuple
 
@@ -21,7 +21,7 @@ from ...subjects.utils import es as fes
 from ...subjects.utils import llambda as fllambda
 
 
-@equinox.filter_jit
+@eqx.filter_jit
 def soil_energy_balance(
     quantum: ParNir, nir: ParNir, ir: Ir, met: Met, prof: Prof, prm: Para, soil: Soil
 ) -> Soil:
@@ -55,6 +55,9 @@ def soil_energy_balance(
     Returns:
         Soil: _description_
     """
+    # ntime = prm.ntime
+    ntime = soil.T_soil.shape[0]
+
     # radiation balance at soil in PAR band, W m-2
     soil_par = (
         quantum.beam_flux[:, 0] + quantum.dn_flux[:, 0] - quantum.up_flux[:, 0]
@@ -129,14 +132,15 @@ def soil_energy_balance(
     tmparray = jnp.concatenate(
         [
             jnp.zeros([1]),
-            soil.T_soil[1 : prm.ntime, 0] - soil.T_soil_old[: prm.ntime - 1, 0],
+            soil.T_soil[1:ntime, 0] - soil.T_soil_old[: ntime - 1, 0],
             # soil.T_soil[1 : prm.ntime, 0] - soil.T_soil[: prm.ntime - 1, 0],
         ]
     )
 
     # soil.gsoil is computed in FiniteDifferenceMatrix
     storage = soil.cp_soil[:, 0] * tmparray
-    soil.gsoil = soil.gsoil + storage
+    gsoil = soil.gsoil + storage
+    # soil.gsoil = soil.gsoil + storage
 
     # coefficients for latent heat flux density
     lecoef = met.air_density * 0.622 * fact_latent * kv_soil / (met.P_kPa * 1000)
@@ -149,25 +153,26 @@ def soil_energy_balance(
     bcoef = (
         -repeat
         - lecoef * dest
-        + acoeff * (-2 * soil_Qin + 2 * soil.llout + 2.0 * soil.gsoil)
+        + acoeff * (-2 * soil_Qin + 2 * soil.llout + 2.0 * gsoil)
     )
     ccoef = (
         repeat * lecoef * vpdsoil
-        + lecoef * dest * (soil_Qin - soil.llout - soil.gsoil)
+        + lecoef * dest * (soil_Qin - soil.llout - gsoil)
         + acoeff
         * (
             soil_Qin * soil_Qin
             + soil.llout * soil.llout
-            + soil.gsoil * soil.gsoil
+            + gsoil * gsoil
             - 2 * soil_Qin * soil.llout
-            - 2 * soil_Qin * soil.gsoil
-            + 2.0 * soil.gsoil * soil.llout
+            - 2 * soil_Qin * gsoil
+            + 2.0 * gsoil * soil.llout
         )
     )
     product = bcoef * bcoef - 4 * acoef * ccoef
     # le1= (-bcoef + jnp.power(product,.5)) / (2*acoef)
     le2 = (-bcoef - jnp.power(product, 0.5)) / (2 * acoef)
-    soil.evap = jnp.real(le2)
+    evap = jnp.real(le2)
+    # soil.evap = jnp.real(le2)
 
     # # solve for Ts using quadratic solution
     # att = 6 * prm.epsoil * prm.sigma * tk2 + d2est * lecoef / 2
@@ -188,26 +193,41 @@ def soil_energy_balance(
     # soil.lout_sfc = prm.epsoil * prm.sigma * jnp.power(soil.sfc_temperature,4)
 
     # dT = (Q -LE - Gsoil -  ep sigma Ta^4)/( rho Cp gh + 4 ep sigma Ta^3)
-    del_Tk = (soil_Qin - soil.evap - soil.gsoil - soil.llout) / repeat
+    # del_Tk = (soil_Qin - soil.evap - soil.gsoil - soil.llout) / repeat
+    del_Tk = (soil_Qin - evap - gsoil - soil.llout) / repeat
     # jax.debug.print("soil Qin: {a}", a=soil_Qin[10])
     # jax.debug.print("soil evap: {a}", a=soil.evap[10])
     # jax.debug.print("soil gsoil: {a}", a=soil.gsoil[10])
     # jax.debug.print("soil llout: {a}", a=soil.llout[10])
     # jax.debug.print("repeat: {a}", a=repeat[10])
     # jax.debug.print("soil T: {a}", a=soil.T_soil[10,:])
-    soil.sfc_temperature = soil_T_air + del_Tk
+    sfc_temperature = soil_T_air + del_Tk
     # soil.T_Kelvin=soil.sfc_temperature
-    lout_sfc = prm.epsoil * prm.sigma * jnp.power(soil.sfc_temperature, 4)
+    T_soil_up_boundary = sfc_temperature
+    lout_sfc = prm.epsoil * prm.sigma * jnp.power(sfc_temperature, 4)
 
     # Sensible heat flux density over soil, W m-2
     # soil.heat = del_Tk * kcsoil
-    soil.heat = soil_Qin - lout_sfc - soil.evap - soil.gsoil
-    soil.rnet = soil_Qin - lout_sfc
+    heat = soil_Qin - lout_sfc - evap - gsoil
+    rnet = soil_Qin - lout_sfc
+
+    soil = eqx.tree_at(
+        lambda t: (
+            t.gsoil,
+            t.evap,
+            t.heat,
+            t.rnet,
+            t.sfc_temperature,
+            t.T_soil_up_boundary,
+        ),
+        soil,
+        (gsoil, evap, heat, rnet, sfc_temperature, T_soil_up_boundary),
+    )
 
     return soil
 
 
-# @equinox.filter_jit
+@eqx.filter_jit
 def finite_difference_matrix(soil: Soil, prm: Para) -> Soil:
     """Convert Soil Physics with Basic from Campbell for soil heat flux
 
@@ -229,16 +249,15 @@ def finite_difference_matrix(soil: Soil, prm: Para) -> Soil:
     Returns:
         Soil: _description_
     """
-    soil_mtime = prm.soil_mtime
+    # soil_mtime = prm.soil_mtime
+    # soil_nsoil = soil.n_soil
+    soil_nsoil = soil.dz.size
+    soil_mtime = soil.mtime
     # soil_mtime = 180
     # tolerance = 1.e-2
 
-    # pre allocate space for coefficients
-    # a_soil=zeros(prm.nn,soil.n_soil_2);
-    # b_soil=zeros(prm.nn,soil.n_soil_2);
-    # c_soil=zeros(prm.nn,soil.n_soil_2);
-    # d_soil=zeros(prm.nn,soil.n_soil_2);
-    # mm=zeros(prm.nn,soil.n_soil_2);
+    # ntime = prm.ntime
+    ntime = soil.T_soil.shape[0]
 
     Fst = 0.6  # (0: explicit, 1: implicit Euler)
     Gst = 1.0 - Fst
@@ -249,8 +268,8 @@ def finite_difference_matrix(soil: Soil, prm: Para) -> Soil:
         T_soil = c
         # Calculate the coef for each soil layers
         # Top boundary conditions: The first soil layer
-        a_soil_0, b_soil_0 = jnp.zeros([prm.ntime, 1]), jnp.ones([prm.ntime, 1])
-        c_soil_0, d_soil_0 = jnp.zeros([prm.ntime, 1]), soil.T_soil_up_boundary
+        a_soil_0, b_soil_0 = jnp.zeros([ntime, 1]), jnp.ones([ntime, 1])
+        c_soil_0, d_soil_0 = jnp.zeros([ntime, 1]), soil.T_soil_up_boundary
         d_soil_0 = jnp.expand_dims(d_soil_0, axis=-1)
 
         @jnp.vectorize
@@ -278,10 +297,10 @@ def finite_difference_matrix(soil: Soil, prm: Para) -> Soil:
             T_soil[:, 2:-1],
         )  # (ntime, nsoil-1) for each
         # Bottom boundary conditions
-        c_soil_n = jnp.zeros([prm.ntime, 1])
+        c_soil_n = jnp.zeros([ntime, 1])
         d_soil_n = (
             d_soil[:, -1]
-            + Fst * soil.k_conductivity_soil[:, soil.n_soil - 1] * soil.T_soil_low_bound
+            + Fst * soil.k_conductivity_soil[:, soil_nsoil - 1] * soil.T_soil_low_bound
         )  # noqa: E501
         d_soil_n = jnp.expand_dims(d_soil_n, axis=-1)
         a_soil = jnp.concatenate([a_soil_0, a_soil], axis=1)
@@ -302,7 +321,7 @@ def finite_difference_matrix(soil: Soil, prm: Para) -> Soil:
             return c2new, c2new
 
         _, out = jax.lax.scan(
-            update_bd, [b_soil[:, 0], d_soil[:, 0]], jnp.arange(1, soil.n_soil)
+            update_bd, [b_soil[:, 0], d_soil[:, 0]], jnp.arange(1, soil_nsoil)
         )
         b_soil_update, d_soil_update = out[0].T, out[1].T
         b_soil = jnp.concatenate([b_soil[:, [0]], b_soil_update], axis=1)
@@ -317,8 +336,8 @@ def finite_difference_matrix(soil: Soil, prm: Para) -> Soil:
 
         _, out = jax.lax.scan(
             calculate_Tsoilnew,
-            T_soil[:, soil.n_soil],
-            xs=jnp.arange(soil.n_soil - 1, -1, -1),
+            T_soil[:, soil_nsoil],
+            xs=jnp.arange(soil_nsoil - 1, -1, -1),
         )
         T_soil_new = out.T[:, ::-1]  # (ntime, n_soil)
         T_soil_new = jnp.concatenate(
@@ -343,14 +362,17 @@ def finite_difference_matrix(soil: Soil, prm: Para) -> Soil:
         soil.T_soil,
     )
 
-    soil.T_soil = carry
+    # Update T_soil
+    T_soil = carry
 
     # Update T_soil_old
-    soil.T_soil_old = soil.T_soil
+    T_soil_old = T_soil
 
     # Update the soil heat flux
-    soil.gsoil = soil.k_conductivity_soil[:, 0] * (
-        soil.T_soil[:, 0] - soil.T_soil[:, 1]
+    gsoil = soil.k_conductivity_soil[:, 0] * (T_soil[:, 0] - T_soil[:, 1])
+
+    soil = eqx.tree_at(
+        lambda t: (t.T_soil, t.T_soil_old, t.gsoil), soil, (T_soil, T_soil_old, gsoil)
     )
 
     return soil

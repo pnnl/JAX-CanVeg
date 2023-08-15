@@ -26,13 +26,14 @@ import equinox as eqx
 
 # from ..physics.energy_fluxes import conc_mx
 
+
 from .meterology import Met
 from .parameters import Para
 from .utils import soil_sfc_res, conc_mx
 from .utils import llambda as flambda
 
 # from ..physics.energy_fluxes.soil_energy_balance_mx import soil_sfc_res
-from ..shared_utilities.types import Float_2D, Float_1D, Float_0D
+from ..shared_utilities.types import Float_2D, Float_1D, Float_0D, Int_0D
 from ..shared_utilities.utils import dot, minus
 from ..shared_utilities.constants import PI
 
@@ -101,7 +102,7 @@ class ParNir(eqx.Module):
 
     @property
     def total(self):
-        return self.up_flux + self.dn_flux
+        return self.beam_flux + self.dn_flux
 
     @property
     def incoming(self):
@@ -202,170 +203,155 @@ class Ps(eqx.Module):
     rstom: Float_2D
 
 
-class Soil(object):
-    def __init__(
-        self,
-        dt: Float_0D,
-        n_soil: int,
-        depth: Float_0D,
-        mtime: int,
-        water_content_15cm: Float_1D,
-        water_content_litter: Float_0D,
-        bulkdensity: Float_0D,
-        bulkdensity_kg_m3: Float_0D,
-        pore_fraction: Float_0D,
-        clay_fraction: Float_0D,
-        peat_fraction: Float_0D,
-        mineral_fraction: Float_0D,
-        air_fraction: Float_1D,
-        Cp_water: Float_0D,
-        Cp_air: Float_0D,
-        Cp_org: Float_0D,
-        Cp_mineral: Float_0D,
-        K_mineral: Float_0D,
-        K_org: Float_0D,
-        K_water: Float_0D,
-        n_soil_1: int,
-        n_soil_2: int,
-        dz: Float_1D,
-        z_soil: Float_1D,
-        d2z: Float_1D,
-        vol: Float_1D,
-        T_soil: Float_2D,
-        T_soil_old: Float_2D,
-        T_soil_up_boundary: Float_1D,
-        sfc_temperature: Float_1D,
-        sfc_temperature_old: Float_1D,
-        bulk_density: Float_2D,
-        K_air: Float_1D,
-        Cp_soil: Float_1D,
-        K_soil: Float_1D,
-        cp_soil: Float_2D,
-        k_conductivity_soil: Float_2D,
-        k_conductivity_soil_bound: Float_1D,
-        evap: Float_1D,
-        heat: Float_1D,
-        rnet: Float_1D,
-        gsoil: Float_1D,
-        lout: Float_1D,
-        llout: Float_1D,
-        resistance_h2o: Float_1D,
-        T_soil_low_bound: Float_1D,
-    ) -> None:
-        self.dt = dt
-        self.n_soil = n_soil
-        self.depth = depth
-        self.mtime = mtime
-        self.water_content_15cm = water_content_15cm
-        self.water_content_litter = water_content_litter
-        self.bulkdensity = bulkdensity
-        self.bulkdensity_kg_m3 = bulkdensity_kg_m3
-        self.pore_fraction = pore_fraction
-        self.clay_fraction = clay_fraction
-        self.peat_fraction = peat_fraction
-        self.mineral_fraction = mineral_fraction
-        self.air_fraction = air_fraction
-        self.Cp_water = Cp_water
-        self.Cp_air = Cp_air
-        self.Cp_org = Cp_org
-        self.Cp_mineral = Cp_mineral
-        self.K_mineral = K_mineral
-        self.K_org = K_org
-        self.K_water = K_water
-        self.n_soil_1 = n_soil_1
-        self.n_soil_2 = n_soil_2
-        self.dz = dz
-        self.z_soil = z_soil
-        self.d2z = d2z
-        self.vol = vol
-        self.T_soil = T_soil
-        self.T_soil_old = T_soil_old
-        self.T_soil_up_boundary = T_soil_up_boundary
-        self.sfc_temperature = sfc_temperature
-        self.sfc_temperature_old = sfc_temperature_old
-        self.bulk_density = bulk_density
-        self.K_air = K_air
-        self.Cp_soil = Cp_soil
-        self.K_soil = K_soil
-        self.cp_soil = cp_soil
-        self.k_conductivity_soil = k_conductivity_soil
-        self.k_conductivity_soil_bound = k_conductivity_soil_bound
-        self.evap = evap
-        self.heat = heat
-        self.rnet = rnet
-        self.gsoil = gsoil
-        self.lout = lout
-        self.llout = llout
-        self.resistance_h2o = resistance_h2o
-        self.T_soil_low_bound = T_soil_low_bound
+class Soil(eqx.Module):
+    dt: Float_0D
+    n_soil: Int_0D
+    depth: Float_0D
+    mtime: Int_0D
+    water_content_15cm: Float_1D
+    water_content_litter: Float_0D
+    bulkdensity: Float_0D
+    clay_fraction: Float_0D
+    peat_fraction: Float_0D
+    Cp_water: Float_0D
+    Cp_air: Float_0D
+    Cp_org: Float_0D
+    Cp_mineral: Float_0D
+    K_mineral: Float_0D
+    K_org: Float_0D
+    K_water: Float_0D
+    dz: Float_1D
+    vol: Float_1D
+    T_soil: Float_2D
+    T_soil_old: Float_2D
+    T_soil_up_boundary: Float_1D
+    T_soil_low_bound: Float_1D
+    sfc_temperature: Float_1D
+    sfc_temperature_old: Float_1D
+    bulk_density: Float_2D
+    K_air: Float_1D
+    Cp_soil: Float_1D
+    evap: Float_1D
+    heat: Float_1D
+    rnet: Float_1D
+    gsoil: Float_1D
+    lout: Float_1D
+    llout: Float_1D
 
-    def _tree_flatten(self):
-        children = (
-            # self.dt,
-            # self.n_soil,
-            # self.depth,
-            # self.mtime,
-            self.water_content_15cm,
-            self.water_content_litter,
-            self.bulkdensity,
-            self.bulkdensity_kg_m3,
-            self.pore_fraction,
-            self.clay_fraction,
-            self.peat_fraction,
-            self.mineral_fraction,
-            self.air_fraction,
-            self.Cp_water,
-            self.Cp_air,
-            self.Cp_org,
-            self.Cp_mineral,
-            self.K_mineral,
-            self.K_org,
-            self.K_water,
-            self.n_soil_1,
-            self.n_soil_2,
-            self.dz,
-            self.z_soil,
-            self.d2z,
-            self.vol,
-            self.T_soil,
-            self.T_soil_old,
-            self.T_soil_up_boundary,
-            self.sfc_temperature,
-            self.sfc_temperature_old,
-            self.bulk_density,
-            self.K_air,
-            self.Cp_soil,
-            self.K_soil,
-            self.cp_soil,
-            self.k_conductivity_soil,
-            self.k_conductivity_soil_bound,
-            self.evap,
-            self.heat,
-            self.rnet,
-            self.gsoil,
-            self.lout,
-            self.llout,
-            self.resistance_h2o,
-            self.T_soil_low_bound,
-        )
-        aux_data = {
-            "dt": self.dt,
-            "n_soil": self.n_soil,
-            "depth": self.depth,
-            "mtime": self.mtime,
-        }
-        return (children, aux_data)
+    @property
+    def bulkdensity_kg_m3(self):
+        return self.bulkdensity * 100 * 100 * 100 / 1000
 
-    @classmethod
-    def _tree_unflatten(cls, aux_data, children):
-        # return cls(*children, **aux_data)
-        return cls(
-            aux_data["dt"],
-            aux_data["n_soil"],
-            aux_data["depth"],
-            aux_data["mtime"],
-            *children
+    @property
+    def pore_fraction(self):
+        # from alfalfa, 1 minus ratio bulk density 1.00
+        # g cm-3/2.65 g cm-3, density of solids
+        return 1 - self.bulkdensity / 2.65
+
+    @property
+    def mineral_fraction(self):
+        return 1 - self.pore_fraction - self.peat_fraction
+
+    @property
+    def air_fraction(self):
+        return self.pore_fraction - self.water_content_15cm
+
+    @property
+    def n_soil_1(self):
+        return self.n_soil + 1
+
+    @property
+    def n_soil_2(self):
+        return self.n_soil + 2
+
+    @property
+    def z_soil(self):
+        # (n_soil_1,)
+        return jnp.concatenate([jnp.array([0]), jnp.cumsum(self.dz)])
+
+    @property
+    def d2z(self):
+        #  (n_soil,)
+        d2z = self.z_soil[2:] - self.z_soil[:-2]
+        return jnp.concatenate([self.dz[:1], d2z])
+
+    @property
+    def k_fluid(self):
+        # (ntime,)
+        fw = 1.0 / (1 + jnp.power((self.water_content_15cm / 0.15), -4))
+        return self.K_air + fw * (self.K_water - self.K_air)  # (ntime,)
+
+    @property
+    def wt_air(self):
+        return 2.0 / (3.0 * (1.0 + 0.2 * (self.K_air / self.k_fluid - 1))) + 1.0 / (
+            3.0 * (1.0 + (1.0 - 2.0 * 0.2) * (self.K_air / self.k_fluid - 1))
         )
+
+    @property
+    def wt_water(self):
+        return 2.0 / (3.0 * (1.0 + 0.2 * (self.K_water / self.k_fluid - 1))) + 1.0 / (
+            3.0 * (1.0 + (1.0 - 2.0 * 0.2) * (self.K_water / self.k_fluid - 1))
+        )
+
+    @property
+    def wt_org(self):
+        return 2.0 / (3.0 * (1 + 0.2 * (self.K_org / self.k_fluid - 1))) + 1.0 / (
+            3.0 * (1.0 + (1.0 - 2.0 * 0.2) * (self.K_org / self.k_fluid - 1))
+        )
+
+    @property
+    def wt_mineral(self):
+        return 2.0 / (3.0 * (1.0 + 0.2 * (self.K_mineral / self.k_fluid - 1))) + 1.0 / (
+            3.0 * (1.0 + (1.0 - 2.0 * 0.2) * (self.K_mineral / self.k_fluid - 1))
+        )
+
+    @property
+    def K_soil_num(self):
+        # thermal conductivity, W m-1  K-1
+        # (ntime,)
+        return (
+            self.mineral_fraction * self.wt_mineral * self.K_mineral
+            + self.air_fraction * self.wt_air * self.K_air
+            + self.water_content_15cm * self.wt_water * self.K_water
+            + self.peat_fraction * self.wt_org * self.K_mineral
+        )
+
+    @property
+    def K_soil(self):
+        # thermal conductivity, W m-1  K-1
+        # (ntime,)
+        return self.K_soil_num / (
+            self.mineral_fraction * self.wt_mineral
+            + self.air_fraction * self.wt_air
+            + self.water_content_15cm * self.wt_water
+            + self.peat_fraction * self.wt_org
+        )
+
+    @property
+    def cp_soil(self):
+        # rho Cp Volume/ 2 dt
+        # transpose dz to make 2d matrix, (ntime, n_soil)
+        return jnp.outer(self.Cp_soil, self.d2z) / (2 * self.dt)
+
+    @property
+    def k_conductivity_soil(self):
+        # K/dz
+        # (ntime, n_soil+1)
+        ntime = self.K_soil.size
+        k_conductivity_soil = jnp.outer(self.K_soil, 1.0 / self.dz)  # (ntime, n_soil)
+        k_conductivity_soil = jnp.concatenate(
+            [k_conductivity_soil, jnp.zeros([ntime, 1])],
+            axis=1,
+        )
+        return k_conductivity_soil
+
+    @property
+    def k_conductivity_soil_bound(self):
+        return self.k_conductivity_soil[:, 0]
+
+    @property
+    def resistance_h2o(self):
+        return soil_sfc_res(self.water_content_15cm)
 
 
 def initialize_profile_mx(met: Met, para: Para):
@@ -417,28 +403,32 @@ def update_profile_mx(
     sun: SunShadedCan,
     shade: SunShadedCan,
     soil: Soil,
+    veg: Veg,
     lai: Lai,
     dij: Float_2D,
 ) -> Prof:
+    from ..physics.carbon_fluxes import soil_respiration_alfalfa_mx
+
+    nlayers = para.jtot
     Ps = (
-        quantum.prob_beam[:, : para.nlayers] * sun.Ps
-        + quantum.prob_shade[:, : para.nlayers] * shade.Ps
+        quantum.prob_beam[:, :nlayers] * sun.Ps
+        + quantum.prob_shade[:, :nlayers] * shade.Ps
     ) * lai.adens
     LE = (
-        quantum.prob_beam[:, : para.nlayers] * sun.LE
-        + quantum.prob_shade[:, : para.nlayers] * shade.LE
+        quantum.prob_beam[:, :nlayers] * sun.LE
+        + quantum.prob_shade[:, :nlayers] * shade.LE
     ) * lai.adens
     H = (
-        quantum.prob_beam[:, : para.nlayers] * sun.H
-        + quantum.prob_shade[:, : para.nlayers] * shade.H
+        quantum.prob_beam[:, :nlayers] * sun.H
+        + quantum.prob_shade[:, :nlayers] * shade.H
     ) * lai.adens
     Rnet = (
-        quantum.prob_beam[:, : para.nlayers] * sun.Rnet
-        + quantum.prob_shade[:, : para.nlayers] * shade.Rnet
+        quantum.prob_beam[:, :nlayers] * sun.Rnet
+        + quantum.prob_shade[:, :nlayers] * shade.Rnet
     ) * lai.adens
     Tsfc = (
-        quantum.prob_beam[:, : para.nlayers] * sun.Tsfc
-        + quantum.prob_shade[:, : para.nlayers] * shade.Tsfc
+        quantum.prob_beam[:, :nlayers] * sun.Tsfc
+        + quantum.prob_shade[:, :nlayers] * shade.Tsfc
     )
 
     # Compute scalar profiles
@@ -496,6 +486,28 @@ def update_profile_mx(
     #    Veg.Ps,soil.T_soil(:,10),met.soilmoisture,met.zcanopy,Veg.Rd,prm)
     # soilflux=Rsoil.Respiration;
     # [prof.co2]=fConcMatrix(-prof.Ps,soilflux, prof.delz, Dij,met,met.CO2,prm,fact.co2)
+    fact_co2 = (28.97 / 44.0) * met.air_density_mole
+    respiration = soil_respiration_alfalfa_mx(
+        veg.Ps, soil.T_soil[:, 9], met.soilmoisture, met.zcanopy, veg.Rd, para
+    )
+    soilflux = respiration
+    co2 = conc_mx(
+        -Ps,
+        soilflux,
+        prof.delz,
+        dij,
+        met.ustar,
+        met.zL,
+        met.CO2,
+        para.jtot,
+        para.nlayers_atmos,
+        fact_co2,
+    )
+    # jax.debug.print("soilflux: {a}", a=soilflux[:10])
+    # jax.debug.print("Ps: {a}", a=Ps[:10])
+    # jax.debug.print("met.zL: {a}", a=met.zL[:10])
+    # jax.debug.print("met co2: {a}", a=met.CO2[:10])
+    # jax.debug.print("co2: {a}", a=co2[:10,:5])
 
     # Update
     prof = eqx.tree_at(
@@ -503,6 +515,7 @@ def update_profile_mx(
             t.Ps,
             t.LE,
             t.H,
+            t.co2,
             t.Rnet,
             t.Tsfc,
             t.Tair_K,
@@ -511,7 +524,7 @@ def update_profile_mx(
             t.eair_old_Pa,
         ),
         prof,
-        (Ps, LE, H, Rnet, Tsfc, Tair_K, Told_K, eair_Pa, eair_old_Pa),
+        (Ps, LE, H, co2, Rnet, Tsfc, Tair_K, Told_K, eair_Pa, eair_old_Pa),
     )
 
     return prof
@@ -520,58 +533,59 @@ def update_profile_mx(
 def calculate_veg_mx(
     para: Para, lai: Lai, quantum: ParNir, sun: SunShadedCan, shade: SunShadedCan
 ) -> Veg:
+    nlayers = para.jtot
     veg_Ps = jnp.sum(
         (
-            quantum.prob_beam[:, : para.nlayers] * sun.Ps
-            + quantum.prob_shade[:, : para.nlayers] * shade.Ps
+            quantum.prob_beam[:, :nlayers] * sun.Ps
+            + quantum.prob_shade[:, :nlayers] * shade.Ps
         )
         * lai.dff,
         axis=1,
     )
     veg_Rd = jnp.sum(
         (
-            quantum.prob_beam[:, : para.nlayers] * sun.Resp
-            + quantum.prob_shade[:, : para.nlayers] * shade.Resp
+            quantum.prob_beam[:, :nlayers] * sun.Resp
+            + quantum.prob_shade[:, :nlayers] * shade.Resp
         )
         * lai.dff,
         axis=1,
     )
     veg_LE = jnp.sum(
         (
-            quantum.prob_beam[:, : para.nlayers] * sun.LE
-            + quantum.prob_shade[:, : para.nlayers] * shade.LE
+            quantum.prob_beam[:, :nlayers] * sun.LE
+            + quantum.prob_shade[:, :nlayers] * shade.LE
         )
         * lai.dff,
         axis=1,
     )
     veg_H = jnp.sum(
         (
-            quantum.prob_beam[:, : para.nlayers] * sun.H
-            + quantum.prob_shade[:, : para.nlayers] * shade.H
+            quantum.prob_beam[:, :nlayers] * sun.H
+            + quantum.prob_shade[:, :nlayers] * shade.H
         )
         * lai.dff,
         axis=1,
     )
     veg_gs = jnp.sum(
         (
-            quantum.prob_beam[:, : para.nlayers] * sun.gs
-            + quantum.prob_shade[:, : para.nlayers] * shade.gs
+            quantum.prob_beam[:, :nlayers] * sun.gs
+            + quantum.prob_shade[:, :nlayers] * shade.gs
         )
         * lai.dff,
         axis=1,
     )
     veg_Rnet = jnp.sum(
         (
-            quantum.prob_beam[:, : para.nlayers] * sun.Rnet
-            + quantum.prob_shade[:, : para.nlayers] * shade.Rnet
+            quantum.prob_beam[:, :nlayers] * sun.Rnet
+            + quantum.prob_shade[:, :nlayers] * shade.Rnet
         )
         * lai.dff,
         axis=1,
     )
     veg_Tsfc = jnp.sum(
         (
-            quantum.prob_beam[:, : para.nlayers] * sun.Tsfc
-            + quantum.prob_shade[:, : para.nlayers] * shade.Tsfc
+            quantum.prob_beam[:, :nlayers] * sun.Tsfc
+            + quantum.prob_shade[:, :nlayers] * shade.Tsfc
         )
         * lai.dff,
         axis=1,
@@ -579,8 +593,8 @@ def calculate_veg_mx(
     veg_Tsfc = veg_Tsfc / lai.lai
     veg_vpd = jnp.sum(
         (
-            quantum.prob_beam[:, : para.nlayers] * sun.vpd_Pa
-            + quantum.prob_shade[:, : para.nlayers] * shade.vpd_Pa
+            quantum.prob_beam[:, :nlayers] * sun.vpd_Pa
+            + quantum.prob_shade[:, :nlayers] * shade.vpd_Pa
         )
         * lai.dff,
         axis=1,
@@ -603,8 +617,8 @@ def initialize_model_states(met: Met, para: Para):
     # IR
     ir = initialize_ir(para)
 
-    # # Veg
-    # veg = initialize_veg(para)
+    # Veg
+    veg = initialize_veg(para)
 
     # Qin
     qin = initialize_qin(para)
@@ -622,7 +636,7 @@ def initialize_model_states(met: Met, para: Para):
     # Lai
     lai = initialize_lai(para, met)
 
-    return soil, quantum, nir, ir, qin, rnet, sun, shade, lai
+    return soil, quantum, nir, ir, qin, rnet, sun, shade, veg, lai
 
 
 def initialize_parnir(para: Para, wavebnd: str) -> ParNir:
@@ -762,8 +776,9 @@ def initialize_sunshade(para: Para, met: Met) -> SunShadedCan:
 
 
 def initialize_lai(para: Para, met: Met) -> Lai:
+    nlayers = para.jtot
     lai = met.lai
-    dff = jnp.ones([para.ntime, para.nlayers]) / para.nlayers  # (ntime,nlayers)
+    dff = jnp.ones([para.ntime, nlayers]) / nlayers  # (ntime,nlayers)
     dff = dot(lai, dff)  # (ntime, nlayers)
     # TODO: double check!
     # self.sumlai = jax.lax.cumsum(self.dff, axis=1, reverse=True) #(ntime,nlayers)
@@ -772,13 +787,13 @@ def initialize_lai(para: Para, met: Met) -> Lai:
     dff_clmp = dff / para.markov  # (ntime, nlayers)
 
     # divide by height of the layers in the canopy
-    adens = dff[:, : para.nlayers] / para.dht_canopy  # (ntime, nlayers)
+    adens = dff[:, :nlayers] / para.dht_canopy  # (ntime, nlayers)
 
     return Lai(lai, dff, sumlai, dff_clmp, adens)
 
 
 def initialize_soil(
-    para: Para, met: Met, dt: Float_0D = 20.0, n_soil: int = 10, depth: Float_0D = 0.15
+    para: Para, met: Met, n_soil: Int_0D = 10, depth: Float_0D = 0.15
 ) -> Soil:
     # Soil water content
     water_content_15cm = (
@@ -791,7 +806,6 @@ def initialize_soil(
     # fraction porosity + mineral + organic = 1
     # airborne fraction = porosity - volumetric water content
     bulkdensity = 1.06  # g cm-3   Data from Tyler Anthony
-    bulkdensity_kg_m3 = bulkdensity * 100 * 100 * 100 / 1000
     pore_fraction = (
         1 - bulkdensity / 2.65
     )  # from alfalfa, 1 minus ratio bulk density 1.00 g cm-3/2.65 g cm-3, density of solids  # noqa: E501
@@ -814,12 +828,13 @@ def initialize_soil(
     K_water = 0.25
 
     # Time step in seconds
-    dt = dt
-    mtime = floor(1800.0 / dt)  # time steps per half hour
+    dt = para.dt_soil
+    mtime = floor(3600 * 24 / para.hrs / para.dt_soil)
+    # mtime = floor(1800.0 / dt)  # time steps per half hour
 
     n_soil = n_soil  # number of soil layers
-    n_soil_1 = n_soil + 1  # number of soil levels
-    n_soil_2 = n_soil + 2  # number of soil levels
+    n_soil_1 = n_soil + 1
+    n_soil_2 = n_soil + 2
 
     # Compute soils depths, from 0 to base
     # we define n layers and n+1 levels, including top and bottom boundaries
@@ -861,19 +876,6 @@ def initialize_soil(
     K_air = (
         0.024 + 44100 * 2.42e-5 * fw * met.air_density_mole * met.dest / met.P_Pa
     )  # (ntime,)  # noqa: E501
-    k_fluid = K_air + fw * (K_water - K_air)  # (ntime,)
-    wt_air = 2.0 / (3.0 * (1.0 + 0.2 * (K_air / k_fluid - 1))) + 1.0 / (
-        3.0 * (1.0 + (1.0 - 2.0 * 0.2) * (K_air / k_fluid - 1))
-    )  # noqa: E501
-    wt_water = 2.0 / (3.0 * (1.0 + 0.2 * (K_water / k_fluid - 1))) + 1.0 / (
-        3.0 * (1.0 + (1.0 - 2.0 * 0.2) * (K_water / k_fluid - 1))
-    )  # noqa: E501
-    wt_org = 2.0 / (3.0 * (1 + 0.2 * (K_org / k_fluid - 1))) + 1.0 / (
-        3.0 * (1.0 + (1.0 - 2.0 * 0.2) * (K_org / k_fluid - 1))
-    )  # noqa: E501
-    wt_mineral = 2.0 / (3.0 * (1.0 + 0.2 * (K_mineral / k_fluid - 1))) + 1.0 / (
-        3.0 * (1.0 + (1.0 - 2.0 * 0.2) * (K_mineral / k_fluid - 1))
-    )  # noqa: E501
 
     # compute heat capacity and thermal conductivty weighting by mineral, water, air
     # and organic fractions
@@ -888,36 +890,6 @@ def initialize_soil(
         + 2650.000 * Cp_mineral * mineral_fraction
     )  # (ntime,)
 
-    # thermal conductivity, W m-1  K-1
-    K_soil_num = (
-        mineral_fraction * wt_mineral * K_mineral
-        + air_fraction * wt_air * K_air
-        + water_content_15cm * wt_water * K_water
-        + peat_fraction * wt_org * K_mineral
-    )  # (ntime,)
-    K_soil = K_soil_num / (
-        mineral_fraction * wt_mineral
-        + air_fraction * wt_air
-        + water_content_15cm * wt_water
-        + peat_fraction * wt_org
-    )  # (ntime,)
-
-    # rho Cp Volume/ 2 dt
-    cp_soil = jnp.outer(Cp_soil, d2z) / (
-        2 * dt
-    )  # transpose dz to make 2d matrix, (ntime, n_soil)  # noqa: E501
-
-    # K/dz
-    # self.k_conductivity_soil = self.K_soil / self.dz  # (ntime, n_soil)
-    k_conductivity_soil = jnp.outer(K_soil, 1.0 / dz)  # (ntime, n_soil)
-    k_conductivity_soil_bound = k_conductivity_soil[:, 0]
-    k_conductivity_soil = jnp.concatenate(
-        # [k_conductivity_soil[:, :-1], jnp.zeros([para.ntime, 1])], axis=1
-        [k_conductivity_soil, jnp.zeros([para.ntime, 1])],
-        axis=1,
-    )  # (ntime, n_soil+1)
-    # self.k_conductivity_soil[:,-1]=0
-
     # Energy initialization
     evap = jnp.zeros(para.ntime)  # initialization
     heat = jnp.zeros(para.ntime)
@@ -927,8 +899,6 @@ def initialize_soil(
     lout = para.epsigma * jnp.power(met.T_air_K, 4)  # initialization
     llout = lout
 
-    resistance_h2o = soil_sfc_res(water_content_15cm)
-
     # lower boundary
     T_soil_low_bound = met.Tsoil + 273.15
     T_soil = jnp.concatenate(
@@ -936,6 +906,23 @@ def initialize_soil(
         axis=1,
     )
     T_soil_old = T_soil
+
+    # Convert int/float to jnp.ndarray
+    dt = jnp.array(dt)
+    n_soil = jnp.array(n_soil)
+    depth = jnp.array(depth)
+    mtime = jnp.array(mtime)
+    water_content_litter = jnp.array(water_content_litter)
+    bulkdensity = jnp.array(bulkdensity)
+    clay_fraction = jnp.array(clay_fraction)
+    peat_fraction = jnp.array(peat_fraction)
+    Cp_water = jnp.array(Cp_water)
+    Cp_air = jnp.array(Cp_air)
+    Cp_org = jnp.array(Cp_org)
+    Cp_mineral = jnp.array(Cp_mineral)
+    K_mineral = jnp.array(K_mineral)
+    K_org = jnp.array(K_org)
+    K_water = jnp.array(K_water)
 
     return Soil(
         dt,
@@ -945,12 +932,8 @@ def initialize_soil(
         water_content_15cm,
         water_content_litter,
         bulkdensity,
-        bulkdensity_kg_m3,
-        pore_fraction,
         clay_fraction,
         peat_fraction,
-        mineral_fraction,
-        air_fraction,
         Cp_water,
         Cp_air,
         Cp_org,
@@ -958,54 +941,21 @@ def initialize_soil(
         K_mineral,
         K_org,
         K_water,
-        n_soil_1,
-        n_soil_2,
         dz,
-        z_soil,
-        d2z,
         vol,
         T_soil,
         T_soil_old,
         T_soil_up_boundary,
+        T_soil_low_bound,
         sfc_temperature,
         sfc_temperature_old,
         bulk_density,
         K_air,
         Cp_soil,
-        K_soil,
-        cp_soil,
-        k_conductivity_soil,
-        k_conductivity_soil_bound,
         evap,
         heat,
         rnet,
         gsoil,
         lout,
         llout,
-        resistance_h2o,
-        T_soil_low_bound,
     )
-
-
-# def initialize_model_states(met: Met, para: Para):
-#     soil = Soil(met, para)
-#     quantum, nir = ParNir(para.ntime, para.jtot), ParNir(para.ntime, para.jtot)
-#     quantum.reflect = para.par_reflect  # reflectance of leaf
-#     quantum.trans = para.par_trans  # transmittances of leaf
-#     quantum.soil_refl = para.par_soil_refl  # soil reflectances
-#     quantum.absorbed = para.par_absorbed  # fraction absorbed
-#     nir.reflect = para.nir_reflect  # reflectance of leaf
-#     nir.trans = para.nir_trans  # transmittances of leaf
-#     nir.soil_refl = para.nir_soil_refl  # soil reflectances
-#     nir.absorbed = para.nir_absorbed  # fraction absorbed
-
-#     ir, veg = Ir(para.ntime, para.jtot), Veg(para.ntime)
-#     qin, rnet = Qin(para.ntime, para.jtot), Rnet(para.ntime, para.jktot)
-#     sun, shade = SunShadedCan(para.ntime, para.jtot), SunShadedCan(
-#         para.ntime, para.jtot
-#     )  # noqa: E501
-#     # dot = jax.vmap(lambda x, y: x * y, in_axes=(None, 1), out_axes=1)
-#     sun.Tsfc = dot(met.T_air_K, sun.Tsfc)
-#     shade.Tsfc = dot(met.T_air_K, shade.Tsfc)
-
-#     return soil, quantum, nir, ir, veg, qin, rnet, sun, shade

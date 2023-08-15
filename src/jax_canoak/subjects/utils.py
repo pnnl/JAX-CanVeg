@@ -32,8 +32,10 @@ def es(tk: Float_ND) -> Float_ND:
     Returns:
         Float_0D: _description_
     """
-    tc = tk - 273.15
-    return 613.0 * jnp.exp(17.502 * tc / (240.97 + tc))
+    # tc = tk - 273.15
+    # return 613.0 * jnp.exp(17.502 * tc / (240.97 + tc))
+    # Use the matlab version here to keep consistent
+    return 100.0 * jnp.exp(54.8781919 - 6790.4985 / tk - 5.02808 * jnp.log(tk))
 
 
 def desdt(t: Float_ND) -> Float_ND:

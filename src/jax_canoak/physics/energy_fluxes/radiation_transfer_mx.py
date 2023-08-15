@@ -160,6 +160,7 @@ def sky_ir_v2(met: Met, ratrad: Float_1D, sigma: Float_0D) -> Float_1D:
 
 
 # @partial(jax.jit, static_argnames=["mask_night", "niter"])
+@eqx.filter_jit
 def rad_tran_canopy(
     sunang: SunAng,
     leafang: LeafAng,
@@ -191,6 +192,13 @@ def rad_tran_canopy(
     Returns:
         ParNir: _description_
     """
+    ntime = rad.inbeam.shape[0]
+    jtot = prm.markov.shape[0]
+    jktot = jtot + 1
+    # ntime = prm.ntime
+    # jtot = prm.jtot
+    # jktot = prm.jktot
+
     # Incident radiation above the canopy
     # Compute the amount of diffuse light that is transmitted through a layer.
     # Diffuse radiation through gpas and absorbed radiation transmitted
@@ -211,7 +219,7 @@ def rad_tran_canopy(
         )
     )  # (ntime, jtot)
     exp_direct = jnp.concatenate(
-        [exp_direct, jnp.ones([prm.ntime, 1])], axis=1
+        [exp_direct, jnp.ones([ntime, 1])], axis=1
     )  # (ntime, jktot)
     exp_direct = exp_direct.at[mask_night.val, :].set(0.0)
     P0 = jax.lax.cumprod(exp_direct, axis=1, reverse=True)  # (ntime, jktot)
@@ -224,7 +232,7 @@ def rad_tran_canopy(
 
     # rad.prob_beam(:,prm.jtot)=ones;
     prob_beam = jnp.concatenate(
-        [prm.markov * P0[:, : prm.jtot], jnp.ones([prm.ntime, 1])], axis=1
+        [prm.markov * P0[:, :jtot], jnp.ones([ntime, 1])], axis=1
     )  # (ntime, jktot)
     prob_beam = jnp.clip(prob_beam, a_max=1.0)
     prob_beam = prob_beam.at[mask_night.val, :].set(0.0)
@@ -249,9 +257,9 @@ def rad_tran_canopy(
     # Compute diffuse and complementary radiation
     dn_top = (1 - fraction_beam) * rad.incoming
     dn_init = jnp.concatenate(
-        [jnp.zeros([prm.ntime, prm.jtot]), jnp.expand_dims(dn_top, axis=-1)], axis=1
+        [jnp.zeros([ntime, jtot]), jnp.expand_dims(dn_top, axis=-1)], axis=1
     )
-    up_init = jnp.zeros([prm.ntime, prm.jktot])
+    up_init = jnp.zeros([ntime, jktot])
 
     def calculate_dnup(c2, j):
         up, dn = c2[0], c2[1]
@@ -274,7 +282,7 @@ def rad_tran_canopy(
             return cnew, out_layer
 
         _, out = jax.lax.scan(
-            calculate_dnup_layer, dn_top, jnp.arange(prm.jtot - 1, -1, -1)
+            calculate_dnup_layer, dn_top, jnp.arange(jtot - 1, -1, -1)
         )
         outdn, outup = out[0], out[1]
         outdn = outdn.T
@@ -303,11 +311,11 @@ def rad_tran_canopy(
     # rad.total = rad.beam_flux + rad.dn_flux
 
     # amount of radiation absorbed on the sun and shade leaves
-    sh_abs = (dn_flux[:, : prm.jtot] + up_flux[:, : prm.jtot]) * rad.absorbed
-    normal = beam_flux[:, prm.jtot] * leafang.Gfunc / sunang.sin_beta  # (ntime,)
+    sh_abs = (dn_flux[:, :jtot] + up_flux[:, :jtot]) * rad.absorbed
+    normal = beam_flux[:, jtot] * leafang.Gfunc / sunang.sin_beta  # (ntime,)
     normal = jnp.clip(normal, a_min=0.0)
     sun_normal_abs = normal * rad.absorbed
-    sun_abs = add(sun_normal_abs, rad.sh_abs)
+    sun_abs = add(sun_normal_abs, sh_abs)
 
     rad = eqx.tree_at(
         lambda t: (t.prob_beam, t.beam_flux, t.up_flux, t.dn_flux, t.sh_abs, t.sun_abs),
@@ -388,7 +396,10 @@ def ir_rad_tran_canopy(
         return cnew, cnew
 
     _, out = jax.lax.scan(
-        calculate_dn_layer, ir_dn[:, -1], jnp.arange(prm.jtot - 1, -1, -1)
+        # calculate_dn_layer, ir_dn[:, -1], jnp.arange(prm.jtot - 1, -1, -1)
+        calculate_dn_layer,
+        ir_dn[:, -1],
+        jnp.arange(prm.jtot - 1, -1, -1),
     )
     out = out.T
     ir_dn = jnp.concatenate([out[:, ::-1], ir_dn[:, -1:]], axis=1)

@@ -95,3 +95,6 @@ add = jax.vmap(lambda x, y: x + y, in_axes=(None, 1), out_axes=1)
 
 # minus: (n) + (n,m) -> (n,m)
 minus = jax.vmap(lambda x, y: x - y, in_axes=(None, 1), out_axes=1)
+
+# divide: (n) + (n,m) -> (n,m)
+divide = jax.vmap(lambda x, y: x / y, in_axes=(None, 1), out_axes=1)

@@ -19,7 +19,7 @@ rugc_default = 8.314  # J mole-1 K-1
 
 
 class Met(eqx.Module):
-    ntime: Int_0D
+    # ntime: Int_0D
     Mair: Float_0D
     rugc: Float_0D
     zL: Float_1D
@@ -91,6 +91,7 @@ def initialize_met(
     Mair: Float_0D = Mair_default,
     rugc: Float_0D = rugc_default,
 ) -> Met:
+    assert ntime == data.shape[0]
     day = jnp.array(data[:, 0])  # day of year
     hhour = jnp.array(data[:, 1])  # hour
     # self.T_air_K = jnp.array(data[:, 2]) + 273.15  # air temperature, K
@@ -108,16 +109,17 @@ def initialize_met(
 
     # Some operations to ensure stability
     wind = jnp.clip(wind, a_min=0.75)
+    # ustar = jnp.clip(ustar, a_min=0.75)
     ustar = jnp.clip(ustar, a_min=0.1)
     rglobal = jnp.clip(rglobal, a_min=0.0)
 
     # Convert the following int and float to jax.ndarray
-    ntime = jnp.array(ntime)
+    # ntime = jnp.array(ntime)
     Mair = jnp.array(Mair)
     rugc = jnp.array(rugc)
 
     met = Met(
-        ntime,
+        # ntime,
         Mair,
         rugc,
         zL0,

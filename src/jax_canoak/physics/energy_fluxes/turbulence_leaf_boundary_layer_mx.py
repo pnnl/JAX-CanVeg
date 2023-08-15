@@ -51,7 +51,6 @@ def uz(met: Met, prm: Para) -> Float_2D:
     return wnd
 
 
-# @partial(jax.jit, static_argnames=["mask_turbulence"])
 @eqx.filter_jit
 def boundary_resistance(
     prof: Prof,
@@ -89,9 +88,9 @@ def boundary_resistance(
     # co2 = jnp.zeros([prm.ntime, prm.jtot])
     # boundary_layer_res = BoundLayerRes(heat, vapor, co2)
 
-    Sh_heat = jnp.zeros([prm.ntime, prm.jtot])
-    Sh_vapor = jnp.zeros([prm.ntime, prm.jtot])
-    Sh_CO2 = jnp.zeros([prm.ntime, prm.jtot])
+    # Sh_heat = jnp.zeros([prm.ntime, prm.jtot])
+    # Sh_vapor = jnp.zeros([prm.ntime, prm.jtot])
+    # Sh_CO2 = jnp.zeros([prm.ntime, prm.jtot])
 
     Tref = TLF
     deltlf = Tref - prof.Tair_K[:, : prm.jtot]  # make sure K

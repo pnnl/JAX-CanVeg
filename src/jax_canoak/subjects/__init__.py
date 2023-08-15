@@ -1,4 +1,5 @@
-from .parameters import Para
+from .parameters import Para  # noqa: F401
+from .parameters import initialize_parameters  # noqa: F401
 from .meterology import Met  # noqa: F401
 from .meterology import initialize_met  # noqa: F401
 from .states import ParNir, Ir, Rnet, SunShadedCan  # noqa: F401
@@ -9,15 +10,15 @@ from .states import update_profile_mx  # noqa: F401
 from .states import calculate_veg_mx  # noqa: F401
 from .states import initialize_model_states  # noqa: F401
 
-from jax import tree_util
+# from jax import tree_util
 
 # Let's register these classes to pytrees
-tree_util.register_pytree_node(
-    Para, Para._tree_flatten, Para._tree_unflatten  # pyright: ignore
-)
-tree_util.register_pytree_node(
-    Soil, Soil._tree_flatten, Soil._tree_unflatten  # pyright: ignore
-)
+# tree_util.register_pytree_node(
+#     Para, Para._tree_flatten, Para._tree_unflatten  # pyright: ignore
+# )
+# tree_util.register_pytree_node(
+#     Soil, Soil._tree_flatten, Soil._tree_unflatten  # pyright: ignore
+# )
 # tree_util.register_pytree_node(
 #     Met, Met._tree_flatten, Met._tree_unflatten  # pyright: ignore
 # )

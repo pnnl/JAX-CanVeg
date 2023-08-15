@@ -13,9 +13,10 @@ import jax.numpy as jnp
 import numpy as np
 
 import equinox as eqx
-from jax_canoak.subjects import Para
 
-from jax_canoak.subjects import initialize_met
+# from jax_canoak.subjects import Para
+
+from jax_canoak.subjects import initialize_met, initialize_parameters
 from jax_canoak.subjects import initialize_profile_mx, initialize_model_states
 from jax_canoak.subjects import update_profile_mx, calculate_veg_mx
 
@@ -23,11 +24,12 @@ from jax_canoak.subjects import update_profile_mx, calculate_veg_mx
 from jax_canoak.shared_utilities.types import HashableArrayWrapper
 from jax_canoak.shared_utilities.utils import dot
 from jax_canoak.physics import energy_carbon_fluxes_mx
-from jax_canoak.physics.energy_fluxes import disp_canveg, diffuse_direct_radiation_mx
+from jax_canoak.physics.energy_fluxes import diffuse_direct_radiation_mx
 
-from jax_canoak.physics.energy_fluxes import rad_tran_canopy_mx, sky_ir_v2_mx
+# from jax_canoak.physics.energy_fluxes import disp_canveg, diffuse_direct_radiation_mx
 
-# from jax_canoak.physics.energy_fluxes import rad_tran_canopy_mx, sky_ir_mx
+# from jax_canoak.physics.energy_fluxes import rad_tran_canopy_mx, sky_ir_v2_mx
+from jax_canoak.physics.energy_fluxes import rad_tran_canopy_mx, sky_ir_mx
 from jax_canoak.physics.energy_fluxes import compute_qin_mx, ir_rad_tran_canopy_mx
 from jax_canoak.physics.energy_fluxes import uz_mx, soil_energy_balance_mx
 from jax_canoak.physics.carbon_fluxes import angle_mx, leaf_angle_mx
@@ -37,13 +39,14 @@ import matplotlib.pyplot as plt
 from jax_canoak.shared_utilities.plot import plot_dij, plot_daily
 from jax_canoak.shared_utilities.plot import plot_veg_temp
 
-# from jax_canoak.shared_utilities import plot_ir, plot_rad, plot_canopy1, plot_dij
+from jax_canoak.shared_utilities.plot import plot_ir, plot_rad
+
 # from jax_canoak.shared_utilities import plot_soil, plot_soiltemp, plot_prof
 # from jax_canoak.shared_utilities import plot_totalenergyplot_prof
 
 jax.config.update("jax_enable_x64", True)
 
-plot = True
+plot = False
 
 # ---------------------------------------------------------------------------- #
 #                     Model parameter/properties settings                      #
@@ -64,7 +67,8 @@ lai = 5.0
 # ---------------------------------------------------------------------------- #
 #                     Set the model forcings                                   #
 # ---------------------------------------------------------------------------- #
-f_forcing = "../shared_utilities/forcings/AlfMetBouldinInput.csv"
+# f_forcing = "../shared_utilities/forcings/AlfMetBouldinInput.csv"
+f_forcing = "../shared_utilities/forcings/AlfBouldinMetInput.csv"
 forcing_data = np.loadtxt(f_forcing, delimiter=",")
 forcing_data = jnp.array(forcing_data)
 n_time = forcing_data.shape[0]
@@ -76,7 +80,8 @@ met = initialize_met(forcing_data, n_time, zl0)
 # ---------------------------------------------------------------------------- #
 #                     Set up model parameter instance                      #
 # ---------------------------------------------------------------------------- #
-para = Para(
+para = initialize_parameters(
+    # para = Para(
     time_zone=time_zone,
     latitude=latitude,
     longitude=longitude,
@@ -95,15 +100,17 @@ para = Para(
 # ---------------------------------------------------------------------------- #
 #                     Generate or read the Dispersion matrix                   #
 # ---------------------------------------------------------------------------- #
-dij = disp_canveg(para, timemax=5000.0)
-# dij = np.loadtxt('Dij_Alfalfa.csv', delimiter=',')
-# dij = jnp.array(dij)
+# dij = disp_canveg(para, timemax=5000.0)
+dij = np.loadtxt("Dij_Alfalfa.csv", delimiter=",")
+dij = jnp.array(dij)
 
 
 # ---------------------------------------------------------------------------- #
 #                     Initialize model states                        #
 # ---------------------------------------------------------------------------- #
-soil, quantum, nir, ir, qin, rnet, sun, shade, lai = initialize_model_states(met, para)
+soil, quantum, nir, ir, qin, rnet, sun, shade, veg, lai = initialize_model_states(
+    met, para
+)
 
 
 # ---------------------------------------------------------------------------- #
@@ -136,8 +143,8 @@ leaf_ang = leaf_angle_mx(sun_ang, para, lai)
 # ---------------------------------------------------------------------------- #
 #                     Initialize IR fluxes with air temperature                #
 # ---------------------------------------------------------------------------- #
-# ir.ir_in = sky_ir_mx(met.T_air_K, ratrad, para.sigma)
-ir_in = sky_ir_v2_mx(met, ratrad, para.sigma)
+ir_in = sky_ir_mx(met.T_air_K, ratrad, para.sigma)
+# ir_in = sky_ir_v2_mx(met, ratrad, para.sigma)
 ir_dn = dot(ir_in, ir.ir_dn)
 ir_up = dot(ir_in, ir.ir_up)
 ir = eqx.tree_at(lambda t: (t.ir_in, t.ir_dn, t.ir_up), ir, (ir_in, ir_dn, ir_up))
@@ -189,7 +196,7 @@ nir = rad_tran_canopy_mx(
 # loop again and apply updated Tsfc info until convergence
 # This is where things should be jitted as a whole
 def iteration(c, i):
-    met, prof, ir, qin, sun, shade, soil = c
+    met, prof, ir, qin, sun, shade, soil, veg = c
     # jax.debug.print("T soil: {a}", a=soil.T_soil[10,:])
     jax.debug.print("T sfc: {a}", a=soil.sfc_temperature[10])
 
@@ -220,15 +227,15 @@ def iteration(c, i):
 
     # Compute profiles of C's, zero layer jtot+1 as that is not a dF/dz or
     # source/sink level
-    prof = update_profile_mx(met, para, prof, quantum, sun, shade, soil, lai, dij)
+    prof = update_profile_mx(met, para, prof, quantum, sun, shade, soil, veg, lai, dij)
 
     # compute met.zL from HH and met.ustar
     HH = jnp.sum(
         (
-            quantum.prob_beam[:, : para.nlayers] * sun.H
-            + quantum.prob_shade[:, : para.nlayers] * shade.H
+            quantum.prob_beam[:, : para.jtot] * sun.H
+            + quantum.prob_shade[:, : para.jtot] * shade.H
         )
-        * lai.dff[:, : para.nlayers],
+        * lai.dff[:, : para.jtot],
         axis=1,
     )
     zL = -(0.4 * 9.8 * HH * para.meas_ht) / (
@@ -254,18 +261,20 @@ def iteration(c, i):
     #     * lai.dff[:, : para.nlayers],
     #     axis=1,
     # )
+    # Compute canopy integrated fluxes
+    veg = calculate_veg_mx(para, lai, quantum, sun, shade)
 
-    cnew = [met, prof, ir, qin, sun, shade, soil]
+    cnew = [met, prof, ir, qin, sun, shade, soil, veg]
     return cnew, None
 
 
-initials = [met, prof, ir, qin, sun, shade, soil]
-finals, _ = jax.lax.scan(iteration, initials, xs=None, length=30)
+initials = [met, prof, ir, qin, sun, shade, soil, veg]
+finals, _ = jax.lax.scan(iteration, initials, xs=None, length=1)
 
-met, prof, ir, qin, sun, shade, soil = finals
+met, prof, ir, qin, sun, shade, soil, veg = finals
 
-# Compute canopy integrated fluxes
-veg = calculate_veg_mx(para, lai, quantum, sun, shade)
+# # Compute canopy integrated fluxes
+# veg = calculate_veg_mx(para, lai, quantum, sun, shade)
 
 # Net radiation budget at top of the canopy
 can_rnet = (
@@ -283,9 +292,9 @@ can_rnet = (
 #                     Plot                                              #
 # ---------------------------------------------------------------------------- #
 if plot:
-    # plot_rad(quantum, para, lai, "par")
-    # plot_rad(nir, para, lai, "nir")
-    # plot_ir(ir, para, lai)
+    plot_rad(quantum, para, lai, "par")
+    plot_rad(nir, para, lai, "nir")
+    plot_ir(ir, para, lai)
     # fig, axes = plt.subplots(2, 1, figsize=(10, 10))
     # plot_canopy1(sun, qin, para, "sun", axes[0])
     # plot_canopy1(shade, qin, para, "shade", axes[1])

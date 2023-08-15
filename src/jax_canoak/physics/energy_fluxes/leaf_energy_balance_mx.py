@@ -124,6 +124,9 @@ def leaf_energy(
     hcoef2 = 2 * hcoef
     repeat = hcoef2 + prm.epsigma8 * tk3
     llout2 = 2 * llout
+    # jax.debug.print("qin: {a}", a=qin[:2,:])
+    # jax.debug.print("Tair_K: {a}", a=prof.Tair_K[:2,:])
+    # jax.debug.print("d2est: {a}", a=d2est[:2,:])
 
     # coefficients analytical solution
     def calculate_coef_hypo():
@@ -170,8 +173,12 @@ def leaf_energy(
     # jax.debug.print("{a}", a=product.mean(axis=1))
     LE = jnp.real(le2)
     del_Tk = (qin - LE - llout2) / repeat
-    Tsfc_K = prof.Tair_K[:, : prm.nlayers] + del_Tk
-    # jax.debug.print("{a}", a=del_Tk.mean())
+    Tsfc_K = prof.Tair_K[:, : prm.jtot] + del_Tk
+    # Tsfc_K = prof.Tair_K[:, : prm.nlayers] + del_Tk
+    # jax.debug.print("qin: {a}", a=qin.mean(axis=0))
+    # jax.debug.print("LE: {a}", a=LE.mean(axis=0))
+    # jax.debug.print("llout2: {a}", a=llout2.mean(axis=0))
+    # jax.debug.print("del_Tk: {a}", a=del_Tk.mean(axis=0))
 
     # H is sensible heat flux density from both sides of leaf
     H = hcoef2 * jnp.real(del_Tk)
