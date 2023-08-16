@@ -26,6 +26,7 @@ from ...shared_utilities.utils import dot
 from ...shared_utilities.types import Float_2D
 
 
+@eqx.filter_jit
 def compute_qin(quantum: ParNir, nir: ParNir, ir: Ir, prm: Para, qin: Qin) -> Qin:
     """Available energy on leaves for evaporation.
        Values are average of top and bottom levels of a layer.
@@ -173,6 +174,7 @@ def leaf_energy(
     # jax.debug.print("{a}", a=product.mean(axis=1))
     LE = jnp.real(le2)
     del_Tk = (qin - LE - llout2) / repeat
+    # del_Tk -= 0.2
     Tsfc_K = prof.Tair_K[:, : prm.jtot] + del_Tk
     # Tsfc_K = prof.Tair_K[:, : prm.nlayers] + del_Tk
     # jax.debug.print("qin: {a}", a=qin.mean(axis=0))

@@ -102,8 +102,10 @@ def diffuse_direct_radiation(
     # nir_diffuse = nir_diffuse.at[nirx == 0].set(0.1)
     nir_beam = nir_beam.at[nirx == 0].set(0.0)
     nir_diffuse = nir_diffuse.at[nirx == 0].set(0.0)
-    nir_diffuse = nirx - nir_beam
-    nir_beam = nirx - nir_diffuse
+
+    # nir_diffuse = nirx - nir_beam
+    # nir_beam = nirx - nir_diffuse
+    # par_beam = parin - par_diffuse
 
     # Check nan
     par_beam = par_beam.at[jnp.isnan(par_beam)].set(0.0)
@@ -130,6 +132,11 @@ def sky_ir(T: Float_1D, ratrad: Float_1D, sigma: Float_0D) -> Float_1D:
         - ratrad
     )
     y = sigma * jnp.power(T, 4.0) * product
+    # product = (
+    #     1.0 - 0.261 * jnp.exp(-0.000777 * jnp.power((273.16 - T), 2.0) * ratrad
+    #     + 1
+    #     - ratrad)
+    # )
     # y = sigma * jnp.power(T, 4.0)
     return y
 
@@ -160,7 +167,7 @@ def sky_ir_v2(met: Met, ratrad: Float_1D, sigma: Float_0D) -> Float_1D:
 
 
 # @partial(jax.jit, static_argnames=["mask_night", "niter"])
-@eqx.filter_jit
+# @eqx.filter_jit
 def rad_tran_canopy(
     sunang: SunAng,
     leafang: LeafAng,
@@ -237,6 +244,7 @@ def rad_tran_canopy(
     prob_beam = jnp.clip(prob_beam, a_max=1.0)
     prob_beam = prob_beam.at[mask_night.val, :].set(0.0)
     # rad.prob_shade = 1 - rad.prob_beam
+    # jax.debug.print("prob_beam: {a}", a=prob_beam.mean(axis=0))
 
     # Calculate beam PAR that is transmitted downward
     # (ntime, jtot)
@@ -298,6 +306,9 @@ def rad_tran_canopy(
     carry, _ = jax.lax.scan(calculate_dnup, [up_init, dn_init], xs=None, length=niter)
     up, dn = carry[0], carry[1]
 
+    # jax.debug.print("up: {a}", a=up.mean(axis=0))
+    # jax.debug.print("dn: {a}", a=dn.mean(axis=0))
+
     # upward diffuse radiation flux density, on the horizontal
     up_flux = up
 
@@ -326,6 +337,7 @@ def rad_tran_canopy(
     return rad
 
 
+# @eqx.filter_jit
 def ir_rad_tran_canopy(
     leafang: LeafAng,
     ir: Ir,
@@ -378,52 +390,106 @@ def ir_rad_tran_canopy(
     # normally we assume relectance is 1-ep and transmission is zero, but that only
     # allows backward scattering and the IR fluxes are not so great leaving the canopy
     scat = (1 - prm.ep) / 2
-
     forward_scat = leafang.integ_exp_diff + (1 - leafang.integ_exp_diff) * scat
     backward_scat = (1 - leafang.integ_exp_diff) * scat
+
     sdn = IR_source * (1 - leafang.integ_exp_diff)
     sup = IR_source * (1 - leafang.integ_exp_diff)
 
-    def calculate_dn_layer(c, i):
-        dn_layer_t, up_layer_b = c, ir_up[:, i]
-        dn_layer_b = (
-            dn_layer_t * forward_scat[:, i]
-            + up_layer_b * backward_scat[:, i]
-            # dn_layer_t * leafang.integ_exp_diff[:,i]
-            + sdn[:, i]
+    # def calculate_dnup(c2, j):
+    #     ir_dn, ir_up = c2[0], c2[1]
+    #     dn_top, up_bot = ir_dn[:, -1], ir_up[:, 0]
+
+    #     def calculate_dn_layer(c, i):
+    #         dn_layer_t, up_layer_b = c, ir_up[:, i]
+
+    #         dn_layer_b = (
+    #             dn_layer_t * forward_scat[:, i]
+    #             + up_layer_b * backward_scat[:, i]
+    #             + sdn[:, i]
+    #         )
+
+    #         up_layer_t = (
+    #             up_layer_b * forward_scat[:, i]
+    #             + dn_layer_t * backward_scat[:, i]
+    #             + sup[:, i]
+    #         )
+
+    #         cnew = dn_layer_b
+    #         out_layer = (dn_layer_b, up_layer_t)
+    #         return cnew, out_layer
+
+    #     _, out = jax.lax.scan(
+    #         calculate_dn_layer,
+    #         dn_top,
+    #         jnp.arange(prm.jtot - 1, -1, -1),
+    #     )
+    #     outdn, outup = out[0], out[1]
+    #     outdn = outdn.T
+    #     ir_dn=jnp.concatenate([outdn[:,::-1],jnp.expand_dims(dn_top, axis=-1)],axis=1)
+
+    #     up_bot = (1 - prm.epsoil) * ir_dn[:, 0] + prm.epsoil * prm.sigma * jnp.power(
+    #         soil.sfc_temperature, 4
+    #     )
+    #     outup = outup.T
+    #     ir_up=jnp.concatenate([jnp.expand_dims(up_bot,axis=-1),outup[:,::-1]],axis=1)
+
+    #     cnew = [ir_dn, ir_up]
+
+    #     return cnew, None
+
+    # carry, _ = jax.lax.scan(calculate_dnup, [ir_dn, ir_up], xs=None, length=50)
+    # ir_dn, ir_up = carry[0], carry[1]
+
+    def calculate_dnup(c2, j):
+        ir_dn, ir_up = c2[0], c2[1]
+
+        def calculate_dn_layer(c, i):
+            dn_layer_t, up_layer_b = c, ir_up[:, i]
+            dn_layer_b = (
+                dn_layer_t * forward_scat[:, i]
+                + up_layer_b * backward_scat[:, i]
+                + sdn[:, i]
+            )
+            cnew = dn_layer_b
+            return cnew, cnew
+
+        _, out = jax.lax.scan(
+            # calculate_dn_layer, ir_dn[:, -1], jnp.arange(prm.jtot - 1, -1, -1)
+            calculate_dn_layer,
+            ir_dn[:, -1],
+            jnp.arange(prm.jtot - 1, -1, -1),
         )
-        cnew = dn_layer_b
+        out = out.T
+        ir_dn = jnp.concatenate([out[:, ::-1], ir_dn[:, -1:]], axis=1)
+
+        # Compute upward IR from the bottom up with the lower boundary condition
+        # based on soil temperature
+        up_bot = (1 - prm.epsoil) * ir_dn[:, 0] + prm.epsoil * prm.sigma * jnp.power(
+            soil.sfc_temperature, 4
+        )
+
+        def calculate_up_layer(c, i):
+            un_layer_b, dn_layer_t = c, ir_dn[:, i + 1]
+            up_layer_t = (
+                un_layer_b * forward_scat[:, i]
+                + dn_layer_t * backward_scat[:, i]
+                # un_layer_b * leafang.integ_exp_diff[:,i]
+                + sup[:, i]
+            )
+            cnew = up_layer_t
+            return cnew, cnew
+
+        _, out = jax.lax.scan(calculate_up_layer, up_bot, jnp.arange(prm.jtot))
+        out = out.T
+        ir_up = jnp.concatenate([jnp.expand_dims(up_bot, axis=-1), out], axis=1)
+
+        cnew = [ir_dn, ir_up]
+
         return cnew, cnew
 
-    _, out = jax.lax.scan(
-        # calculate_dn_layer, ir_dn[:, -1], jnp.arange(prm.jtot - 1, -1, -1)
-        calculate_dn_layer,
-        ir_dn[:, -1],
-        jnp.arange(prm.jtot - 1, -1, -1),
-    )
-    out = out.T
-    ir_dn = jnp.concatenate([out[:, ::-1], ir_dn[:, -1:]], axis=1)
-
-    # Compute upward IR from the bottom up with the lower boundary condition based on
-    # soil temperature
-    up_bot = (1 - prm.epsoil) * ir_dn[:, 0] + prm.epsoil * prm.sigma * jnp.power(
-        soil.sfc_temperature, 4
-    )
-
-    def calculate_up_layer(c, i):
-        un_layer_b, dn_layer_t = c, ir_dn[:, i + 1]
-        up_layer_t = (
-            un_layer_b * forward_scat[:, i]
-            + dn_layer_t * backward_scat[:, i]
-            # un_layer_b * leafang.integ_exp_diff[:,i]
-            + sup[:, i]
-        )
-        cnew = up_layer_t
-        return cnew, cnew
-
-    _, out = jax.lax.scan(calculate_up_layer, up_bot, jnp.arange(prm.jtot))
-    out = out.T
-    ir_up = jnp.concatenate([jnp.expand_dims(up_bot, axis=-1), out], axis=1)
+    carry, _ = jax.lax.scan(calculate_dnup, [ir_dn, ir_up], xs=None, length=1)
+    ir_dn, ir_up = carry[0], carry[1]
 
     # IR shade on top + bottom of leaves
     ir_shade = ir_up[:, : prm.jtot] + ir_dn[:, : prm.jtot]

@@ -39,14 +39,14 @@ import matplotlib.pyplot as plt
 from jax_canoak.shared_utilities.plot import plot_dij, plot_daily
 from jax_canoak.shared_utilities.plot import plot_veg_temp
 
-from jax_canoak.shared_utilities.plot import plot_ir, plot_rad
+from jax_canoak.shared_utilities.plot import plot_ir, plot_rad, plot_prof2
 
 # from jax_canoak.shared_utilities import plot_soil, plot_soiltemp, plot_prof
 # from jax_canoak.shared_utilities import plot_totalenergyplot_prof
 
 jax.config.update("jax_enable_x64", True)
 
-plot = False
+plot = True
 
 # ---------------------------------------------------------------------------- #
 #                     Model parameter/properties settings                      #
@@ -179,14 +179,10 @@ mask_turbulence_hashable = HashableArrayWrapper(mask_turbulence)
 quantum = rad_tran_canopy_mx(
     sun_ang, leaf_ang, quantum, para, lai, mask_night_hashable, niter=5
 )
-# print(quantum.inbeam)
 # NIR
 nir = rad_tran_canopy_mx(
     sun_ang, leaf_ang, nir, para, lai, mask_night_hashable, niter=25
 )
-# jax.debug.print("{a}", a=jnp.mean(nir.dn_flux, 0))
-# jax.debug.print("{a}", a=nir.dn_flux[1,:])
-# plt.imshow(nir.dn_flux, cmap='Blues', vmin=0., aspect='auto')
 
 
 # ---------------------------------------------------------------------------- #
@@ -244,23 +240,6 @@ def iteration(c, i):
     zL = jnp.clip(zL, a_min=-3, a_max=0.25)
     met = eqx.tree_at(lambda t: t.zL, met, zL)
 
-    # # Compute the vegetation overall photosynthesis and respiration
-    # veg_Ps = jnp.sum(
-    #     (
-    #         quantum.prob_beam[:, : para.nlayers] * sun.Ps
-    #         + quantum.prob_shade[:, : para.nlayers] * shade.Ps
-    #     )
-    #     * lai.dff[:, : para.nlayers],
-    #     axis=1,
-    # )
-    # veg_Rd = jnp.sum(
-    #     (
-    #         quantum.prob_beam[:, : para.nlayers] * sun.Resp
-    #         + quantum.prob_shade[:, : para.nlayers] * shade.Resp
-    #     )
-    #     * lai.dff[:, : para.nlayers],
-    #     axis=1,
-    # )
     # Compute canopy integrated fluxes
     veg = calculate_veg_mx(para, lai, quantum, sun, shade)
 
@@ -269,12 +248,10 @@ def iteration(c, i):
 
 
 initials = [met, prof, ir, qin, sun, shade, soil, veg]
-finals, _ = jax.lax.scan(iteration, initials, xs=None, length=1)
+finals, _ = jax.lax.scan(iteration, initials, xs=None, length=15)
 
 met, prof, ir, qin, sun, shade, soil, veg = finals
 
-# # Compute canopy integrated fluxes
-# veg = calculate_veg_mx(para, lai, quantum, sun, shade)
 
 # Net radiation budget at top of the canopy
 can_rnet = (
@@ -307,6 +284,6 @@ if plot:
     # plot_soiltemp(soil, para)
     # plot_totalenergy(soil, veg, can_rnet)
     # plot_prof1(prof)
-    # plot_prof2(prof, para)
+    plot_prof2(prof, para)
     plot_daily(met, soil, veg, para)
     plt.show()

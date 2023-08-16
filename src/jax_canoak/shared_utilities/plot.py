@@ -176,7 +176,7 @@ def plot_prof1(prof, axes=None):
 
 def plot_prof2(prof, prm, axes=None):
     if axes is None:
-        fig, axes = plt.subplots(1, 2, figsize=(15, 8))
+        fig, axes = plt.subplots(1, 3, figsize=(20, 8))
     # Tair ~ ht
     ax = axes[0]
     ax.plot(jnp.nanmean(prof.Tair_K, 0), prm.zht[: prm.nlayers_atmos])
@@ -185,6 +185,10 @@ def plot_prof2(prof, prm, axes=None):
     ax = axes[1]
     ax.plot(jnp.nanmean(prof.eair_Pa, 0), prm.zht[: prm.nlayers_atmos])
     ax.set(xlabel="eair [Pa]", ylabel="Ht [m]")
+    # co2 ~ ht
+    ax = axes[2]
+    ax.plot(jnp.nanmean(prof.co2, 0), prm.zht[: prm.nlayers_atmos])
+    ax.set(xlabel="CO2 [ppm]", ylabel="Ht [m]")
 
 
 def plot_daily(met, soil, veg, prm, axes=None):

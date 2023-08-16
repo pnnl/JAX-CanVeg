@@ -23,6 +23,7 @@ from ...shared_utilities.types import HashableArrayWrapper
 from ...shared_utilities.utils import dot
 
 
+@eqx.filter_jit
 def uz(met: Met, prm: Para) -> Float_2D:
     """U(Z) inside the canopy during the day is about 1.09 u*
        This simple parameterization is derived from turbulence
