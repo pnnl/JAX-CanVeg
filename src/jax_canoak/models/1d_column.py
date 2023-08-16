@@ -17,22 +17,22 @@ import equinox as eqx
 # from jax_canoak.subjects import Para
 
 from jax_canoak.subjects import initialize_met, initialize_parameters
-from jax_canoak.subjects import initialize_profile_mx, initialize_model_states
-from jax_canoak.subjects import update_profile_mx, calculate_veg_mx
+from jax_canoak.subjects import initialize_profile, initialize_model_states
+from jax_canoak.subjects import update_profile, calculate_veg
 
 # from jax_canoak.subjects.utils import llambda as flambda
 from jax_canoak.shared_utilities.types import HashableArrayWrapper
 from jax_canoak.shared_utilities.utils import dot
-from jax_canoak.physics import energy_carbon_fluxes_mx
-from jax_canoak.physics.energy_fluxes import diffuse_direct_radiation_mx
+from jax_canoak.physics import energy_carbon_fluxes
+from jax_canoak.physics.energy_fluxes import diffuse_direct_radiation
 
-# from jax_canoak.physics.energy_fluxes import disp_canveg, diffuse_direct_radiation_mx
+# from jax_canoak.physics.energy_fluxes import disp_canveg, diffuse_direct_radiation
 
-# from jax_canoak.physics.energy_fluxes import rad_tran_canopy_mx, sky_ir_v2_mx
-from jax_canoak.physics.energy_fluxes import rad_tran_canopy_mx, sky_ir_mx
-from jax_canoak.physics.energy_fluxes import compute_qin_mx, ir_rad_tran_canopy_mx
-from jax_canoak.physics.energy_fluxes import uz_mx, soil_energy_balance_mx
-from jax_canoak.physics.carbon_fluxes import angle_mx, leaf_angle_mx
+# from jax_canoak.physics.energy_fluxes import rad_tran_canopy, sky_ir_v2
+from jax_canoak.physics.energy_fluxes import rad_tran_canopy, sky_ir
+from jax_canoak.physics.energy_fluxes import compute_qin, ir_rad_tran_canopy
+from jax_canoak.physics.energy_fluxes import uz, soil_energy_balance
+from jax_canoak.physics.carbon_fluxes import angle, leaf_angle
 
 
 import matplotlib.pyplot as plt
@@ -116,13 +116,13 @@ soil, quantum, nir, ir, qin, rnet, sun, shade, veg, lai = initialize_model_state
 # ---------------------------------------------------------------------------- #
 #                     Compute sun angles                                       #
 # ---------------------------------------------------------------------------- #
-# beta_rad, solar_sin_beta, beta_deg = angle_mx(
-sun_ang = angle_mx(para.lat_deg, para.long_deg, para.time_zone, met.day, met.hhour)
+# beta_rad, solar_sin_beta, beta_deg = angle(
+sun_ang = angle(para.lat_deg, para.long_deg, para.time_zone, met.day, met.hhour)
 
 # ---------------------------------------------------------------------------- #
 #                     Compute direct and diffuse radiations                    #
 # ---------------------------------------------------------------------------- #
-ratrad, par_beam, par_diffuse, nir_beam, nir_diffuse = diffuse_direct_radiation_mx(
+ratrad, par_beam, par_diffuse, nir_beam, nir_diffuse = diffuse_direct_radiation(
     sun_ang.sin_beta, met.rglobal, met.parin, met.P_kPa
 )
 quantum = eqx.tree_at(
@@ -137,14 +137,14 @@ nir = eqx.tree_at(lambda t: (t.inbeam, t.indiffuse), nir, (nir_beam, nir_diffuse
 # ---------------------------------------------------------------------------- #
 #                     Compute leaf angle                                       #
 # ---------------------------------------------------------------------------- #
-leaf_ang = leaf_angle_mx(sun_ang, para, lai)
+leaf_ang = leaf_angle(sun_ang, para, lai)
 
 
 # ---------------------------------------------------------------------------- #
 #                     Initialize IR fluxes with air temperature                #
 # ---------------------------------------------------------------------------- #
-ir_in = sky_ir_mx(met.T_air_K, ratrad, para.sigma)
-# ir_in = sky_ir_v2_mx(met, ratrad, para.sigma)
+ir_in = sky_ir(met.T_air_K, ratrad, para.sigma)
+# ir_in = sky_ir_v2(met, ratrad, para.sigma)
 ir_dn = dot(ir_in, ir.ir_dn)
 ir_up = dot(ir_in, ir.ir_up)
 ir = eqx.tree_at(lambda t: (t.ir_in, t.ir_dn, t.ir_up), ir, (ir_in, ir_dn, ir_up))
@@ -153,7 +153,7 @@ ir = eqx.tree_at(lambda t: (t.ir_in, t.ir_dn, t.ir_up), ir, (ir_in, ir_dn, ir_up
 # ---------------------------------------------------------------------------- #
 #                     Initialize profiles of scalars/sources/sinks             #
 # ---------------------------------------------------------------------------- #
-prof = initialize_profile_mx(met, para)
+prof = initialize_profile(met, para)
 
 
 # ---------------------------------------------------------------------------- #
@@ -176,13 +176,11 @@ mask_turbulence_hashable = HashableArrayWrapper(mask_turbulence)
 #                     Compute radiation fields             #
 # ---------------------------------------------------------------------------- #
 # PAR
-quantum = rad_tran_canopy_mx(
+quantum = rad_tran_canopy(
     sun_ang, leaf_ang, quantum, para, lai, mask_night_hashable, niter=5
 )
 # NIR
-nir = rad_tran_canopy_mx(
-    sun_ang, leaf_ang, nir, para, lai, mask_night_hashable, niter=25
-)
+nir = rad_tran_canopy(sun_ang, leaf_ang, nir, para, lai, mask_night_hashable, niter=25)
 
 
 # ---------------------------------------------------------------------------- #
@@ -198,32 +196,30 @@ def iteration(c, i):
 
     # Update canopy wind profile with iteration of z/l and use in boundary layer
     # resistance computations
-    wind = uz_mx(met, para)
+    wind = uz(met, para)
     prof = eqx.tree_at(lambda t: t.wind, prof, wind)
 
     # Compute IR fluxes with Bonan's algorithms of Norman model
-    ir = ir_rad_tran_canopy_mx(leaf_ang, ir, quantum, soil, sun, shade, para)
+    ir = ir_rad_tran_canopy(leaf_ang, ir, quantum, soil, sun, shade, para)
     # jax.debug.print("ir: {a}", a=ir.ir_dn[10,:])
 
     # Incoming short and longwave radiation
-    qin = compute_qin_mx(quantum, nir, ir, para, qin)
+    qin = compute_qin(quantum, nir, ir, para, qin)
 
     # Compute energy fluxes for H, LE, gs, A on Sun and Shade leaves
     # Compute new boundary layer conductances based on new leaf energy balance
     # and delta T, in case convection occurs
     # Different coefficients will be assigned if amphistomatous or hypostomatous
-    sun, shade = energy_carbon_fluxes_mx(
+    sun, shade = energy_carbon_fluxes(
         sun, shade, qin, quantum, met, prof, para, mask_turbulence_hashable
     )
 
     # Compute soil fluxes
-    soil = soil_energy_balance_mx(
-        quantum, nir, ir, met, prof, para, soil
-    )  # type: ignore
+    soil = soil_energy_balance(quantum, nir, ir, met, prof, para, soil)  # type: ignore
 
     # Compute profiles of C's, zero layer jtot+1 as that is not a dF/dz or
     # source/sink level
-    prof = update_profile_mx(met, para, prof, quantum, sun, shade, soil, veg, lai, dij)
+    prof = update_profile(met, para, prof, quantum, sun, shade, soil, veg, lai, dij)
 
     # compute met.zL from HH and met.ustar
     HH = jnp.sum(
@@ -241,7 +237,7 @@ def iteration(c, i):
     met = eqx.tree_at(lambda t: t.zL, met, zL)
 
     # Compute canopy integrated fluxes
-    veg = calculate_veg_mx(para, lai, quantum, sun, shade)
+    veg = calculate_veg(para, lai, quantum, sun, shade)
 
     cnew = [met, prof, ir, qin, sun, shade, soil, veg]
     return cnew, None

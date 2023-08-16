@@ -17,8 +17,8 @@ from typing import Tuple
 
 from ..subjects import ParNir, Met, Prof, Para, SunShadedCan, Qin
 from ..shared_utilities.types import HashableArrayWrapper
-from .energy_fluxes import boundary_resistance_mx, leaf_energy_mx
-from .carbon_fluxes import leaf_ps_mx
+from .energy_fluxes import boundary_resistance, leaf_energy
+from .carbon_fluxes import leaf_ps
 
 # from .energy_fluxes import boundary_resistance, energy_balance_amphi, llambda
 # from .carbon_fluxes import photosynthesis_amphi
@@ -70,12 +70,10 @@ def energy_carbon_fluxes(
     """
     # Based on sunlit leaf temperature and air temperature of the layer
     # compute boundary layer resistances for heat, vapor and CO2
-    boundary_layer_res = boundary_resistance_mx(
-        prof, met, sun.Tsfc, prm, mask_turbulence
-    )
+    boundary_layer_res = boundary_resistance(prof, met, sun.Tsfc, prm, mask_turbulence)
 
     # Compute leaf photosynthesis
-    ps = leaf_ps_mx(
+    ps = leaf_ps(
         quantum.sun_abs,
         prof.co2[:, : prm.jtot],
         sun.Tsfc,
@@ -91,16 +89,16 @@ def energy_carbon_fluxes(
 
     # Compute energy balance on the top of sunlit leaves
     # pass and use prm if leaf is amphistomatous or hypostomatous
-    sun = leaf_energy_mx(boundary_layer_res, qin.sun_abs, met, prof, sun, prm)
+    sun = leaf_energy(boundary_layer_res, qin.sun_abs, met, prof, sun, prm)
 
     # Compute energy balance for the bottom of sunlit leaves
     # if assuming hypostomatous assign gs a low value, eg 0.01m/s
 
     # Redo for shade fraction
-    boundary_layer_res = boundary_resistance_mx(
+    boundary_layer_res = boundary_resistance(
         prof, met, shade.Tsfc, prm, mask_turbulence
     )
-    ps = leaf_ps_mx(
+    ps = leaf_ps(
         quantum.sh_abs,
         prof.co2[:, : prm.jtot],
         shade.Tsfc,
@@ -113,6 +111,6 @@ def energy_carbon_fluxes(
     shade = eqx.tree_at(
         lambda t: (t.Ps, t.gs, t.Resp), shade, (ps.aphoto, ps.gs_m_s, ps.rd)
     )
-    shade = leaf_energy_mx(boundary_layer_res, qin.shade_abs, met, prof, shade, prm)
+    shade = leaf_energy(boundary_layer_res, qin.shade_abs, met, prof, shade, prm)
 
     return sun, shade

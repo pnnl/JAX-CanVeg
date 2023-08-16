@@ -24,21 +24,14 @@ from math import floor
 
 import equinox as eqx
 
-# from ..physics.energy_fluxes import conc_mx
-
-
 from .meterology import Met
 from .parameters import Para
-from .utils import soil_sfc_res, conc_mx
+from .utils import soil_sfc_res, conc
 from .utils import llambda as flambda
 
-# from ..physics.energy_fluxes.soil_energy_balance_mx import soil_sfc_res
 from ..shared_utilities.types import Float_2D, Float_1D, Float_0D, Int_0D
 from ..shared_utilities.utils import dot, minus
 from ..shared_utilities.constants import PI
-
-
-# dot = jax.vmap(lambda x, y: x * y, in_axes=(None, 1), out_axes=1)
 
 
 class Prof(eqx.Module):
@@ -354,7 +347,7 @@ class Soil(eqx.Module):
         return soil_sfc_res(self.water_content_15cm)
 
 
-def initialize_profile_mx(met: Met, para: Para):
+def initialize_profile(met: Met, para: Para):
     ntime, jtot = para.ntime, para.jtot
     nlayers = para.nlayers_atmos
     zht = para.zht
@@ -395,7 +388,7 @@ def initialize_profile_mx(met: Met, para: Para):
     return prof
 
 
-def update_profile_mx(
+def update_profile(
     met: Met,
     para: Para,
     prof: Prof,
@@ -407,7 +400,7 @@ def update_profile_mx(
     lai: Lai,
     dij: Float_2D,
 ) -> Prof:
-    from ..physics.carbon_fluxes import soil_respiration_alfalfa_mx
+    from ..physics.carbon_fluxes import soil_respiration_alfalfa
 
     nlayers = para.jtot
     Ps = (
@@ -435,7 +428,7 @@ def update_profile_mx(
     # it needs information on source/sink, Dij, soil boundary flux and factor for units
     fact_heatcoef = met.air_density * para.Cp
     soilflux = soil.heat  # assume soil heat flux is 20 W m-2 until soil sub is working
-    Tair_K = conc_mx(
+    Tair_K = conc(
         H,
         soilflux,
         prof.delz,
@@ -464,7 +457,7 @@ def update_profile_mx(
         * 18.01
         / (1000 * 8.314 * Tair_K[:, para.jktot - 1])
     )  # noqa: E501
-    eair_Pa = conc_mx(
+    eair_Pa = conc(
         LE,
         soil.evap,
         prof.delz,
@@ -487,11 +480,11 @@ def update_profile_mx(
     # soilflux=Rsoil.Respiration;
     # [prof.co2]=fConcMatrix(-prof.Ps,soilflux, prof.delz, Dij,met,met.CO2,prm,fact.co2)
     fact_co2 = (28.97 / 44.0) * met.air_density_mole
-    respiration = soil_respiration_alfalfa_mx(
+    respiration = soil_respiration_alfalfa(
         veg.Ps, soil.T_soil[:, 9], met.soilmoisture, met.zcanopy, veg.Rd, para
     )
     soilflux = respiration
-    co2 = conc_mx(
+    co2 = conc(
         -Ps,
         soilflux,
         prof.delz,
@@ -530,7 +523,7 @@ def update_profile_mx(
     return prof
 
 
-def calculate_veg_mx(
+def calculate_veg(
     para: Para, lai: Lai, quantum: ParNir, sun: SunShadedCan, shade: SunShadedCan
 ) -> Veg:
     nlayers = para.jtot

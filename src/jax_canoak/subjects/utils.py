@@ -92,7 +92,7 @@ def soil_sfc_res(wg: Float_1D) -> Float_1D:
     return y
 
 
-def conc_mx(
+def conc(
     source: Float_2D,
     soilflux: Float_1D,
     delz: Float_1D,
