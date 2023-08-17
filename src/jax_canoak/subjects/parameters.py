@@ -11,7 +11,7 @@ Date: 2023.7.24.
 # import jax
 import jax.numpy as jnp
 
-# from math import floor
+from math import floor
 
 import equinox as eqx
 
@@ -49,6 +49,10 @@ class Setup(eqx.Module):
     npart: int
     # Number of iteration
     niter: int
+
+    @property
+    def soil_mtime(self):
+        return floor(3600 * 24 / self.n_hr_per_day / self.dt_soil)
 
     @property
     def ndays(self):

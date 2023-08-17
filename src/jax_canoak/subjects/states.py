@@ -20,7 +20,6 @@ Date: 2023.7.24.
 
 import jax
 import jax.numpy as jnp
-from math import floor
 
 import equinox as eqx
 
@@ -828,7 +827,7 @@ def initialize_soil(
 
     # Time step in seconds
     dt = setup.dt_soil
-    mtime = floor(3600 * 24 / setup.n_hr_per_day / setup.dt_soil)
+    mtime = setup.soil_mtime
     # mtime = floor(1800.0 / dt)  # time steps per half hour
 
     n_soil = setup.n_soil_layers  # number of soil layers

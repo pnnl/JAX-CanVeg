@@ -16,7 +16,6 @@ import equinox as eqx
 from typing import Tuple
 
 from ..subjects import ParNir, Met, Prof, Para, Setup, SunShadedCan, Qin
-from ..shared_utilities.types import HashableArrayWrapper
 from .energy_fluxes import boundary_resistance, leaf_energy
 from .carbon_fluxes import leaf_ps
 
@@ -34,7 +33,6 @@ def energy_carbon_fluxes(
     prof: Prof,
     prm: Para,
     setup: Setup,
-    mask_turbulence: HashableArrayWrapper,
 ) -> Tuple[SunShadedCan, SunShadedCan]:
     """The ENERGY_AND_CARBON_FLUXES routine to computes coupled fluxes
        of energy, water and CO2 exchange, as well as leaf temperature.  Computataions
@@ -70,7 +68,7 @@ def energy_carbon_fluxes(
     """
     # Based on sunlit leaf temperature and air temperature of the layer
     # compute boundary layer resistances for heat, vapor and CO2
-    boundary_layer_res = boundary_resistance(prof, met, sun.Tsfc, prm, mask_turbulence)
+    boundary_layer_res = boundary_resistance(prof, met, sun.Tsfc, prm)
 
     # Compute leaf photosynthesis
     ps = leaf_ps(
@@ -96,9 +94,7 @@ def energy_carbon_fluxes(
     # if assuming hypostomatous assign gs a low value, eg 0.01m/s
 
     # Redo for shade fraction
-    boundary_layer_res = boundary_resistance(
-        prof, met, shade.Tsfc, prm, mask_turbulence
-    )
+    boundary_layer_res = boundary_resistance(prof, met, shade.Tsfc, prm)
     ps = leaf_ps(
         quantum.sh_abs,
         prof.co2[:, : prm.jtot],

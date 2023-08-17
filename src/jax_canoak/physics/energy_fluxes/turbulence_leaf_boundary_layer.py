@@ -19,7 +19,6 @@ import jax.numpy as jnp
 
 from ...subjects import Met, Para, Setup, Prof, BoundLayerRes
 from ...shared_utilities.types import Float_2D
-from ...shared_utilities.types import HashableArrayWrapper
 from ...shared_utilities.utils import dot
 
 
@@ -59,7 +58,6 @@ def boundary_resistance(
     met: Met,
     TLF: Float_2D,
     prm: Para,
-    mask_turbulence: HashableArrayWrapper,
 ) -> BoundLayerRes:
     """This subroutine computes the leaf boundary layer
        resistances for heat, vapor and CO2 (s/m).
@@ -109,33 +107,31 @@ def boundary_resistance(
     Re5 = jnp.power(Re, 0.5)
     Re8 = jnp.power(Re, 0.8)
 
-    # # Turbulent boundary layer
-    # Res_factor = 0.036*Re8*prm.betfac
-    # sh1 = Res_factor[mask_turbulence.val] * prm.pr33
-    # sh2 = Res_factor[mask_turbulence.val] * prm.sc33
-    # sh3 = Res_factor[mask_turbulence.val] * prm.scc33
-    # Sh_heat = Sh_heat.at[mask_turbulence.val].set(sh1)
-    # Sh_vapor = Sh_vapor.at[mask_turbulence.val].set(sh2)
-    # Sh_CO2 = Sh_CO2.at[mask_turbulence.val].set(sh3)
-
-    # # Laminar layers
-    # Res_factor_lam = 0.66*Re5*prm.betfac
-    # sh1 = Res_factor_lam[~mask_turbulence.val] * prm.pr33
-    # sh2 = Res_factor_lam[~mask_turbulence.val] * prm.sc33
-    # sh3 = Res_factor_lam[~mask_turbulence.val] * prm.scc33
-    # Sh_heat = Sh_heat.at[~mask_turbulence.val].set(sh1)
-    # Sh_vapor = Sh_vapor.at[~mask_turbulence.val].set(sh2)
-    # Sh_CO2 = Sh_CO2.at[~mask_turbulence.val].set(sh3)
-
     # Compute res_factor
-    Res_factor = 0.66 * Re5 * prm.betfac  # laminar layers
-    Res_factor = Res_factor.at[mask_turbulence.val].set(
-        0.036 * Re8[mask_turbulence.val] * prm.betfac  # turbulent layers
+    nnu_T_P = dot(
+        prm.nnu * (101.3 / met.P_kPa),
+        jnp.power(prof.Tair_K[:, : prm.jtot] / 273.16, 1.81),
     )
+    Re = prm.lleaf * prof.wind[:, : prm.jtot] / nnu_T_P
+
+    @jnp.vectorize
+    def turbulence(Re_e, Re8_e, Re5_e):
+        return jax.lax.cond(
+            Re_e > 14000,
+            lambda: 0.036 * Re8_e * prm.betfac,  # turbulence layer
+            lambda: 0.66 * Re5_e * prm.betfac,  # laminar layer
+        )
+
+    Res_factor = turbulence(Re, Re8, Re5)
+    # mask_turbulence = Re > 14000.0
+    # Res_factor = 0.66 * Re5 * prm.betfac  # laminar layers
+    # Res_factor = Res_factor.at[mask_turbulence.val].set(
+    #     0.036 * Re8[mask_turbulence.val] * prm.betfac  # turbulent layers
+    # )
 
     # If there is free convection
     @jnp.vectorize
-    def func(graf_e, Re_e, Res_factor_e):
+    def free_convection(graf_e, Re_e, Res_factor_e):
         conds = jnp.array(
             [
                 (graf_e / (Re_e * Re_e) > 1.0) & (graf_e < 100000.0),
@@ -154,7 +150,7 @@ def boundary_resistance(
         )
         return coef
 
-    coef = func(graf, Re, Res_factor)
+    coef = free_convection(graf, Re, Res_factor)
     Sh_heat = coef * prm.pr33
     Sh_vapor = coef * prm.sc33
     Sh_CO2 = coef * prm.scc33

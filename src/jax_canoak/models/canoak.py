@@ -11,11 +11,11 @@ import equinox as eqx
 
 from typing import Tuple
 
-from jax_canoak.shared_utilities.types import Float_1D, Float_2D
-from jax_canoak.shared_utilities.types import HashableArrayWrapper
+from jax_canoak.shared_utilities.types import Float_2D
 
 from jax_canoak.subjects import Para, Met, Prof, SunAng, LeafAng, SunShadedCan
-from jax_canoak.subjects import Setup, Veg, Soil, Qin, Ir, ParNir, Lai
+from jax_canoak.subjects import Setup, Veg, Soil, Rnet, Qin, Ir, ParNir, Lai
+from jax_canoak.subjects import initialize_profile, initialize_model_states
 
 from jax_canoak.shared_utilities.utils import dot
 from jax_canoak.subjects import update_profile, calculate_veg
@@ -25,41 +25,65 @@ from jax_canoak.physics import energy_carbon_fluxes
 from jax_canoak.physics.energy_fluxes import rad_tran_canopy, sky_ir
 from jax_canoak.physics.energy_fluxes import compute_qin, ir_rad_tran_canopy
 from jax_canoak.physics.energy_fluxes import uz, soil_energy_balance
+from jax_canoak.physics.energy_fluxes import diffuse_direct_radiation
+from jax_canoak.physics.carbon_fluxes import angle, leaf_angle
 
 
 def canoak(
     para: Para,
     setup: Setup,
     met: Met,
-    prof: Prof,
     dij: Float_2D,
-    lai: Lai,
-    sun_ang: SunAng,
-    leaf_ang: LeafAng,
-    quantum: ParNir,
-    nir: ParNir,
-    ir: Ir,
-    qin: Qin,
-    ratrad: Float_1D,
-    sun: SunShadedCan,
-    shade: SunShadedCan,
-    veg: Veg,
-    soil: Soil,
-    mask_night_hashable: HashableArrayWrapper,
-    mask_turbulence_hashable: HashableArrayWrapper,
     soil_mtime: int,
     niter: int = 15,
-) -> Tuple[Met, Prof, Ir, Qin, SunShadedCan, SunShadedCan, Soil, Veg]:
-    # # ---------------------------------------------------------------------------- #
-    # #                     Compute direct and diffuse radiations                    #
-    # # ---------------------------------------------------------------------------- #
-    # ratrad, par_beam, par_diffuse, nir_beam, nir_diffuse = diffuse_direct_radiation(
-    #     sun_ang.sin_beta, met.rglobal, met.parin, met.P_kPa
-    # )
-    # quantum = eqx.tree_at(
-    #     lambda t: (t.inbeam, t.indiffuse), quantum, (par_beam, par_diffuse)
-    # )
-    # nir = eqx.tree_at(lambda t: (t.inbeam, t.indiffuse), nir, (nir_beam, nir_diffuse))
+) -> Tuple[
+    Met,
+    Prof,
+    ParNir,
+    ParNir,
+    Ir,
+    Rnet,
+    Qin,
+    SunAng,
+    LeafAng,
+    Lai,
+    SunShadedCan,
+    SunShadedCan,
+    Soil,
+    Veg,
+]:
+    # ---------------------------------------------------------------------------- #
+    #                     Initialize profiles of scalars/sources/sinks             #
+    # ---------------------------------------------------------------------------- #
+    prof = initialize_profile(met, para, setup)
+
+    # ---------------------------------------------------------------------------- #
+    #                     Initialize model states                        #
+    # ---------------------------------------------------------------------------- #
+    soil, quantum, nir, ir, qin, rnet, sun, shade, veg, lai = initialize_model_states(
+        met, para, setup
+    )
+
+    # ---------------------------------------------------------------------------- #
+    #                     Compute sun angles                                       #
+    # ---------------------------------------------------------------------------- #
+    sun_ang = angle(setup.lat_deg, setup.long_deg, setup.time_zone, met.day, met.hhour)
+
+    # ---------------------------------------------------------------------------- #
+    #                     Compute leaf angle                                       #
+    # ---------------------------------------------------------------------------- #
+    leaf_ang = leaf_angle(sun_ang, para, setup, lai)
+
+    # ---------------------------------------------------------------------------- #
+    #                     Compute direct and diffuse radiations                    #
+    # ---------------------------------------------------------------------------- #
+    ratrad, par_beam, par_diffuse, nir_beam, nir_diffuse = diffuse_direct_radiation(
+        sun_ang.sin_beta, met.rglobal, met.parin, met.P_kPa
+    )
+    quantum = eqx.tree_at(
+        lambda t: (t.inbeam, t.indiffuse), quantum, (par_beam, par_diffuse)
+    )
+    nir = eqx.tree_at(lambda t: (t.inbeam, t.indiffuse), nir, (nir_beam, nir_diffuse))
 
     # ---------------------------------------------------------------------------- #
     #                     Initialize IR fluxes with air temperature                #
@@ -74,13 +98,9 @@ def canoak(
     #                     Compute radiation fields             #
     # ---------------------------------------------------------------------------- #
     # PAR
-    quantum = rad_tran_canopy(
-        sun_ang, leaf_ang, quantum, para, lai, mask_night_hashable, niter=5
-    )
+    quantum = rad_tran_canopy(sun_ang, leaf_ang, quantum, para, lai, niter=5)
     # NIR
-    nir = rad_tran_canopy(
-        sun_ang, leaf_ang, nir, para, lai, mask_night_hashable, niter=25
-    )  # noqa: E501
+    nir = rad_tran_canopy(sun_ang, leaf_ang, nir, para, lai, niter=25)  # noqa: E501
 
     # ---------------------------------------------------------------------------- #
     #                     Iterations                                               #
@@ -110,7 +130,7 @@ def canoak(
         # and delta T, in case convection occurs
         # Different coefficients will be assigned if amphistomatous or hypostomatous
         sun, shade = energy_carbon_fluxes(
-            sun, shade, qin, quantum, met, prof, para, setup, mask_turbulence_hashable
+            sun, shade, qin, quantum, met, prof, para, setup
         )
 
         # Compute soil fluxes
@@ -146,4 +166,19 @@ def canoak(
 
     met, prof, ir, qin, sun, shade, soil, veg = finals
 
-    return met, prof, ir, qin, sun, shade, soil, veg
+    return (
+        met,
+        prof,
+        quantum,
+        nir,
+        ir,
+        rnet,
+        qin,
+        sun_ang,
+        leaf_ang,
+        lai,
+        sun,
+        shade,
+        soil,
+        veg,
+    )

@@ -14,17 +14,15 @@ import jax.numpy as jnp
 
 import equinox as eqx
 
-# from functools import partial
+from functools import partial
 from typing import Tuple
 
 from ...subjects import SunAng, LeafAng, ParNir, Para, Ir, SunShadedCan, Soil, Met
 from ...subjects import Lai
 from ...shared_utilities.types import Float_0D, Float_1D
-from ...shared_utilities.types import HashableArrayWrapper
 from ...shared_utilities.utils import dot, add
 
 
-# @jax.jit
 def diffuse_direct_radiation(
     solar_sine_beta: Float_1D, rglobal: Float_1D, parin: Float_1D, press_kpa: Float_1D
 ) -> Tuple[Float_1D, Float_1D, Float_1D, Float_1D, Float_1D]:
@@ -36,7 +34,13 @@ def diffuse_direct_radiation(
 
     # visible direct and potential diffuse PAR
     ru = press_kpa / (101.3 * solar_sine_beta)
-    ru = ru.at[ru <= 0].set(jnp.nan)  # for negative sun angles getting complex numbers
+
+    @jnp.vectorize
+    def func_night(ru_e):
+        return jax.lax.cond(ru_e <= 0, lambda: jnp.nan, lambda: ru_e)
+
+    # ru = ru.at[ru <= 0].set(jnp.nan) # for negative sun angles getting complex numbers
+    ru = func_night(ru)
     rdvis = solar_constant * fvis * jnp.exp(-0.185 * ru) * solar_sine_beta
     rsvis = 0.4 * (solar_constant * fvis * solar_sine_beta - rdvis)
 
@@ -44,24 +48,40 @@ def diffuse_direct_radiation(
     wa = solar_constant * 0.077 * jnp.power((2.0 * ru), 0.3)
 
     # direct beam and potential diffuse NIR
+    @jnp.vectorize
+    def clean_nan_to_zero(r_e):
+        return jax.lax.cond(jnp.isnan(r_e), lambda: 0.0, lambda: r_e)
+
     nircoef = solar_constant * fnir
     rdir = (nircoef * jnp.exp(-0.06 * ru) - wa) * solar_sine_beta
-    rdir = rdir.at[jnp.isnan(rdir)].set(0.0)
-    # rdir = jnp.maximum(0.0, rdir)
+    # rdir = rdir.at[jnp.isnan(rdir)].set(0.0)
+    rdir = clean_nan_to_zero(rdir)
     rsdir = 0.6 * (nircoef - rdvis / solar_sine_beta - wa) * solar_sine_beta
-    rsdir = rsdir.at[jnp.isnan(rsdir)].set(0.0)
-    # rsdir = jnp.maximum(0.0, rsdir)
+    # rsdir = rsdir.at[jnp.isnan(rsdir)].set(0.0)
+    rsdir = clean_nan_to_zero(rsdir)
 
     rvt = rdvis + rsvis
     rit = rdir + rsdir
-    rvt = rvt.at[jnp.isnan(rvt)].set(0.0)
-    rit = rit.at[jnp.isnan(rit)].set(0.0)
+    rvt = clean_nan_to_zero(rvt)
+    rit = clean_nan_to_zero(rit)
+    # rvt = rvt.at[jnp.isnan(rvt)].set(0.0)
+    # rit = rit.at[jnp.isnan(rit)].set(0.0)
     # rvt = jnp.maximum(0.1, rvt)
     # rit = jnp.maximum(0.1, rit)
 
+    @jnp.vectorize
+    def clean_nan_to_one(r_e):
+        return jax.lax.cond(jnp.isnan(r_e), lambda: 1.0, lambda: r_e)
+
+    @jnp.vectorize
+    def clean_inf_to_one(r_e):
+        return jax.lax.cond(jnp.isinf(r_e), lambda: 1.0, lambda: r_e)
+
     ratrad = rglobal / (rvt + rit)
-    ratrad = ratrad.at[jnp.isnan(ratrad)].set(1.0)
-    ratrad = ratrad.at[jnp.isinf(ratrad)].set(1.0)
+    # ratrad = ratrad.at[jnp.isnan(ratrad)].set(1.0)
+    # ratrad = ratrad.at[jnp.isinf(ratrad)].set(1.0)
+    ratrad = clean_nan_to_one(ratrad)
+    ratrad = clean_inf_to_one(ratrad)
     ratrad = jnp.clip(ratrad, a_min=0.22, a_max=0.89)
     # ratrad = jnp.maximum(0.22, ratrad)
     # ratrad = jnp.minimum(0.89, ratrad)
@@ -82,12 +102,20 @@ def diffuse_direct_radiation(
 
     # note PAR has been entered in units of uE m-2 s-1
     par_beam = fvsb * parin
-    par_beam = par_beam.at[par_beam < 0].set(0.0)
+    # par_beam = par_beam.at[par_beam < 0].set(0.0)
+    par_beam = jnp.clip(par_beam, a_min=0.0)
     par_diffuse = parin - par_beam
+
+    @jnp.vectorize
+    def clean_zeroin_to_zero(r_e, in_e):
+        return jax.lax.cond(in_e == 0, lambda: 0.0, lambda: r_e)
+
+    par_beam = clean_zeroin_to_zero(par_beam, parin)
+    par_diffuse = clean_zeroin_to_zero(par_diffuse, parin)
     # par_beam = par_beam.at[parin == 0].set(0.001)
     # par_diffuse = par_diffuse.at[parin == 0].set(0.001)
-    par_beam = par_beam.at[parin == 0].set(0.0)
-    par_diffuse = par_diffuse.at[parin == 0].set(0.0)
+    # par_beam = par_beam.at[parin == 0].set(0.0)
+    # par_diffuse = par_diffuse.at[parin == 0].set(0.0)
     # jax.debug.print("par_beam {a}", a=par_beam[:3])
 
     # NIR beam and diffuse flux densities
@@ -96,24 +124,123 @@ def diffuse_direct_radiation(
     fansb = jnp.clip(fansb, a_min=0.0, a_max=1.0)
     # fand = 1. - fansb
     nir_beam = fansb * nirx
-    nir_beam = nir_beam.at[nir_beam < 0].set(0.0)
+    # nir_beam = nir_beam.at[nir_beam < 0].set(0.0)
+    nir_beam = jnp.clip(nir_beam, a_min=0.0)
     nir_diffuse = nirx - nir_beam
+    nir_beam = clean_zeroin_to_zero(nir_beam, nirx)
+    nir_diffuse = clean_zeroin_to_zero(nir_diffuse, nirx)
     # nir_beam = nir_beam.at[nirx == 0].set(0.1)
     # nir_diffuse = nir_diffuse.at[nirx == 0].set(0.1)
-    nir_beam = nir_beam.at[nirx == 0].set(0.0)
-    nir_diffuse = nir_diffuse.at[nirx == 0].set(0.0)
+    # nir_beam = nir_beam.at[nirx == 0].set(0.0)
+    # nir_diffuse = nir_diffuse.at[nirx == 0].set(0.0)
 
     # nir_diffuse = nirx - nir_beam
     # nir_beam = nirx - nir_diffuse
     # par_beam = parin - par_diffuse
 
-    # Check nan
-    par_beam = par_beam.at[jnp.isnan(par_beam)].set(0.0)
-    par_diffuse = par_diffuse.at[jnp.isnan(par_diffuse)].set(0.0)
-    nir_beam = nir_beam.at[jnp.isnan(nir_beam)].set(0.0)
-    nir_diffuse = nir_diffuse.at[jnp.isnan(nir_diffuse)].set(0.0)
+    # Check nan again!
+    par_beam = clean_nan_to_zero(par_beam)
+    par_diffuse = clean_nan_to_zero(par_diffuse)
+    nir_beam = clean_nan_to_zero(nir_beam)
+    nir_diffuse = clean_nan_to_zero(nir_diffuse)
+    # par_beam = par_beam.at[jnp.isnan(par_beam)].set(0.0)
+    # par_diffuse = par_diffuse.at[jnp.isnan(par_diffuse)].set(0.0)
+    # nir_beam = nir_beam.at[jnp.isnan(nir_beam)].set(0.0)
+    # nir_diffuse = nir_diffuse.at[jnp.isnan(nir_diffuse)].set(0.0)
 
     return ratrad, par_beam, par_diffuse, nir_beam, nir_diffuse
+
+
+# # @jax.jit
+# def diffuse_direct_radiation(
+#     solar_sine_beta: Float_1D, rglobal: Float_1D, parin: Float_1D, press_kpa: Float_1D
+# ) -> Tuple[Float_1D, Float_1D, Float_1D, Float_1D, Float_1D]:
+#     solar_constant = 1360.8  # [W m-2]
+
+#     # Distribution of extraterrestrial solar radiation
+#     fnir, fvis = 0.517, 0.383
+#     # fuv, fnir, fvis = 0.087, 0.517, 0.383
+
+#     # visible direct and potential diffuse PAR
+#     ru = press_kpa / (101.3 * solar_sine_beta)
+#     ru = ru.at[ru <= 0].set(jnp.nan) # for negative sun angles getting complex numbers
+#     rdvis = solar_constant * fvis * jnp.exp(-0.185 * ru) * solar_sine_beta
+#     rsvis = 0.4 * (solar_constant * fvis * solar_sine_beta - rdvis)
+
+#     # water absorption in NIR for 10 mm precip water
+#     wa = solar_constant * 0.077 * jnp.power((2.0 * ru), 0.3)
+
+#     # direct beam and potential diffuse NIR
+#     nircoef = solar_constant * fnir
+#     rdir = (nircoef * jnp.exp(-0.06 * ru) - wa) * solar_sine_beta
+#     rdir = rdir.at[jnp.isnan(rdir)].set(0.0)
+#     # rdir = jnp.maximum(0.0, rdir)
+#     rsdir = 0.6 * (nircoef - rdvis / solar_sine_beta - wa) * solar_sine_beta
+#     rsdir = rsdir.at[jnp.isnan(rsdir)].set(0.0)
+#     # rsdir = jnp.maximum(0.0, rsdir)
+
+#     rvt = rdvis + rsvis
+#     rit = rdir + rsdir
+#     rvt = rvt.at[jnp.isnan(rvt)].set(0.0)
+#     rit = rit.at[jnp.isnan(rit)].set(0.0)
+#     # rvt = jnp.maximum(0.1, rvt)
+#     # rit = jnp.maximum(0.1, rit)
+
+#     ratrad = rglobal / (rvt + rit)
+#     ratrad = ratrad.at[jnp.isnan(ratrad)].set(1.0)
+#     ratrad = ratrad.at[jnp.isinf(ratrad)].set(1.0)
+#     ratrad = jnp.clip(ratrad, a_min=0.22, a_max=0.89)
+#     # ratrad = jnp.maximum(0.22, ratrad)
+#     # ratrad = jnp.minimum(0.89, ratrad)
+
+#     # ratio is the ratio between observed and potential radiation
+#     # NIR flux density as a function of PAR
+#     # since NIR is used in energy balance calculations
+#     # convert it to W m-2: divide PAR by 4.6
+#     nirx = rglobal - (parin / 4.6)
+
+#     # fraction PAR direct and diffuse
+#     xvalue = (0.9 - ratrad) / 0.70
+#     fvsb = rdvis / rvt * (1.0 - jnp.power(xvalue, 0.67))
+#     fvsb = jnp.clip(fvsb, a_min=0.0, a_max=1.0)
+#     # fvd = 1.0 - fvsb
+#     # fvsb = jnp.maximum(0.0, fvsb)
+#     # fvsb = jnp.minimum(1.0, fvsb)
+
+#     # note PAR has been entered in units of uE m-2 s-1
+#     par_beam = fvsb * parin
+#     par_beam = par_beam.at[par_beam < 0].set(0.0)
+#     par_diffuse = parin - par_beam
+#     # par_beam = par_beam.at[parin == 0].set(0.001)
+#     # par_diffuse = par_diffuse.at[parin == 0].set(0.001)
+#     par_beam = par_beam.at[parin == 0].set(0.0)
+#     par_diffuse = par_diffuse.at[parin == 0].set(0.0)
+#     # jax.debug.print("par_beam {a}", a=par_beam[:3])
+
+#     # NIR beam and diffuse flux densities
+#     xvalue = (0.9 - ratrad) / 0.68
+#     fansb = rdir / rit * (1.0 - jnp.power(xvalue, 0.67))
+#     fansb = jnp.clip(fansb, a_min=0.0, a_max=1.0)
+#     # fand = 1. - fansb
+#     nir_beam = fansb * nirx
+#     nir_beam = nir_beam.at[nir_beam < 0].set(0.0)
+#     nir_diffuse = nirx - nir_beam
+#     # nir_beam = nir_beam.at[nirx == 0].set(0.1)
+#     # nir_diffuse = nir_diffuse.at[nirx == 0].set(0.1)
+#     nir_beam = nir_beam.at[nirx == 0].set(0.0)
+#     nir_diffuse = nir_diffuse.at[nirx == 0].set(0.0)
+
+#     # nir_diffuse = nirx - nir_beam
+#     # nir_beam = nirx - nir_diffuse
+#     # par_beam = parin - par_diffuse
+
+#     # Check nan
+#     par_beam = par_beam.at[jnp.isnan(par_beam)].set(0.0)
+#     par_diffuse = par_diffuse.at[jnp.isnan(par_diffuse)].set(0.0)
+#     nir_beam = nir_beam.at[jnp.isnan(nir_beam)].set(0.0)
+#     nir_diffuse = nir_diffuse.at[jnp.isnan(nir_diffuse)].set(0.0)
+
+#     return ratrad, par_beam, par_diffuse, nir_beam, nir_diffuse
 
 
 def sky_ir(T: Float_1D, ratrad: Float_1D, sigma: Float_0D) -> Float_1D:
@@ -166,7 +293,6 @@ def sky_ir_v2(met: Met, ratrad: Float_1D, sigma: Float_0D) -> Float_1D:
     return y
 
 
-# @partial(jax.jit, static_argnames=["mask_night", "niter"])
 # @eqx.filter_jit
 def rad_tran_canopy(
     sunang: SunAng,
@@ -174,7 +300,7 @@ def rad_tran_canopy(
     rad: ParNir,
     prm: Para,
     lai: Lai,
-    mask_night: HashableArrayWrapper,
+    # mask_night: HashableArrayWrapper,
     niter: int,
 ) -> ParNir:
     """This subroutine computes the flux density of direct and diffuse
@@ -217,7 +343,11 @@ def rad_tran_canopy(
     # beam_top = fraction_beam # compute beam from initial ones
 
     # Compute beam radiation transfer and probability of beam
-    # jax.debug.print("{a}, {b}", a=leafang.Gfunc.shape, b=sunang.sin_beta.shape)
+    # @jnp.vectorize
+    @partial(jax.vmap, in_axes=(0, 0), out_axes=0)
+    def convert_night_to_zero(v, sin_beta_e):
+        return jax.lax.cond(sin_beta_e <= 0, lambda: jnp.zeros(prm.jktot), lambda: v)
+
     exp_direct = jnp.exp(
         dot(
             leafang.Gfunc / sunang.sin_beta,  # (ntime,)
@@ -228,7 +358,8 @@ def rad_tran_canopy(
     exp_direct = jnp.concatenate(
         [exp_direct, jnp.ones([ntime, 1])], axis=1
     )  # (ntime, jktot)
-    exp_direct = exp_direct.at[mask_night.val, :].set(0.0)
+    exp_direct = convert_night_to_zero(exp_direct, sunang.sin_beta)
+    # exp_direct = exp_direct.at[mask_night.val, :].set(0.0)
     P0 = jax.lax.cumprod(exp_direct, axis=1, reverse=True)  # (ntime, jktot)
     Tbeam = P0
     # rad.prob_beam = jnp.concatenate(
@@ -242,7 +373,8 @@ def rad_tran_canopy(
         [prm.markov * P0[:, :jtot], jnp.ones([ntime, 1])], axis=1
     )  # (ntime, jktot)
     prob_beam = jnp.clip(prob_beam, a_max=1.0)
-    prob_beam = prob_beam.at[mask_night.val, :].set(0.0)
+    prob_beam = convert_night_to_zero(prob_beam, sunang.sin_beta)
+    # prob_beam = prob_beam.at[mask_night.val, :].set(0.0)
     # rad.prob_shade = 1 - rad.prob_beam
     # jax.debug.print("prob_beam: {a}", a=prob_beam.mean(axis=0))
 

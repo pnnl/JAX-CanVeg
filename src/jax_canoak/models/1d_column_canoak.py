@@ -14,15 +14,8 @@ import numpy as np
 
 import equinox as eqx
 
-# from jax_canoak.subjects import Para
-
 from jax_canoak.subjects import initialize_met, initialize_parameters
-from jax_canoak.subjects import initialize_profile, initialize_model_states
-from jax_canoak.physics import generate_night_mask, generate_turbulence_mask
-from jax_canoak.physics.energy_fluxes import diffuse_direct_radiation
-from jax_canoak.physics.carbon_fluxes import angle, leaf_angle
 from jax_canoak.models import canoak
-
 
 import matplotlib.pyplot as plt
 from jax_canoak.shared_utilities.plot import plot_dij, plot_daily
@@ -35,7 +28,7 @@ from jax_canoak.shared_utilities.plot import plot_ir, plot_rad, plot_prof2
 
 jax.config.update("jax_enable_x64", True)
 
-plot = False
+plot = True
 
 # ---------------------------------------------------------------------------- #
 #                     Model parameter/properties settings                      #
@@ -96,82 +89,26 @@ dij = jnp.array(dij)
 
 
 # ---------------------------------------------------------------------------- #
-#                     Initialize profiles of scalars/sources/sinks             #
-# ---------------------------------------------------------------------------- #
-prof = initialize_profile(met, para, setup)
-
-
-# ---------------------------------------------------------------------------- #
-#                     Initialize model states                        #
-# ---------------------------------------------------------------------------- #
-soil, quantum, nir, ir, qin, rnet, sun, shade, veg, lai = initialize_model_states(
-    met, para, setup
-)
-soil_mtime = int(soil.mtime)  # convert it to integer instead from jax array
-
-
-# ---------------------------------------------------------------------------- #
-#                     Compute sun angles                                       #
-# ---------------------------------------------------------------------------- #
-sun_ang = angle(setup.lat_deg, setup.long_deg, setup.time_zone, met.day, met.hhour)
-
-
-# ---------------------------------------------------------------------------- #
-#                     Compute leaf angle                                       #
-# ---------------------------------------------------------------------------- #
-leaf_ang = leaf_angle(sun_ang, para, setup, lai)
-
-
-# ---------------------------------------------------------------------------- #
-#                     Compute direct and diffuse radiations                    #
-# ---------------------------------------------------------------------------- #
-ratrad, par_beam, par_diffuse, nir_beam, nir_diffuse = diffuse_direct_radiation(
-    sun_ang.sin_beta, met.rglobal, met.parin, met.P_kPa
-)
-quantum = eqx.tree_at(
-    lambda t: (t.inbeam, t.indiffuse), quantum, (par_beam, par_diffuse)
-)
-nir = eqx.tree_at(lambda t: (t.inbeam, t.indiffuse), nir, (nir_beam, nir_diffuse))
-
-
-# ---------------------------------------------------------------------------- #
-#                     Generate masks for matrix calculations                   #
-# ---------------------------------------------------------------------------- #
-# Night mask
-mask_night_hashable = generate_night_mask(sun_ang)
-# Turbulence mask
-mask_turbulence_hashable = generate_turbulence_mask(para, met, prof)
-
-
-# ---------------------------------------------------------------------------- #
 #                     Run CANOAK!                #
 # ---------------------------------------------------------------------------- #
-initials = [
+# Let's use a jitted version
+canoak = eqx.filter_jit(canoak)
+(
+    met,
     prof,
-    dij,
-    lai,
-    sun_ang,
-    leaf_ang,
     quantum,
     nir,
     ir,
+    rnet,
     qin,
-    ratrad,
+    sun_ang,
+    leaf_ang,
+    lai,
     sun,
     shade,
-    veg,
     soil,
-    mask_night_hashable,
-    mask_turbulence_hashable,
-    int(soil_mtime),
-    niter,
-]
-
-# Let's use a jitted version
-canoak_jit = eqx.filter_jit(canoak)
-met1, prof1, ir1, qin1, sun1, shade1, soil1, veg1 = canoak_jit(
-    para, setup, met, *initials
-)
+    veg,
+) = canoak(para, setup, met, dij, setup.soil_mtime, setup.niter)
 
 
 # Net radiation budget at top of the canopy

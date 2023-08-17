@@ -143,7 +143,13 @@ def leaf_angle(
     # compute a matrix of Gfunc for all the inputs
     thetaSun = sunang.theta_rad
     Gfunc = Gfunc_dir(thetaSun, thetaLeaf, pdf)  # (ntime,)
-    Gfunc = Gfunc.at[Gfunc < 0.0].set(0.5)
+
+    @jnp.vectorize
+    def tune_zero(g):
+        return jax.lax.cond(g < 0.0, lambda: 0.5, lambda: g)
+
+    Gfunc = tune_zero(Gfunc)
+    # Gfunc = Gfunc.at[Gfunc < 0.0].set(0.5)
     # leafang.Gfunc = jnp.clip(leafang.Gfunc, a_min=0.5)
     # leafang.Gfunc(leafang.Gfunc < 0)=0.5
 
@@ -187,47 +193,44 @@ def Gfunc_dir(theta_rad: Float_1D, theta_leaf: Float_1D, pdf: Float_1D) -> Float
     Returns:
         Float_1D: _description_
     """
-    ntime, nclass = theta_rad.size, pdf.size
+    product1 = jnp.outer(1.0 / jnp.tan(theta_rad), 1.0 / jnp.tan(theta_leaf))
 
-    A, psi = jnp.zeros([ntime, nclass]), jnp.zeros([ntime, nclass])
-    mask = jnp.abs(jnp.outer(1.0 / jnp.tan(theta_rad), 1.0 / jnp.tan(theta_leaf))) > 1.0
-    A = A.at[mask].set(jnp.outer(jnp.cos(theta_rad), jnp.cos(theta_leaf))[mask])
-    psi = psi.at[~mask].set(
-        jnp.arccos(jnp.outer(1.0 / jnp.tan(theta_rad), 1.0 / jnp.tan(theta_leaf)))[
-            ~mask
-        ]
-    )
-    A = A.at[~mask].set(
-        jnp.outer(jnp.cos(theta_rad), jnp.cos(theta_leaf))[~mask]
-        * (1.0 + 2.0 / PI * (jnp.tan(psi[~mask]) - psi[~mask]))
-    )
+    @jnp.vectorize
+    def calculate_psi(p_e):
+        return jax.lax.cond(jnp.abs(p_e) > 1.0, lambda: 0.0, lambda: jnp.arccos(p_e))
+
+    psi = calculate_psi(product1)
+
+    product2 = jnp.outer(jnp.cos(theta_rad), jnp.cos(theta_leaf))
+
+    @jnp.vectorize
+    def calculate_A(p_e1, p_e2, psi_e):
+        return jax.lax.cond(
+            jnp.abs(p_e1) > 1.0,
+            lambda: p_e2,
+            lambda: p_e2 * (1.0 + 2.0 / PI * (jnp.tan(psi_e) - psi_e)),
+        )
+
+    A = calculate_A(product1, product2, psi)
+
+    # ntime, nclass = theta_rad.size, pdf.size
+    # A, psi = jnp.zeros([ntime, nclass]), jnp.zeros([ntime, nclass])
+    # mask = jnp.abs(jnp.outer(1.0 / jnp.tan(theta_rad), 1.0/jnp.tan(theta_leaf))) > 1.0
+    # psi = psi.at[~mask].set(
+    #     jnp.arccos(jnp.outer(1.0 / jnp.tan(theta_rad), 1.0 /jnp.tan(theta_leaf)))[
+    #         ~mask
+    #     ]
+    # )
+
+    # A = A.at[mask].set(jnp.outer(jnp.cos(theta_rad), jnp.cos(theta_leaf))[mask])
+    # A = A.at[~mask].set(
+    #     jnp.outer(jnp.cos(theta_rad), jnp.cos(theta_leaf))[~mask]
+    #     * (1.0 + 2.0 / PI * (jnp.tan(psi[~mask]) - psi[~mask]))
+    # )
+
     F = A * pdf  # (ntime, nclass)
     Gfunc = jax.vmap(jnp.trapz, in_axes=[0, None])(F, theta_leaf)
     return Gfunc
-
-    # def calculate_each_Gfunc(theta_rad_each):
-    #     A, psi = jnp.zeros(nclass), jnp.zeros(nclass)
-    #     mask = jnp.abs(
-    #         1./jnp.tan(theta_rad_each)*1./jnp.tan(theta_leaf)
-    #     ) > 1.
-    #     # jax.debug.print("mask: {a}", a=theta_leaf[theta_leaf<0.5])
-    #     # mask = theta_leaf+theta_rad_each > 0.5
-    #     # print(mask)
-    #     A = A.at[mask].set(
-    #         jnp.cos(theta_rad_each)*jnp.cos(theta_leaf[mask])
-    #     )
-    #     psi = psi.at[~mask].set(
-    #         jnp.arccos(1./jnp.tan(theta_rad_each)*1./jnp.tan(theta_leaf[~mask]))
-    #     )
-    #     A = A.at[~mask].set(
-    #         jnp.cos(theta_rad_each)*jnp.cos(theta_leaf[~mask])*\
-    #             (1.+2./PI*(jnp.tan(psi[~mask])-psi[~mask]))
-    #     )
-    #     F = A * pdf
-    #     G = jnp.trapz(F, theta_leaf)
-    #     return G
-    # Gfunc = jax.vmap(calculate_each_Gfunc, in_axes=[0])(theta_rad)
-    # return Gfunc
 
 
 def Gfunc_diff(thetaSky: Float_1D, thetaLeaf: Float_1D, pdf: Float_1D) -> Float_1D:
@@ -244,24 +247,44 @@ def Gfunc_diff(thetaSky: Float_1D, thetaLeaf: Float_1D, pdf: Float_1D) -> Float_
     Returns:
         Float_1D: _description_
     """
-    n1, n2 = thetaSky.size, thetaLeaf.size
+    product1 = jnp.outer(1.0 / jnp.tan(thetaSky), 1.0 / jnp.tan(thetaLeaf))
 
-    Adiff = jnp.zeros([n1, n2])
-    psi = jnp.zeros([n1, n2])
+    @jnp.vectorize
+    def calculate_psi(p_e):
+        return jax.lax.cond(jnp.abs(p_e) > 1.0, lambda: 0.0, lambda: jnp.arccos(p_e))
 
-    mask = jnp.abs(jnp.outer(1.0 / jnp.tan(thetaSky), 1.0 / jnp.tan(thetaLeaf))) > 1.0
+    psi = calculate_psi(product1)
 
-    Adiff = Adiff.at[mask].set(jnp.outer(jnp.cos(thetaSky), jnp.cos(thetaLeaf))[mask])
-    psi = psi.at[~mask].set(
-        jnp.arccos(jnp.outer(1.0 / jnp.tan(thetaSky), 1.0 / jnp.tan(thetaLeaf)))[~mask]
-    )
-    Adiff = Adiff.at[~mask].set(
-        jnp.outer(jnp.cos(thetaSky), jnp.cos(thetaLeaf))[~mask]
-        * (1.0 + 2.0 / PI * (jnp.tan(psi[~mask]) - psi[~mask]))
-    )
+    product2 = jnp.outer(jnp.cos(thetaSky), jnp.cos(thetaLeaf))
+
+    @jnp.vectorize
+    def calculate_A(p_e1, p_e2, psi_e):
+        return jax.lax.cond(
+            jnp.abs(p_e1) > 1.0,
+            lambda: p_e2,
+            lambda: p_e2 * (1.0 + 2.0 / PI * (jnp.tan(psi_e) - psi_e)),
+        )
+
+    Adiff = calculate_A(product1, product2, psi)
+
+    # n1, n2 = thetaSky.size, thetaLeaf.size
+
+    # Adiff = jnp.zeros([n1, n2])
+    # psi = jnp.zeros([n1, n2])
+
+    # mask = jnp.abs(jnp.outer(1.0 / jnp.tan(thetaSky), 1.0 /jnp.tan(thetaLeaf))) > 1.0
+
+    # psi = psi.at[~mask].set(
+    #     jnp.arccos(jnp.outer(1.0 / jnp.tan(thetaSky), 1.0 /jnp.tan(thetaLeaf)))[~mask]
+    # )
+
+    # Adiff = Adiff.at[mask].set(jnp.outer(jnp.cos(thetaSky), jnp.cos(thetaLeaf))[mask])
+    # Adiff = Adiff.at[~mask].set(
+    #     jnp.outer(jnp.cos(thetaSky), jnp.cos(thetaLeaf))[~mask]
+    #     * (1.0 + 2.0 / PI * (jnp.tan(psi[~mask]) - psi[~mask]))
+    # )
+
     F = Adiff * pdf  # (ntime, nclass)
-    # jax.debug.print("Adiff {a}", a=Adiff)
-    # jax.debug.print("pdf {a}", a=pdf)
     Gfunc_Sky = jax.vmap(jnp.trapz, in_axes=[0, None])(F, thetaLeaf)
     return Gfunc_Sky
 
