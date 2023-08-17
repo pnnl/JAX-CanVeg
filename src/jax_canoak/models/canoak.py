@@ -98,9 +98,29 @@ def canoak(
     #                     Compute radiation fields             #
     # ---------------------------------------------------------------------------- #
     # PAR
-    quantum = rad_tran_canopy(sun_ang, leaf_ang, quantum, para, lai, niter=5)
+    quantum = rad_tran_canopy(
+        sun_ang,
+        leaf_ang,
+        quantum,
+        para,
+        lai,
+        para.par_reflect,
+        para.par_trans,
+        para.par_soil_refl,
+        niter=5,
+    )
     # NIR
-    nir = rad_tran_canopy(sun_ang, leaf_ang, nir, para, lai, niter=25)  # noqa: E501
+    nir = rad_tran_canopy(
+        sun_ang,
+        leaf_ang,
+        nir,
+        para,
+        lai,
+        para.nir_reflect,
+        para.nir_trans,
+        para.nir_soil_refl,
+        niter=25,
+    )  # noqa: E501
 
     # ---------------------------------------------------------------------------- #
     #                     Iterations                                               #

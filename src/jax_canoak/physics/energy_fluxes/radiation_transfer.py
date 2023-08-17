@@ -300,7 +300,9 @@ def rad_tran_canopy(
     rad: ParNir,
     prm: Para,
     lai: Lai,
-    # mask_night: HashableArrayWrapper,
+    reflect: Float_0D,
+    trans: Float_0D,
+    soil_refl: Float_0D,
     niter: int,
 ) -> ParNir:
     """This subroutine computes the flux density of direct and diffuse
@@ -325,6 +327,8 @@ def rad_tran_canopy(
     Returns:
         ParNir: _description_
     """
+    absorbed = 1 - reflect - trans
+
     ntime = rad.inbeam.shape[0]
     jtot = prm.markov.shape[0]
     jktot = jtot + 1
@@ -389,9 +393,12 @@ def rad_tran_canopy(
     sup = incoming_beam * rad.reflect
 
     # Calculate the transmission and reflection of each layer
-    reflectance_layer = (1 - leafang.integ_exp_diff) * rad.reflect  # (ntime, jtot)
+    # reflectance_layer = (1 - leafang.integ_exp_diff) * rad.reflect  # (ntime, jtot)
+    reflectance_layer = (1 - leafang.integ_exp_diff) * reflect  # (ntime, jtot)
     transmission_layer = (
-        leafang.integ_exp_diff + (1 - leafang.integ_exp_diff) * rad.trans
+        # leafang.integ_exp_diff + (1 - leafang.integ_exp_diff) * rad.trans
+        leafang.integ_exp_diff
+        + (1 - leafang.integ_exp_diff) * trans
     )  # (ntime, jtot)  # noqa: E501
 
     # Compute diffuse and complementary radiation
@@ -428,7 +435,8 @@ def rad_tran_canopy(
         outdn = outdn.T
         dn = jnp.concatenate([outdn[:, ::-1], jnp.expand_dims(dn_top, axis=-1)], axis=1)
 
-        up_bot = (dn[:, 0] + rad.incoming * fraction_beam * Tbeam[:, 0]) * rad.soil_refl
+        # up_bot = (dn[:, 0] + rad.incoming * fraction_beam * Tbeam[:, 0])*rad.soil_refl
+        up_bot = (dn[:, 0] + rad.incoming * fraction_beam * Tbeam[:, 0]) * soil_refl
         outup = outup.T
         up = jnp.concatenate([jnp.expand_dims(up_bot, axis=-1), outup[:, ::-1]], axis=1)
 
@@ -454,10 +462,12 @@ def rad_tran_canopy(
     # rad.total = rad.beam_flux + rad.dn_flux
 
     # amount of radiation absorbed on the sun and shade leaves
-    sh_abs = (dn_flux[:, :jtot] + up_flux[:, :jtot]) * rad.absorbed
+    # sh_abs = (dn_flux[:, :jtot] + up_flux[:, :jtot]) * rad.absorbed
+    sh_abs = (dn_flux[:, :jtot] + up_flux[:, :jtot]) * absorbed
     normal = beam_flux[:, jtot] * leafang.Gfunc / sunang.sin_beta  # (ntime,)
     normal = jnp.clip(normal, a_min=0.0)
-    sun_normal_abs = normal * rad.absorbed
+    # sun_normal_abs = normal * rad.absorbed
+    sun_normal_abs = normal * absorbed
     sun_abs = add(sun_normal_abs, sh_abs)
 
     rad = eqx.tree_at(
