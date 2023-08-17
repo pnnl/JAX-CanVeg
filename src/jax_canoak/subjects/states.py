@@ -198,9 +198,9 @@ class Ps(eqx.Module):
 
 class Soil(eqx.Module):
     dt: Float_0D
-    n_soil: Int_0D
+    n_soil: int
     depth: Float_0D
-    mtime: Int_0D
+    mtime: int
     water_content_15cm: Float_1D
     water_content_litter: Float_0D
     bulkdensity: Float_0D
@@ -902,9 +902,9 @@ def initialize_soil(
 
     # Convert int/float to jnp.ndarray
     dt = jnp.array(dt)
-    n_soil = jnp.array(n_soil)
+    # n_soil = jnp.array(n_soil)
     depth = jnp.array(depth)
-    mtime = jnp.array(mtime)
+    # mtime = jnp.array(mtime)
     water_content_litter = jnp.array(water_content_litter)
     bulkdensity = jnp.array(bulkdensity)
     clay_fraction = jnp.array(clay_fraction)

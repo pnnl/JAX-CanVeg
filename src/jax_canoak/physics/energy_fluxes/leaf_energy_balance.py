@@ -26,7 +26,7 @@ from ...shared_utilities.utils import dot
 from ...shared_utilities.types import Float_2D
 
 
-@eqx.filter_jit
+# @eqx.filter_jit
 def compute_qin(quantum: ParNir, nir: ParNir, ir: Ir, prm: Para, qin: Qin) -> Qin:
     """Available energy on leaves for evaporation.
        Values are average of top and bottom levels of a layer.

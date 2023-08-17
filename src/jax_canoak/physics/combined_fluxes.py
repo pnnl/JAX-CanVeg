@@ -24,8 +24,7 @@ from .carbon_fluxes import leaf_ps
 # from .carbon_fluxes import photosynthesis_amphi
 
 
-# @partial(jax.jit, static_argnames=["mask_turbulence"])
-@eqx.filter_jit
+# @eqx.filter_jit
 def energy_carbon_fluxes(
     sun: SunShadedCan,
     shade: SunShadedCan,

@@ -11,7 +11,7 @@ Date: 2023.07.30.
 import jax
 import jax.numpy as jnp
 
-import equinox as eqx
+# import equinox as eqx
 
 # from functools import partial
 
@@ -23,7 +23,7 @@ from ...shared_utilities.types import HashableArrayWrapper
 from ...shared_utilities.utils import dot
 
 
-@eqx.filter_jit
+# @eqx.filter_jit
 def uz(met: Met, prm: Para) -> Float_2D:
     """U(Z) inside the canopy during the day is about 1.09 u*
        This simple parameterization is derived from turbulence
@@ -52,7 +52,7 @@ def uz(met: Met, prm: Para) -> Float_2D:
     return wnd
 
 
-@eqx.filter_jit
+# @eqx.filter_jit
 def boundary_resistance(
     prof: Prof,
     met: Met,

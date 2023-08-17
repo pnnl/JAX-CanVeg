@@ -18,15 +18,12 @@ import equinox as eqx
 
 from jax_canoak.subjects import initialize_met, initialize_parameters
 from jax_canoak.subjects import initialize_profile, initialize_model_states
+from jax_canoak.physics import generate_night_mask, generate_turbulence_mask
 from jax_canoak.subjects import update_profile, calculate_veg
 
-# from jax_canoak.subjects.utils import llambda as flambda
-from jax_canoak.shared_utilities.types import HashableArrayWrapper
 from jax_canoak.shared_utilities.utils import dot
 from jax_canoak.physics import energy_carbon_fluxes
 from jax_canoak.physics.energy_fluxes import diffuse_direct_radiation
-
-# from jax_canoak.physics.energy_fluxes import disp_canveg, diffuse_direct_radiation
 
 # from jax_canoak.physics.energy_fluxes import rad_tran_canopy, sky_ir_v2
 from jax_canoak.physics.energy_fluxes import rad_tran_canopy, sky_ir
@@ -106,18 +103,31 @@ dij = jnp.array(dij)
 
 
 # ---------------------------------------------------------------------------- #
+#                     Initialize profiles of scalars/sources/sinks             #
+# ---------------------------------------------------------------------------- #
+prof = initialize_profile(met, para)
+
+
+# ---------------------------------------------------------------------------- #
 #                     Initialize model states                        #
 # ---------------------------------------------------------------------------- #
 soil, quantum, nir, ir, qin, rnet, sun, shade, veg, lai = initialize_model_states(
     met, para
 )
+soil_mtime = int(soil.mtime)
 
 
 # ---------------------------------------------------------------------------- #
 #                     Compute sun angles                                       #
 # ---------------------------------------------------------------------------- #
-# beta_rad, solar_sin_beta, beta_deg = angle(
 sun_ang = angle(para.lat_deg, para.long_deg, para.time_zone, met.day, met.hhour)
+
+
+# ---------------------------------------------------------------------------- #
+#                     Compute leaf angle                                       #
+# ---------------------------------------------------------------------------- #
+leaf_ang = leaf_angle(sun_ang, para, lai)
+
 
 # ---------------------------------------------------------------------------- #
 #                     Compute direct and diffuse radiations                    #
@@ -129,15 +139,15 @@ quantum = eqx.tree_at(
     lambda t: (t.inbeam, t.indiffuse), quantum, (par_beam, par_diffuse)
 )
 nir = eqx.tree_at(lambda t: (t.inbeam, t.indiffuse), nir, (nir_beam, nir_diffuse))
-# quantum.inbeam, quantum.indiffuse = par_beam, par_diffuse
-# quantum.incoming = quantum.inbeam + quantum.indiffuse
-# nir.inbeam, nir.indiffuse = nir_beam, nir_diffuse
-# nir.incoming = nir.inbeam + nir.indiffuse
+
 
 # ---------------------------------------------------------------------------- #
-#                     Compute leaf angle                                       #
+#                     Generate masks for matrix calculations                   #
 # ---------------------------------------------------------------------------- #
-leaf_ang = leaf_angle(sun_ang, para, lai)
+# Night mask
+mask_night_hashable = generate_night_mask(sun_ang)
+# Turbulence mask
+mask_turbulence_hashable = generate_turbulence_mask(para, met, prof)
 
 
 # ---------------------------------------------------------------------------- #
@@ -148,28 +158,6 @@ ir_in = sky_ir(met.T_air_K, ratrad, para.sigma)
 ir_dn = dot(ir_in, ir.ir_dn)
 ir_up = dot(ir_in, ir.ir_up)
 ir = eqx.tree_at(lambda t: (t.ir_in, t.ir_dn, t.ir_up), ir, (ir_in, ir_dn, ir_up))
-
-
-# ---------------------------------------------------------------------------- #
-#                     Initialize profiles of scalars/sources/sinks             #
-# ---------------------------------------------------------------------------- #
-prof = initialize_profile(met, para)
-
-
-# ---------------------------------------------------------------------------- #
-#                     Generate masks for matrix calculations                   #
-# ---------------------------------------------------------------------------- #
-# Night mask
-mask_night = sun_ang.sin_beta <= 0.0
-mask_night_hashable = HashableArrayWrapper(mask_night)
-# Turbulence mask
-nnu_T_P = dot(
-    para.nnu * (101.3 / met.P_kPa),
-    jnp.power(prof.Tair_K[:, : para.jtot] / 273.16, 1.81),
-)
-Re = para.lleaf * prof.wind[:, : para.jtot] / nnu_T_P
-mask_turbulence = Re > 14000.0
-mask_turbulence_hashable = HashableArrayWrapper(mask_turbulence)
 
 
 # ---------------------------------------------------------------------------- #
@@ -215,7 +203,8 @@ def iteration(c, i):
     )
 
     # Compute soil fluxes
-    soil = soil_energy_balance(quantum, nir, ir, met, prof, para, soil)  # type: ignore
+    # soil = soil_energy_balance(quantum, nir, ir, met, prof, para, soil, soil.mtime)  # type: ignore  # noqa: E501
+    soil = soil_energy_balance(quantum, nir, ir, met, prof, para, soil, soil_mtime)  # type: ignore  # noqa: E501
 
     # Compute profiles of C's, zero layer jtot+1 as that is not a dF/dz or
     # source/sink level

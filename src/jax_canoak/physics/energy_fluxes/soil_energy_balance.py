@@ -13,7 +13,6 @@ import equinox as eqx
 
 # from typing import Tuple
 
-# from ...shared_utilities.types import Float_1D
 from ...subjects import ParNir, Ir, Met, Prof, Para, Soil
 from ...subjects.utils import desdt as fdesdt
 from ...subjects.utils import des2dt as fdes2dt
@@ -21,9 +20,16 @@ from ...subjects.utils import es as fes
 from ...subjects.utils import llambda as fllambda
 
 
-@eqx.filter_jit
+# @eqx.filter_jit
 def soil_energy_balance(
-    quantum: ParNir, nir: ParNir, ir: Ir, met: Met, prof: Prof, prm: Para, soil: Soil
+    quantum: ParNir,
+    nir: ParNir,
+    ir: Ir,
+    met: Met,
+    prof: Prof,
+    prm: Para,
+    soil: Soil,
+    soil_mtime: int,
 ) -> Soil:
     """The soil energy balance model of Campbell has been adapted to
        compute soil energy fluxes and temperature profiles at the soil
@@ -124,7 +130,7 @@ def soil_energy_balance(
     vpdsoil = est - prof.eair_Pa[:, 0]
 
     # call finite difference routine to solve Fourier Heat Transfer equation for soil
-    soil = finite_difference_matrix(soil, prm)
+    soil = finite_difference_matrix(soil, prm, soil_mtime)
 
     # compute storage
     # tmparray=jnp.zeros(prm.ntime)
@@ -227,8 +233,8 @@ def soil_energy_balance(
     return soil
 
 
-@eqx.filter_jit
-def finite_difference_matrix(soil: Soil, prm: Para) -> Soil:
+# @eqx.filter_jit
+def finite_difference_matrix(soil: Soil, prm: Para, soil_mtime: int) -> Soil:
     """Convert Soil Physics with Basic from Campbell for soil heat flux
 
        Using finite difference approach to solve soil heat transfer
@@ -252,7 +258,7 @@ def finite_difference_matrix(soil: Soil, prm: Para) -> Soil:
     # soil_mtime = prm.soil_mtime
     # soil_nsoil = soil.n_soil
     soil_nsoil = soil.dz.size
-    soil_mtime = soil.mtime
+    # soil_mtime = soil.mtime
     # soil_mtime = 180
     # tolerance = 1.e-2
 
@@ -264,7 +270,8 @@ def finite_difference_matrix(soil: Soil, prm: Para) -> Soil:
     # energyBalance = 1.
 
     # Looping to solve the Fourier heat transfer equation
-    def update_tsoil(i, c):
+    # def update_tsoil(i, c):
+    def update_tsoil(c, i):
         T_soil = c
         # Calculate the coef for each soil layers
         # Top boundary conditions: The first soil layer
@@ -352,15 +359,16 @@ def finite_difference_matrix(soil: Soil, prm: Para) -> Soil:
         # jax.debug.print('k_cond: {a}', a=soil.k_conductivity_soil[3,:])
         # jax.debug.print('cp: {a}', a=soil.cp_soil[3,:])
         cnew = T_soil_new
-        return cnew
+        return cnew, None
 
-    carry = jax.lax.fori_loop(
-        0,
-        soil_mtime,
-        # 3,
-        update_tsoil,
-        soil.T_soil,
-    )
+    # carry = jax.lax.fori_loop(
+    #     0,
+    #     soil_mtime,
+    #     # 3,
+    #     update_tsoil,
+    #     soil.T_soil,
+    # )
+    carry, _ = jax.lax.scan(update_tsoil, soil.T_soil, xs=None, length=soil_mtime)
 
     # Update T_soil
     T_soil = carry
