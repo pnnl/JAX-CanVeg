@@ -1,5 +1,8 @@
 """
-A class for model general parameters.
+Classes for model general parameters.
+
+- 
+- Para()
 
 Author: Peishi Jiang
 Date: 2023.7.24.
@@ -12,35 +15,74 @@ import jax.numpy as jnp
 
 import equinox as eqx
 
-# from typing import Array
-from ..shared_utilities.types import Float_0D, Int_0D, Float_1D
+from typing import Tuple
+from ..shared_utilities.types import Float_0D, Float_1D
 
 # from ..shared_utilities.utils import dot, minus
 # dot = jax.vmap(lambda x, y: x * y, in_axes=(None, 1), out_axes=1)
 
+# TODO: I need to separate the fixed setup and the parameters that can be estimated.
+# TODO: Soil parameters should also go here.
 
-class Para(eqx.Module):
+
+class Setup(eqx.Module):
     # Location
-    time_zone: Int_0D
+    time_zone: int
     lat_deg: Float_0D
     long_deg: Float_0D
     # Leaf
-    stomata: Int_0D
-    hypo_amphi: Int_0D
-    leafangle: Int_0D
-    leaf_clumping_factor: Float_0D
-    markov: Float_1D
+    stomata: int  # amphistomatous = 2; hypostomatous = 1
+    hypo_amphi: int  # hypostomatous, 1, amphistomatous, 2
+    # Leaf angle distributions
+    # options include spherical - 1, planophile - 2, erectophile - 3, uniform - 4,
+    # plagiophile - 5, extremophile - 6
+    leafangle: int
+    # Timesteps
+    n_hr_per_day: int
+    ntime: int
+    dt_soil: int
+    # Number of layers
+    n_can_layers: int
+    n_total_layers: int
+    n_soil_layers: int
+    # dispersion
+    npart: int
+    # Number of iteration
+    niter: int
+
+    @property
+    def ndays(self):
+        return self.ntime / self.n_hr_per_day
+
+    @property
+    def n_atmos_layers(self):
+        return self.n_total_layers - self.n_can_layers
+
+    # @property
+    # def jtot(self):
+    #     return self.n_can_layers
+
+    # @property
+    # def jktot(self):
+    #     return self.jtot + 1
+
+    # @property
+    # def jtot3(self):
+    #     return self.jtot * 3
+
+    # @property
+    # def jktot3(self):
+    #     return self.jtot3 + 1
+
+
+class Para(eqx.Module):
     # Vertical profiles
-    jtot: Int_0D
-    n_atmos_layers: Int_0D
     zht1: Float_1D
     zht2: Float_1D
     delz1: Float_1D
     delz2: Float_1D
-    # Timesteps
-    hrs: Int_0D
-    ntime: Int_0D
-    dt_soil: Int_0D
+    # Leaf
+    leaf_clumping_factor: Float_0D
     # Par and Nir
     par_reflect: Float_0D
     par_trans: Float_0D
@@ -48,8 +90,6 @@ class Para(eqx.Module):
     nir_reflect: Float_0D
     nir_trans: Float_0D
     nir_soil_refl: Float_0D
-    # dispersion
-    npart: Int_0D
     # Constants for IR fluxes
     sigma: Float_0D
     ep: Float_0D
@@ -113,24 +153,13 @@ class Para(eqx.Module):
 
     def __init__(
         self,
-        # Location
-        time_zone: Int_0D,
-        latitude: Float_0D,
-        longitude: Float_0D,
-        # Leaf
-        stomata: Int_0D,
-        hypo_amphi: Int_0D,
-        leafangle: Int_0D,
-        leaf_clumping_factor: Float_0D,
         # Vertical profiles
         zht1: Float_1D,
         zht2: Float_1D,
         delz1: Float_1D,
         delz2: Float_1D,
-        # Timesteps
-        n_hr_per_day: Int_0D = 48,
-        n_time: Int_0D = 200,
-        dt_soil: Int_0D = 20,
+        # Leaf
+        leaf_clumping_factor: Float_0D,
         # Par and Nir
         par_reflect: Float_0D = 0.05,
         par_trans: Float_0D = 0.05,
@@ -138,51 +167,23 @@ class Para(eqx.Module):
         nir_reflect: Float_0D = 0.60,
         nir_trans: Float_0D = 0.20,
         nir_soil_refl: Float_0D = 0.10,
-        # dispersion
-        npart: Int_0D = 1000000,
     ) -> None:
-        # Location
-        self.time_zone = jnp.array(time_zone)  # time zone
-        self.lat_deg = jnp.array(latitude)  # latitude
-        self.long_deg = jnp.array(longitude)  # longitude
+        # Vertical profiles
+        self.zht1 = zht1
+        self.zht2 = zht2
+        self.delz1 = delz1
+        self.delz2 = delz2
 
-        # Vertical profile
-        self.zht1, self.zht2 = zht1, zht2
-        self.delz1, self.delz2 = delz1, delz2
-        n_can_layers = zht1.size
-        self.n_atmos_layers = zht2.size
-        self.jtot = n_can_layers
-        # self.jktot = self.jtot + 1
-        # self.jtot3 = self.jtot * 3
-        # self.jktot3 = self.jtot3 + 1
-
-        # Leaf angle distributions
-        # options include spherical - 1, planophile - 2, erectophile - 3, uniform - 4,
-        # plagiophile - 5, extremophile - 6
-        self.leafangle = jnp.array(leafangle)
         # Leaf clumping
         self.leaf_clumping_factor = jnp.array(leaf_clumping_factor)
-        self.markov = jnp.ones(n_can_layers) * leaf_clumping_factor
-        self.stomata = jnp.array(stomata)  # amphistomatous = 2; hypostomatous = 1
-        self.hypo_amphi = jnp.array(hypo_amphi)  # hypostomatous, 1, amphistomatous, 2
-        # vegetation canopy height, aerodynamic height, Bouldin, 2018
 
-        # Set up time
-        self.hrs = jnp.array(n_hr_per_day)  # number of hour periods per day
-        self.ntime = jnp.array(n_time)
-        self.dt_soil = jnp.array(dt_soil)  # soil time step
-
+        # Reflectance, transmiss, soil reflectance
         self.par_reflect = jnp.array(par_reflect)
         self.par_trans = jnp.array(par_trans)
         self.par_soil_refl = jnp.array(par_soil_refl)
         self.nir_reflect = jnp.array(nir_reflect)
         self.nir_trans = jnp.array(nir_trans)
         self.nir_soil_refl = jnp.array(nir_soil_refl)
-
-        # Dispersion Matrix Lagrangian model
-        self.npart = jnp.array(
-            npart
-        )  # number of random walk particles, use about 10,000 for testing, up to 1M for smoother profiles  # noqa: E501, E501
 
         # IR fluxes
         self.sigma = jnp.array(5.670367e-08)  # Stefan Boltzmann constant W m-2 K-4
@@ -193,7 +194,7 @@ class Para(eqx.Module):
         # Universal gas constant
         self.rugc = jnp.array(8.314)  # J mole-1 K-1
         self.rgc1000 = jnp.array(8314.0)  # gas constant times 1000.
-        self.Cp = jnp.array(1005)  # specific heat of air, J kg-1 K-1
+        self.Cp = jnp.array(1005.0)  # specific heat of air, J kg-1 K-1
 
         # parameters for the Farquhar et al photosynthesis model
         # Consts for Photosynthesis model and kinetic equations.
@@ -281,26 +282,6 @@ class Para(eqx.Module):
         self.dLdT = jnp.array(-2370.0)
         self.extinct = jnp.array(2.0)  # extinction coefficient wind in canopy
 
-        # # Constants for leaf boundary layers
-        # self.lfddh = self.lleaf / self.ddh
-
-        # # Prandtl Number
-        # self.pr = self.nuvisc / self.dh
-        # self.pr33 = self.pr**0.33
-
-        # self.lfddv = self.lleaf / self.ddv
-
-        # # SCHMIDT NUMBER FOR VAPOR
-        # self.sc = self.nuvisc / self.dv
-        # self.sc33 = self.sc**0.33
-
-        # # SCHMIDT NUMBER FOR CO2
-        # self.scc = self.nuvisc / self.dc
-        # self.scc33 = self.scc**0.33
-
-        # # Grasshof Number
-        # self.grasshof = 9.8 * self.lleaf**3 / (self.nnu**2)
-
     @property
     def dht(self):
         # zero plane displacement height, m
@@ -317,6 +298,18 @@ class Para(eqx.Module):
         return jnp.concatenate([self.zht1, self.zht2])
 
     @property
+    def n_can_layer(self):
+        return self.zht1.size
+
+    @property
+    def jtot(self):
+        return self.zht1.size
+
+    @property
+    def n_atmos_layers(self):
+        return self.zht2.size
+
+    @property
     def jktot(self):
         return self.jtot + 1
 
@@ -330,23 +323,22 @@ class Para(eqx.Module):
 
     @property
     def delz(self):
-        # aerodynamic roughness height, m
+        # height increment of each layer
         return jnp.concatenate([self.delz1, self.delz2])
 
     @property
     def veg_ht(self):
-        # height increment of each layer
-        return self.zht[self.jtot - 1]
+        # return self.zht[self.jtot - 1]
+        return self.zht1[-1]
 
     @property
     def meas_ht(self):
-        # height increment of each layer
         return self.zht[-1]
 
     @property
     def dht_canopy(self):
         # height increment of each layer
-        return self.veg_ht / self.jtot
+        return self.veg_ht / self.n_can_layer
 
     @property
     def ht_atmos(self):
@@ -359,11 +351,12 @@ class Para(eqx.Module):
     @property
     def nlayers_atmos(self):
         # return self.jtot + jnp.floor(self.ht_atmos / self.dht_atmos).astype(int)
-        return self.jtot + self.n_atmos_layers
+        return self.n_can_layer + self.n_atmos_layers
 
     @property
-    def ndays(self):
-        return self.ntime / self.hrs
+    def markov(self):
+        # zero plane displacement height, m
+        return jnp.ones(self.n_can_layer) * self.leaf_clumping_factor
 
     @property
     def par_absorbed(self):
@@ -491,28 +484,30 @@ class Para(eqx.Module):
 
 
 def initialize_parameters(
-    time_zone: Int_0D = -8,
+    time_zone: int = -8,
     latitude: Float_0D = 38.0991538,
     longitude: Float_0D = -121.49933,
-    stomata: Int_0D = 2,
-    hypo_amphi: Int_0D = 1,
-    leafangle: Int_0D = 1,
+    stomata: int = 2,
+    hypo_amphi: int = 1,
+    leafangle: int = 1,
     leaf_clumping_factor: Float_0D = 0.95,
     veg_ht: Float_0D = 0.8,
     meas_ht: Float_0D = 5.0,
-    n_can_layers: Int_0D = 30,
-    n_atmos_layers: Int_0D = 50,
-    n_hr_per_day: Int_0D = 48,
-    n_time: Int_0D = 200,
-    dt_soil: Int_0D = 20,
+    n_can_layers: int = 30,
+    n_atmos_layers: int = 50,
+    n_soil_layers: int = 10,
+    n_hr_per_day: int = 48,
+    n_time: int = 200,
+    dt_soil: int = 20,
     par_reflect: Float_0D = 0.05,
     par_trans: Float_0D = 0.05,
     par_soil_refl: Float_0D = 0.05,
     nir_reflect: Float_0D = 0.60,
     nir_trans: Float_0D = 0.20,
     nir_soil_refl: Float_0D = 0.10,
-    npart: Int_0D = 1000000,
-) -> Para:
+    npart: int = 1000000,
+    niter: int = 15,
+) -> Tuple[Setup, Para]:
 
     dht_canopy = veg_ht / n_can_layers
     ht_atmos = meas_ht - veg_ht
@@ -527,26 +522,35 @@ def initialize_parameters(
     zht2 = jnp.arange(1, n_total_layers - n_can_layers + 1) * dht_atmos + veg_ht
     delz2 = jnp.ones(n_total_layers - n_can_layers) * dht_atmos
 
-    return Para(
+    setup = Setup(
         time_zone=time_zone,
-        latitude=latitude,
-        longitude=longitude,
+        lat_deg=latitude,
+        long_deg=longitude,
         stomata=stomata,
         hypo_amphi=hypo_amphi,
         leafangle=leafangle,
+        n_hr_per_day=n_hr_per_day,
+        ntime=n_time,
+        n_can_layers=n_can_layers,
+        n_total_layers=n_total_layers,
+        n_soil_layers=n_soil_layers,
+        dt_soil=dt_soil,
+        npart=npart,
+        niter=niter,
+    )
+
+    para = Para(
         leaf_clumping_factor=leaf_clumping_factor,
         zht1=zht1,
         zht2=zht2,
         delz1=delz1,
         delz2=delz2,
-        n_hr_per_day=n_hr_per_day,
-        n_time=n_time,
-        dt_soil=dt_soil,
         par_reflect=par_reflect,
         par_trans=par_trans,
         par_soil_refl=par_soil_refl,
         nir_reflect=nir_reflect,
         nir_trans=nir_trans,
         nir_soil_refl=nir_soil_refl,
-        npart=npart,
     )
+
+    return setup, para

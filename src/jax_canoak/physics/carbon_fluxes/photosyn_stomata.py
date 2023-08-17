@@ -15,7 +15,7 @@ import jax.numpy as jnp
 
 from typing import Tuple
 from ...shared_utilities.types import Float_2D, Float_1D, Float_0D
-from ...subjects import Para, Ps
+from ...subjects import Setup, Para, Ps
 from ...subjects.utils import es
 
 from ...shared_utilities.utils import dot, add
@@ -31,6 +31,7 @@ def leaf_ps(
     P_kPa: Float_1D,
     eair_Pa: Float_2D,
     prm: Para,
+    setup: Setup,
 ) -> Ps:
     """This program solves a cubic equation to calculate
           leaf photosynthesis.  This cubic expression is derived from solving
@@ -263,7 +264,7 @@ def leaf_ps(
         return alpha_ps, bbeta, gamma, theta_ps
 
     alpha_ps, bbeta, gamma, theta_ps = jax.lax.switch(
-        prm.stomata,
+        setup.stomata,
         [
             cubic_coef_hypo,  # hypostomatous = 1
             cubic_coef_amphi,  # amphistomatous = 2
@@ -381,7 +382,7 @@ def leaf_ps(
     # alfalfa is amphistomatous...be careful on where the factor of two is applied
     # just did on LE on energy balance..dont want to double count
     cs = jax.lax.switch(
-        prm.stomata,
+        setup.stomata,
         [
             lambda: cca - aphoto / gb_mole,  # hypostomatous = 1
             lambda: cca - aphoto / (2 * gb_mole),  # amphistomatous = 2

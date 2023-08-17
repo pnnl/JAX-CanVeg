@@ -17,14 +17,14 @@ import jax.numpy as jnp
 
 # from typing import Tuple
 
-from ...subjects import Met, Para, Prof, BoundLayerRes
+from ...subjects import Met, Para, Setup, Prof, BoundLayerRes
 from ...shared_utilities.types import Float_2D
 from ...shared_utilities.types import HashableArrayWrapper
 from ...shared_utilities.utils import dot
 
 
 # @eqx.filter_jit
-def uz(met: Met, prm: Para) -> Float_2D:
+def uz(met: Met, prm: Para, setup: Setup) -> Float_2D:
     """U(Z) inside the canopy during the day is about 1.09 u*
        This simple parameterization is derived from turbulence
        data measured in the WBW forest by Baldocchi and Meyers, 1988.
@@ -40,6 +40,7 @@ def uz(met: Met, prm: Para) -> Float_2D:
         / jnp.log((prm.meas_ht - prm.dht) / prm.z0)
     )
     # (jtot,)
+    # wndexp = jnp.exp(2.0 * (prm.zht[: prm.jtot] / prm.veg_ht - 1))
     wndexp = jnp.exp(2.0 * (prm.zht[: prm.jtot] / prm.veg_ht - 1))
     # (ntime, jtot)
     wnd = jnp.outer(UH, wndexp)

@@ -15,7 +15,7 @@ from jax_canoak.shared_utilities.types import Float_1D, Float_2D
 from jax_canoak.shared_utilities.types import HashableArrayWrapper
 
 from jax_canoak.subjects import Para, Met, Prof, SunAng, LeafAng, SunShadedCan
-from jax_canoak.subjects import Veg, Soil, Qin, Ir, ParNir, Lai
+from jax_canoak.subjects import Setup, Veg, Soil, Qin, Ir, ParNir, Lai
 
 from jax_canoak.shared_utilities.utils import dot
 from jax_canoak.subjects import update_profile, calculate_veg
@@ -29,6 +29,7 @@ from jax_canoak.physics.energy_fluxes import uz, soil_energy_balance
 
 def canoak(
     para: Para,
+    setup: Setup,
     met: Met,
     prof: Prof,
     dij: Float_2D,
@@ -94,7 +95,7 @@ def canoak(
 
         # Update canopy wind profile with iteration of z/l and use in boundary layer
         # resistance computations
-        wind = uz(met, para)
+        wind = uz(met, para, setup)
         prof = eqx.tree_at(lambda t: t.wind, prof, wind)
 
         # Compute IR fluxes with Bonan's algorithms of Norman model
@@ -109,7 +110,7 @@ def canoak(
         # and delta T, in case convection occurs
         # Different coefficients will be assigned if amphistomatous or hypostomatous
         sun, shade = energy_carbon_fluxes(
-            sun, shade, qin, quantum, met, prof, para, mask_turbulence_hashable
+            sun, shade, qin, quantum, met, prof, para, setup, mask_turbulence_hashable
         )
 
         # Compute soil fluxes

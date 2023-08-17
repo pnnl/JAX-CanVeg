@@ -19,17 +19,9 @@ import equinox as eqx
 from jax_canoak.subjects import initialize_met, initialize_parameters
 from jax_canoak.subjects import initialize_profile, initialize_model_states
 from jax_canoak.physics import generate_night_mask, generate_turbulence_mask
-from jax_canoak.subjects import update_profile, calculate_veg
-
-from jax_canoak.shared_utilities.utils import dot
-from jax_canoak.physics import energy_carbon_fluxes
 from jax_canoak.physics.energy_fluxes import diffuse_direct_radiation
-
-# from jax_canoak.physics.energy_fluxes import rad_tran_canopy, sky_ir_v2
-from jax_canoak.physics.energy_fluxes import rad_tran_canopy, sky_ir
-from jax_canoak.physics.energy_fluxes import compute_qin, ir_rad_tran_canopy
-from jax_canoak.physics.energy_fluxes import uz, soil_energy_balance
 from jax_canoak.physics.carbon_fluxes import angle, leaf_angle
+from jax_canoak.models import canoak
 
 
 import matplotlib.pyplot as plt
@@ -43,7 +35,7 @@ from jax_canoak.shared_utilities.plot import plot_ir, plot_rad, plot_prof2
 
 jax.config.update("jax_enable_x64", True)
 
-plot = True
+plot = False
 
 # ---------------------------------------------------------------------------- #
 #                     Model parameter/properties settings                      #
@@ -59,6 +51,7 @@ n_can_layers = 50
 meas_ht = 5.0
 n_hr_per_day = 48
 lai = 5.0
+niter = 15
 
 
 # ---------------------------------------------------------------------------- #
@@ -77,8 +70,7 @@ met = initialize_met(forcing_data, n_time, zl0)
 # ---------------------------------------------------------------------------- #
 #                     Set up model parameter instance                      #
 # ---------------------------------------------------------------------------- #
-para = initialize_parameters(
-    # para = Para(
+setup, para = initialize_parameters(
     time_zone=time_zone,
     latitude=latitude,
     longitude=longitude,
@@ -91,6 +83,7 @@ para = initialize_parameters(
     n_hr_per_day=n_hr_per_day,
     n_time=n_time,
     npart=int(1e6),
+    niter=niter,
 )
 
 
@@ -105,28 +98,28 @@ dij = jnp.array(dij)
 # ---------------------------------------------------------------------------- #
 #                     Initialize profiles of scalars/sources/sinks             #
 # ---------------------------------------------------------------------------- #
-prof = initialize_profile(met, para)
+prof = initialize_profile(met, para, setup)
 
 
 # ---------------------------------------------------------------------------- #
 #                     Initialize model states                        #
 # ---------------------------------------------------------------------------- #
 soil, quantum, nir, ir, qin, rnet, sun, shade, veg, lai = initialize_model_states(
-    met, para
+    met, para, setup
 )
-soil_mtime = int(soil.mtime)
+soil_mtime = int(soil.mtime)  # convert it to integer instead from jax array
 
 
 # ---------------------------------------------------------------------------- #
 #                     Compute sun angles                                       #
 # ---------------------------------------------------------------------------- #
-sun_ang = angle(para.lat_deg, para.long_deg, para.time_zone, met.day, met.hhour)
+sun_ang = angle(setup.lat_deg, setup.long_deg, setup.time_zone, met.day, met.hhour)
 
 
 # ---------------------------------------------------------------------------- #
 #                     Compute leaf angle                                       #
 # ---------------------------------------------------------------------------- #
-leaf_ang = leaf_angle(sun_ang, para, lai)
+leaf_ang = leaf_angle(sun_ang, para, setup, lai)
 
 
 # ---------------------------------------------------------------------------- #
@@ -151,91 +144,34 @@ mask_turbulence_hashable = generate_turbulence_mask(para, met, prof)
 
 
 # ---------------------------------------------------------------------------- #
-#                     Initialize IR fluxes with air temperature                #
+#                     Run CANOAK!                #
 # ---------------------------------------------------------------------------- #
-ir_in = sky_ir(met.T_air_K, ratrad, para.sigma)
-# ir_in = sky_ir_v2(met, ratrad, para.sigma)
-ir_dn = dot(ir_in, ir.ir_dn)
-ir_up = dot(ir_in, ir.ir_up)
-ir = eqx.tree_at(lambda t: (t.ir_in, t.ir_dn, t.ir_up), ir, (ir_in, ir_dn, ir_up))
+initials = [
+    prof,
+    dij,
+    lai,
+    sun_ang,
+    leaf_ang,
+    quantum,
+    nir,
+    ir,
+    qin,
+    ratrad,
+    sun,
+    shade,
+    veg,
+    soil,
+    mask_night_hashable,
+    mask_turbulence_hashable,
+    int(soil_mtime),
+    niter,
+]
 
-
-# ---------------------------------------------------------------------------- #
-#                     Compute radiation fields             #
-# ---------------------------------------------------------------------------- #
-# PAR
-quantum = rad_tran_canopy(
-    sun_ang, leaf_ang, quantum, para, lai, mask_night_hashable, niter=5
+# Let's use a jitted version
+canoak_jit = eqx.filter_jit(canoak)
+met1, prof1, ir1, qin1, sun1, shade1, soil1, veg1 = canoak_jit(
+    para, setup, met, *initials
 )
-# NIR
-nir = rad_tran_canopy(sun_ang, leaf_ang, nir, para, lai, mask_night_hashable, niter=25)
-
-
-# ---------------------------------------------------------------------------- #
-#                     Iterations                                               #
-# ---------------------------------------------------------------------------- #
-# compute Tsfc -> IR -> Rnet -> Energy balance -> Tsfc
-# loop again and apply updated Tsfc info until convergence
-# This is where things should be jitted as a whole
-def iteration(c, i):
-    met, prof, ir, qin, sun, shade, soil, veg = c
-    # jax.debug.print("T soil: {a}", a=soil.T_soil[10,:])
-    jax.debug.print("T sfc: {a}", a=soil.sfc_temperature[10])
-
-    # Update canopy wind profile with iteration of z/l and use in boundary layer
-    # resistance computations
-    wind = uz(met, para)
-    prof = eqx.tree_at(lambda t: t.wind, prof, wind)
-
-    # Compute IR fluxes with Bonan's algorithms of Norman model
-    ir = ir_rad_tran_canopy(leaf_ang, ir, quantum, soil, sun, shade, para)
-    # jax.debug.print("ir: {a}", a=ir.ir_dn[10,:])
-
-    # Incoming short and longwave radiation
-    qin = compute_qin(quantum, nir, ir, para, qin)
-
-    # Compute energy fluxes for H, LE, gs, A on Sun and Shade leaves
-    # Compute new boundary layer conductances based on new leaf energy balance
-    # and delta T, in case convection occurs
-    # Different coefficients will be assigned if amphistomatous or hypostomatous
-    sun, shade = energy_carbon_fluxes(
-        sun, shade, qin, quantum, met, prof, para, mask_turbulence_hashable
-    )
-
-    # Compute soil fluxes
-    # soil = soil_energy_balance(quantum, nir, ir, met, prof, para, soil, soil.mtime)  # type: ignore  # noqa: E501
-    soil = soil_energy_balance(quantum, nir, ir, met, prof, para, soil, soil_mtime)  # type: ignore  # noqa: E501
-
-    # Compute profiles of C's, zero layer jtot+1 as that is not a dF/dz or
-    # source/sink level
-    prof = update_profile(met, para, prof, quantum, sun, shade, soil, veg, lai, dij)
-
-    # compute met.zL from HH and met.ustar
-    HH = jnp.sum(
-        (
-            quantum.prob_beam[:, : para.jtot] * sun.H
-            + quantum.prob_shade[:, : para.jtot] * shade.H
-        )
-        * lai.dff[:, : para.jtot],
-        axis=1,
-    )
-    zL = -(0.4 * 9.8 * HH * para.meas_ht) / (
-        met.air_density * 1005 * met.T_air_K * jnp.power(met.ustar, 3.0)
-    )
-    zL = jnp.clip(zL, a_min=-3, a_max=0.25)
-    met = eqx.tree_at(lambda t: t.zL, met, zL)
-
-    # Compute canopy integrated fluxes
-    veg = calculate_veg(para, lai, quantum, sun, shade)
-
-    cnew = [met, prof, ir, qin, sun, shade, soil, veg]
-    return cnew, None
-
-
-initials = [met, prof, ir, qin, sun, shade, soil, veg]
-finals, _ = jax.lax.scan(iteration, initials, xs=None, length=15)
-
-met, prof, ir, qin, sun, shade, soil, veg = finals
 
 
 # Net radiation budget at top of the canopy

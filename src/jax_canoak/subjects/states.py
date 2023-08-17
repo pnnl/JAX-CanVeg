@@ -25,11 +25,11 @@ from math import floor
 import equinox as eqx
 
 from .meterology import Met
-from .parameters import Para
+from .parameters import Para, Setup
 from .utils import soil_sfc_res, conc
 from .utils import llambda as flambda
 
-from ..shared_utilities.types import Float_2D, Float_1D, Float_0D, Int_0D
+from ..shared_utilities.types import Float_2D, Float_1D, Float_0D
 from ..shared_utilities.utils import dot, minus
 from ..shared_utilities.constants import PI
 
@@ -347,9 +347,10 @@ class Soil(eqx.Module):
         return soil_sfc_res(self.water_content_15cm)
 
 
-def initialize_profile(met: Met, para: Para):
-    ntime, jtot = para.ntime, para.jtot
-    nlayers = para.nlayers_atmos
+def initialize_profile(met: Met, para: Para, setup: Setup):
+    ntime, jtot = setup.ntime, para.jtot
+    # nlayers = setup.nlayers_atmos
+    nlayers = setup.n_total_layers
     zht = para.zht
     delz = para.delz
     co2 = jnp.ones([ntime, nlayers])
@@ -599,41 +600,41 @@ def calculate_veg(
     return veg
 
 
-def initialize_model_states(met: Met, para: Para):
+def initialize_model_states(met: Met, para: Para, setup: Setup):
     # Soil
-    soil = initialize_soil(para, met)
+    soil = initialize_soil(setup, para, met)
 
     # Quantum and NIR
-    quantum = initialize_parnir(para, "par")
-    nir = initialize_parnir(para, "nir")
+    quantum = initialize_parnir(para, setup, "par")
+    nir = initialize_parnir(para, setup, "nir")
 
     # IR
-    ir = initialize_ir(para)
+    ir = initialize_ir(setup, para)
 
     # Veg
-    veg = initialize_veg(para)
+    veg = initialize_veg(setup)
 
     # Qin
-    qin = initialize_qin(para)
+    qin = initialize_qin(setup, para)
 
     # TODO: remove RNet since it is not used
     # RNet
-    rnet = initialize_rnet(para)
+    rnet = initialize_rnet(setup, para)
 
     # Sun
-    sun = initialize_sunshade(para, met)
+    sun = initialize_sunshade(setup, para, met)
 
     # Shade
-    shade = initialize_sunshade(para, met)
+    shade = initialize_sunshade(setup, para, met)
 
     # Lai
-    lai = initialize_lai(para, met)
+    lai = initialize_lai(setup, para, met)
 
     return soil, quantum, nir, ir, qin, rnet, sun, shade, veg, lai
 
 
-def initialize_parnir(para: Para, wavebnd: str) -> ParNir:
-    ntime, jtot = para.ntime, para.jtot
+def initialize_parnir(para: Para, setup: Setup, wavebnd: str) -> ParNir:
+    ntime, jtot = setup.ntime, para.jtot
     jktot = jtot + 1
     sh_abs = jnp.zeros([ntime, jtot])
     sun_abs = jnp.zeros([ntime, jtot])
@@ -651,6 +652,7 @@ def initialize_parnir(para: Para, wavebnd: str) -> ParNir:
     # prob_shade = jnp.ones([ntime, jktot])
     sun_lai = jnp.zeros([ntime, jktot])
     shade_lai = jnp.zeros([ntime, jktot])
+    # TODO: how to link this with model parameters?
     if wavebnd == "par":
         reflect = jnp.array(para.par_reflect)
         trans = jnp.array(para.par_trans)
@@ -686,8 +688,8 @@ def initialize_parnir(para: Para, wavebnd: str) -> ParNir:
     return rad
 
 
-def initialize_ir(para: Para) -> Ir:
-    jktot, jtot, ntime = para.jktot, para.jtot, para.ntime
+def initialize_ir(setup: Setup, para: Para) -> Ir:
+    jktot, jtot, ntime = para.jktot, para.jtot, setup.ntime
     ir_in = jnp.zeros(ntime)
     ir_dn = jnp.ones([ntime, jktot])
     ir_up = jnp.ones([ntime, jktot])
@@ -716,8 +718,8 @@ def initialize_ir(para: Para) -> Ir:
     return ir
 
 
-def initialize_veg(para: Para) -> Veg:
-    ntime = para.ntime
+def initialize_veg(setup: Setup) -> Veg:
+    ntime = setup.ntime
     Ps = jnp.zeros(ntime)
     gs = jnp.zeros(ntime)
     Rd = jnp.zeros(ntime)
@@ -729,15 +731,15 @@ def initialize_veg(para: Para) -> Veg:
     return Veg(Ps, gs, Rd, H, LE, Rnet, Tsfc, vpd)
 
 
-def initialize_qin(para: Para) -> Qin:
-    ntime, jtot = para.ntime, para.jtot
+def initialize_qin(setup: Setup, para: Para) -> Qin:
+    ntime, jtot = setup.ntime, para.jtot
     sun_abs = jnp.zeros([ntime, jtot])
     shade_abs = jnp.zeros([ntime, jtot])
     return Qin(sun_abs, shade_abs)
 
 
-def initialize_rnet(para: Para) -> Rnet:
-    ntime, jktot = para.ntime, para.jktot
+def initialize_rnet(setup: Setup, para: Para) -> Rnet:
+    ntime, jktot = setup.ntime, para.jktot
     sun = jnp.zeros([ntime, jktot])
     sh = jnp.zeros([ntime, jktot])
     sun_top = jnp.zeros([ntime, jktot])
@@ -746,8 +748,8 @@ def initialize_rnet(para: Para) -> Rnet:
     return Rnet(sun, sh, sun_top, sh_top, sh_bottom)
 
 
-def initialize_sunshade(para: Para, met: Met) -> SunShadedCan:
-    ntime, jtot = para.ntime, para.jtot
+def initialize_sunshade(setup: Setup, para: Para, met: Met) -> SunShadedCan:
+    ntime, jtot = setup.ntime, para.jtot
     Ps = jnp.zeros([ntime, jtot])
     Resp = jnp.zeros([ntime, jtot])
     gs = jnp.zeros([ntime, jtot])
@@ -768,10 +770,10 @@ def initialize_sunshade(para: Para, met: Met) -> SunShadedCan:
     )
 
 
-def initialize_lai(para: Para, met: Met) -> Lai:
+def initialize_lai(setup: Setup, para: Para, met: Met) -> Lai:
     nlayers = para.jtot
     lai = met.lai
-    dff = jnp.ones([para.ntime, nlayers]) / nlayers  # (ntime,nlayers)
+    dff = jnp.ones([setup.ntime, nlayers]) / nlayers  # (ntime,nlayers)
     dff = dot(lai, dff)  # (ntime, nlayers)
     # TODO: double check!
     # self.sumlai = jax.lax.cumsum(self.dff, axis=1, reverse=True) #(ntime,nlayers)
@@ -786,7 +788,11 @@ def initialize_lai(para: Para, met: Met) -> Lai:
 
 
 def initialize_soil(
-    para: Para, met: Met, n_soil: Int_0D = 10, depth: Float_0D = 0.15
+    # para: Para, met: Met, n_soil: int = 10, depth: Float_0D = 0.15
+    setup: Setup,
+    para: Para,
+    met: Met,
+    depth: Float_0D = 0.15,
 ) -> Soil:
     # Soil water content
     water_content_15cm = (
@@ -821,11 +827,11 @@ def initialize_soil(
     K_water = 0.25
 
     # Time step in seconds
-    dt = para.dt_soil
-    mtime = floor(3600 * 24 / para.hrs / para.dt_soil)
+    dt = setup.dt_soil
+    mtime = floor(3600 * 24 / setup.n_hr_per_day / setup.dt_soil)
     # mtime = floor(1800.0 / dt)  # time steps per half hour
 
-    n_soil = n_soil  # number of soil layers
+    n_soil = setup.n_soil_layers  # number of soil layers
     n_soil_1 = n_soil + 1
     n_soil_2 = n_soil + 2
 
@@ -846,10 +852,10 @@ def initialize_soil(
     vol = aream2 * dz
 
     # initialize soil temperature to the deep base temperature at 15 cm
-    # self.T_soil = jnp.ones([para.ntime, self.n_soil_2]) * met.Tsoil + 273.15
+    # self.T_soil = jnp.ones([setup.ntime, self.n_soil_2]) * met.Tsoil + 273.15
     # jax.debug.print("{a}", a=met.Tsoil)
     T_soil = (
-        dot(met.Tsoil, jnp.ones([para.ntime, n_soil_2])) + 273.15
+        dot(met.Tsoil, jnp.ones([setup.ntime, n_soil_2])) + 273.15
     )  # (ntime, n_soil_2)  # noqa: E501
 
     # initialize upper boundary temperature as air temperature
@@ -859,7 +865,7 @@ def initialize_soil(
     sfc_temperature = T_soil_up_boundary
     sfc_temperature_old = sfc_temperature
     bulk_density = (
-        jnp.ones([para.ntime, n_soil]) * 0.83
+        jnp.ones([setup.ntime, n_soil]) * 0.83
     )  # soil bulk density for the alfalfa, g cm-3, (ntime, n_soil)  # noqa: E501
 
     # thermal conductivity code from Campbell and Norman
@@ -884,11 +890,11 @@ def initialize_soil(
     )  # (ntime,)
 
     # Energy initialization
-    evap = jnp.zeros(para.ntime)  # initialization
-    heat = jnp.zeros(para.ntime)
-    # self.lout=jnp.zeros(para.ntime)
-    rnet = jnp.zeros(para.ntime)
-    gsoil = jnp.zeros(para.ntime)
+    evap = jnp.zeros(setup.ntime)  # initialization
+    heat = jnp.zeros(setup.ntime)
+    # self.lout=jnp.zeros(setup.ntime)
+    rnet = jnp.zeros(setup.ntime)
+    gsoil = jnp.zeros(setup.ntime)
     lout = para.epsigma * jnp.power(met.T_air_K, 4)  # initialization
     llout = lout
 

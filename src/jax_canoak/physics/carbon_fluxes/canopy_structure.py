@@ -10,7 +10,7 @@ Date: 2023.06.28.
 import jax
 import jax.numpy as jnp
 
-from ...subjects import Para, SunAng, LeafAng, Lai
+from ...subjects import Para, Setup, SunAng, LeafAng, Lai
 from ...shared_utilities.types import Float_0D, Float_1D
 from ...shared_utilities.types import Int_0D, Int_1D
 from ...shared_utilities.constants import PI
@@ -111,9 +111,9 @@ def angle(
 
 # @jax.jit
 def leaf_angle(
-    sunang: SunAng, prm: Para, lai: Lai, num_leaf_class: int = 50
+    sunang: SunAng, prm: Para, setup: Setup, lai: Lai, num_leaf_class: int = 50
 ) -> LeafAng:
-    # leafang = LeafAng(prm.ntime, prm.jtot, num_leaf_class)
+    # leafang = LeafAng(setup.ntime, setup.jtot, num_leaf_class)
     # estimate leaf angle for 50 classes between 0 and pi/2
     # at midpoint between each angle class.  This is a big improvement over
     # the older code that divided the sky into 9 classes.
@@ -129,10 +129,10 @@ def leaf_angle(
         lambda: jnp.ones(num_leaf_class) * 2 / PI,  # uniform
         lambda: jnp.sin(thetaLeaf),  # others
     ]  # (50,)
-    # jax.debug.print("leaf angle: {a}", a=branches[prm.leafangle]())
-    # pdf = jax.lax.switch(prm.leafangle, branches)
+    # jax.debug.print("leaf angle: {a}", a=branches[setup.leafangle]())
+    # pdf = jax.lax.switch(setup.leafangle, branches)
     # jax.debug.print("leaf angle: {a}", a=pdf)
-    pdf = jax.lax.switch(prm.leafangle, branches)
+    pdf = jax.lax.switch(setup.leafangle, branches)
 
     # using the algorithm from Warren Wilson and Wang et al
     # Wang, W. M., Z. L. Li, and H. B. Su. 2007.
@@ -172,11 +172,6 @@ def leaf_angle(
 
     leafang = LeafAng(pdf, Gfunc, thetaSky, Gfunc_Sky, integ_exp_diff)
 
-    # jax.debug.print("exxpdir {a}", a=integ_exp_diff[:2,:])
-    # jax.debug.print("dff_Markov {a}", a=dff_Markov[:2,...])
-    # jax.debug.print("prm.dff {a}", a=prm.dff)
-    # jax.debug.print("prm.markov {a}", a=prm.markov)
-    # jax.debug.print("Gfunc_sky {a}", a=Gfunc_Sky)
     return leafang
 
 

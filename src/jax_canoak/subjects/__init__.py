@@ -1,4 +1,4 @@
-from .parameters import Para  # noqa: F401
+from .parameters import Para, Setup  # noqa: F401
 from .parameters import initialize_parameters  # noqa: F401
 from .meterology import Met  # noqa: F401
 from .meterology import initialize_met  # noqa: F401

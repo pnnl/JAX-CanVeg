@@ -12,7 +12,7 @@ import jax.numpy as jnp
 
 import equinox as eqx
 
-from ...subjects import ParNir, Ir, Para, Qin, BoundLayerRes
+from ...subjects import ParNir, Ir, Setup, Para, Qin, BoundLayerRes
 from ...subjects import Met, SunShadedCan, Prof
 from ...subjects.utils import desdt as fdesdt
 from ...subjects.utils import des2dt as fdes2dt
@@ -72,6 +72,7 @@ def leaf_energy(
     prof: Prof,
     radcan: SunShadedCan,
     prm: Para,
+    setup: Setup,
 ) -> SunShadedCan:
     """_summary_
 
@@ -99,7 +100,7 @@ def leaf_energy(
         return rtop * rbottom / (rtop + rbottom)
 
     # gw = (gb * radcan.gs) / (gb + radcan.gs)
-    rwater = jax.lax.switch(prm.stomata, [rwater_hypo, rwater_amphi])
+    rwater = jax.lax.switch(setup.stomata, [rwater_hypo, rwater_amphi])
     gw = 1.0 / rwater
     # met.P_Pa=1000 * met.P_kPa   # air pressure, Pa
 
@@ -159,7 +160,7 @@ def leaf_energy(
         return Acoef, Bcoef, Ccoef
 
     Acoef, Bcoef, Ccoef = jax.lax.switch(
-        prm.stomata, [calculate_coef_hypo, calculate_coef_amphi]
+        setup.stomata, [calculate_coef_hypo, calculate_coef_amphi]
     )
     # jax.debug.print("Acoef: {a}", a=Acoef[:2,:])
     # jax.debug.print("Bcoef: {a}", a=Bcoef[:2,:])
