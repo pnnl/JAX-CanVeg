@@ -6,18 +6,19 @@ import pandas as pd
 # from ..subjects import ParNir, Ir, Para
 
 
-def plot_rad(rad, prm, lai, waveband: str, ax=None):
+def plot_rad(rad, setup, lai, waveband: str, ax=None):
+    jtot = setup.n_can_layers
     if ax is None:
         fig, ax = plt.subplots(1, 1, figsize=(10, 8))
     sumlai = jnp.mean(lai.sumlai, 0)
-    ax.plot(jnp.mean(rad.up_flux[:, : prm.jtot], 0), sumlai, label="up")
+    ax.plot(jnp.mean(rad.up_flux[:, :jtot], 0), sumlai, label="up")
     # ax=gca;
     # set(ax, 'ydir','reverse');
-    ax.plot(jnp.mean(rad.dn_flux[:, : prm.jtot], 0), sumlai, label="down")
-    ax.plot(jnp.mean(rad.beam_flux[:, : prm.jtot], 0), sumlai, label="beam")
-    ax.plot(jnp.mean(rad.total[:, : prm.jtot], 0), sumlai, label="total")
-    ax.plot(jnp.mean(rad.sun_abs[:, : prm.jtot], 0), sumlai, label="sun abs")
-    ax.plot(jnp.mean(rad.sh_abs[:, : prm.jtot], 0), sumlai, label="shade abs")
+    ax.plot(jnp.mean(rad.dn_flux[:, :jtot], 0), sumlai, label="down")
+    ax.plot(jnp.mean(rad.beam_flux[:, :jtot], 0), sumlai, label="beam")
+    ax.plot(jnp.mean(rad.total[:, :jtot], 0), sumlai, label="total")
+    ax.plot(jnp.mean(rad.sun_abs[:, :jtot], 0), sumlai, label="sun abs")
+    ax.plot(jnp.mean(rad.sh_abs[:, :jtot], 0), sumlai, label="shade abs")
     ax.legend()
     ax.invert_yaxis()
     ax.set(
@@ -28,14 +29,15 @@ def plot_rad(rad, prm, lai, waveband: str, ax=None):
 
 
 # def plot_ir(ir: Ir, prm: Para, ax=None):
-def plot_ir(ir, prm, lai, ax=None):
+def plot_ir(ir, setup, lai, ax=None):
+    jtot = setup.n_can_layers
     if ax is None:
         fig, ax = plt.subplots(1, 1, figsize=(10, 8))
     sumlai = jnp.mean(lai.sumlai, 0)
-    ax.plot(jnp.nanmean(ir.ir_up[:, : prm.jtot], 0), sumlai, "+-", label="up")
+    ax.plot(jnp.nanmean(ir.ir_up[:, :jtot], 0), sumlai, "+-", label="up")
     # ax=gca;
     # set(ax, 'ydir','reverse');
-    ax.plot(jnp.nanmean(ir.ir_dn[:, : prm.jtot], 0), sumlai, label="down")
+    ax.plot(jnp.nanmean(ir.ir_dn[:, :jtot], 0), sumlai, label="down")
     ax.legend()
     ax.invert_yaxis()
     ax.set(
@@ -49,16 +51,17 @@ def plot_ir(ir, prm, lai, ax=None):
     return ax
 
 
-def plot_veg_temp(sun, shade, prm, ax=None):
+def plot_veg_temp(sun, shade, prm, setup, ax=None):
+    jtot = setup.n_can_layers
     if ax is None:
         fig, ax = plt.subplots(1, 1, figsize=(10, 8))
-    ax.plot(jnp.nanmean(sun.Tsfc, 0), prm.zht[: prm.jtot], label="Sun")
-    ax.plot(jnp.nanmean(shade.Tsfc, 0), prm.zht[: prm.jtot], label="Shade")
+    ax.plot(jnp.nanmean(sun.Tsfc, 0), prm.zht[:jtot], label="Sun")
+    ax.plot(jnp.nanmean(shade.Tsfc, 0), prm.zht[:jtot], label="Shade")
     ax.set(xlabel="Temperature [degK]", ylabel="canopy layers")
     ax.legend()
 
 
-def plot_canopy1(can, qin, prm, sunorshade: str, ax=None):
+def plot_canopy1(can, sunorshade: str, ax=None):
     if ax is None:
         fig, ax = plt.subplots(1, 1, figsize=(10, 8))
     # sumlai = jnp.mean(prm.sumlai, 0)
@@ -75,7 +78,7 @@ def plot_canopy1(can, qin, prm, sunorshade: str, ax=None):
     return ax
 
 
-def plot_canopy2(can, prm, waveband: str, ax=None):
+def plot_canopy2(can, waveband: str, ax=None):
     if ax is None:
         fig, ax = plt.subplots(1, 1, figsize=(10, 8))
     ax.scatter(
@@ -101,7 +104,7 @@ def plot_canopy2(can, prm, waveband: str, ax=None):
 #     return ax
 
 
-def plot_leafang(leafang, prm, ax=None):
+def plot_leafang(leafang, ax=None):
     if ax is None:
         fig, ax = plt.subplots(1, 1, figsize=(10, 8))
     im = ax.imshow(leafang.integ_exp_diff.T, aspect="auto", cmap="Blues")
@@ -109,14 +112,14 @@ def plot_leafang(leafang, prm, ax=None):
     plt.colorbar(im)
 
 
-def plot_soil(soil, prm, ax=None):
+def plot_soil(soil, ax=None):
     if ax is None:
         fig, ax = plt.subplots(1, 1, figsize=(10, 8))
     ax.scatter(soil.rnet, soil.evap + soil.heat + soil.gsoil)
     ax.set(ylabel="Heat+Evap+Gsoil", xlabel="Rnet", title="Soil energy balance")
 
 
-def plot_soiltemp(soil, prm, ax=None):
+def plot_soiltemp(soil, ax=None):
     if ax is None:
         fig, ax = plt.subplots(1, 1, figsize=(10, 8))
     im = ax.imshow(soil.T_soil[:, :-2].T, cmap="copper_r", aspect="auto")
@@ -179,15 +182,15 @@ def plot_prof2(prof, prm, axes=None):
         fig, axes = plt.subplots(1, 3, figsize=(20, 8))
     # Tair ~ ht
     ax = axes[0]
-    ax.plot(jnp.nanmean(prof.Tair_K, 0), prm.zht[: prm.nlayers_atmos])
+    ax.plot(jnp.nanmean(prof.Tair_K, 0), prm.zht)
     ax.set(xlabel="Tair [degK]", ylabel="Ht [m]")
     # eair ~ ht
     ax = axes[1]
-    ax.plot(jnp.nanmean(prof.eair_Pa, 0), prm.zht[: prm.nlayers_atmos])
+    ax.plot(jnp.nanmean(prof.eair_Pa, 0), prm.zht)
     ax.set(xlabel="eair [Pa]", ylabel="Ht [m]")
     # co2 ~ ht
     ax = axes[2]
-    ax.plot(jnp.nanmean(prof.co2, 0), prm.zht[: prm.nlayers_atmos])
+    ax.plot(jnp.nanmean(prof.co2, 0), prm.zht)
     ax.set(xlabel="CO2 [ppm]", ylabel="Ht [m]")
 
 

@@ -329,8 +329,9 @@ def rad_tran_canopy(
     """
     absorbed = 1 - reflect - trans
 
-    ntime = rad.inbeam.shape[0]
-    jtot = prm.markov.shape[0]
+    # ntime = rad.inbeam.shape[0]
+    # jtot = prm.markov.shape[0]
+    ntime, jtot = rad.sh_abs.shape
     jktot = jtot + 1
     # ntime = prm.ntime
     # jtot = prm.jtot
@@ -350,7 +351,7 @@ def rad_tran_canopy(
     # @jnp.vectorize
     @partial(jax.vmap, in_axes=(0, 0), out_axes=0)
     def convert_night_to_zero(v, sin_beta_e):
-        return jax.lax.cond(sin_beta_e <= 0, lambda: jnp.zeros(prm.jktot), lambda: v)
+        return jax.lax.cond(sin_beta_e <= 0, lambda: jnp.zeros(jktot), lambda: v)
 
     exp_direct = jnp.exp(
         dot(
@@ -513,18 +514,21 @@ def ir_rad_tran_canopy(
     Returns:
         Ir: _description_
     """  # noqa: E501
+    _, jktot = ir.ir_dn.shape
+    jtot = jktot - 1
+
     # Set upper boundary condition
     ir_dn = jnp.concatenate(
-        [ir.ir_dn[:, : prm.jtot], jnp.expand_dims(ir.ir_in, axis=1)], axis=1
+        [ir.ir_dn[:, :jtot], jnp.expand_dims(ir.ir_in, axis=1)], axis=1
     )
     ir_up = jnp.concatenate(
-        [ir.ir_up[:, : prm.jtot], jnp.expand_dims(ir.ir_in, axis=1)], axis=1
+        [ir.ir_up[:, :jtot], jnp.expand_dims(ir.ir_in, axis=1)], axis=1
     )
 
     # Compute IR radiative source flux as a function of leaf temperature weighted
     # according to sunlit and shaded fractions
-    IR_source_sun = rad.prob_beam[:, : prm.jtot] * jnp.power(sun.Tsfc, 4.0)
-    IR_source_shade = rad.prob_shade[:, : prm.jtot] * jnp.power(shade.Tsfc, 4.0)
+    IR_source_sun = rad.prob_beam[:, :jtot] * jnp.power(sun.Tsfc, 4.0)
+    IR_source_shade = rad.prob_shade[:, :jtot] * jnp.power(shade.Tsfc, 4.0)
     IR_source = prm.epsigma * (IR_source_sun + IR_source_shade)
 
     # Compute downward IR from the Top down
@@ -600,7 +604,7 @@ def ir_rad_tran_canopy(
             # calculate_dn_layer, ir_dn[:, -1], jnp.arange(prm.jtot - 1, -1, -1)
             calculate_dn_layer,
             ir_dn[:, -1],
-            jnp.arange(prm.jtot - 1, -1, -1),
+            jnp.arange(jtot - 1, -1, -1),
         )
         out = out.T
         ir_dn = jnp.concatenate([out[:, ::-1], ir_dn[:, -1:]], axis=1)
@@ -622,7 +626,7 @@ def ir_rad_tran_canopy(
             cnew = up_layer_t
             return cnew, cnew
 
-        _, out = jax.lax.scan(calculate_up_layer, up_bot, jnp.arange(prm.jtot))
+        _, out = jax.lax.scan(calculate_up_layer, up_bot, jnp.arange(jtot))
         out = out.T
         ir_up = jnp.concatenate([jnp.expand_dims(up_bot, axis=-1), out], axis=1)
 
@@ -634,11 +638,11 @@ def ir_rad_tran_canopy(
     ir_dn, ir_up = carry[0], carry[1]
 
     # IR shade on top + bottom of leaves
-    ir_shade = ir_up[:, : prm.jtot] + ir_dn[:, : prm.jtot]
+    ir_shade = ir_up[:, :jtot] + ir_dn[:, :jtot]
 
     # Bonan shows IR Balance for ground area
     ir_balance = (1 - leafang.integ_exp_diff) * (
-        (ir_up[:, : prm.jtot] + ir_dn[:, 1 : prm.jktot]) * prm.ep - 2 * IR_source
+        (ir_up[:, :jtot] + ir_dn[:, 1:jktot]) * prm.ep - 2 * IR_source
     )
 
     ir = eqx.tree_at(

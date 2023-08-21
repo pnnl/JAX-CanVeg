@@ -301,29 +301,29 @@ class Para(eqx.Module):
         # aerodynamic roughness height, m
         return jnp.concatenate([self.zht1, self.zht2])
 
-    @property
-    def n_can_layer(self):
-        return self.zht1.size
+    # @property
+    # def n_can_layer(self):
+    #     return self.zht1.size
 
-    @property
-    def jtot(self):
-        return self.zht1.size
+    # @property
+    # def jtot(self):
+    #     return self.zht1.size
 
-    @property
-    def n_atmos_layers(self):
-        return self.zht2.size
+    # @property
+    # def n_atmos_layers(self):
+    #     return self.zht2.size
 
-    @property
-    def jktot(self):
-        return self.jtot + 1
+    # @property
+    # def jktot(self):
+    #     return self.jtot + 1
 
-    @property
-    def jtot3(self):
-        return self.jtot * 3
+    # @property
+    # def jtot3(self):
+    #     return self.jtot * 3
 
-    @property
-    def jktot3(self):
-        return self.jtot3 + 1
+    # @property
+    # def jktot3(self):
+    #     return self.jtot3 + 1
 
     @property
     def delz(self):
@@ -342,7 +342,8 @@ class Para(eqx.Module):
     @property
     def dht_canopy(self):
         # height increment of each layer
-        return self.veg_ht / self.n_can_layer
+        # return self.veg_ht / self.n_can_layer
+        return self.veg_ht / self.zht1.size
 
     @property
     def ht_atmos(self):
@@ -350,17 +351,19 @@ class Para(eqx.Module):
 
     @property
     def dht_atmos(self):
-        return self.ht_atmos / self.n_atmos_layers
+        # return self.ht_atmos / self.n_atmos_layers
+        return self.ht_atmos / self.zht2.size
 
-    @property
-    def nlayers_atmos(self):
-        # return self.jtot + jnp.floor(self.ht_atmos / self.dht_atmos).astype(int)
-        return self.n_can_layer + self.n_atmos_layers
+    # @property
+    # def nlayers_atmos(self):
+    #     # return self.jtot + jnp.floor(self.ht_atmos / self.dht_atmos).astype(int)
+    #     return self.n_can_layer + self.n_atmos_layers
 
     @property
     def markov(self):
         # zero plane displacement height, m
-        return jnp.ones(self.n_can_layer) * self.leaf_clumping_factor
+        # return jnp.ones(self.n_can_layer) * self.leaf_clumping_factor
+        return jnp.ones(self.zht1.size) * self.leaf_clumping_factor
 
     @property
     def par_absorbed(self):

@@ -17,13 +17,13 @@ import jax.numpy as jnp
 
 # from typing import Tuple
 
-from ...subjects import Met, Para, Setup, Prof, BoundLayerRes
+from ...subjects import Met, Para, Prof, BoundLayerRes
 from ...shared_utilities.types import Float_2D
 from ...shared_utilities.utils import dot
 
 
 # @eqx.filter_jit
-def uz(met: Met, prm: Para, setup: Setup) -> Float_2D:
+def uz(met: Met, prm: Para, jtot: int) -> Float_2D:
     """U(Z) inside the canopy during the day is about 1.09 u*
        This simple parameterization is derived from turbulence
        data measured in the WBW forest by Baldocchi and Meyers, 1988.
@@ -40,7 +40,7 @@ def uz(met: Met, prm: Para, setup: Setup) -> Float_2D:
     )
     # (jtot,)
     # wndexp = jnp.exp(2.0 * (prm.zht[: prm.jtot] / prm.veg_ht - 1))
-    wndexp = jnp.exp(2.0 * (prm.zht[: prm.jtot] / prm.veg_ht - 1))
+    wndexp = jnp.exp(2.0 * (prm.zht[:jtot] / prm.veg_ht - 1))
     # (ntime, jtot)
     wnd = jnp.outer(UH, wndexp)
 
@@ -83,36 +83,29 @@ def boundary_resistance(
     Returns:
         BoundLayerRes: _description_
     """  # noqa: E501
-    # heat = jnp.zeros([prm.ntime, prm.jtot])
-    # vapor = jnp.zeros([prm.ntime, prm.jtot])
-    # co2 = jnp.zeros([prm.ntime, prm.jtot])
-    # boundary_layer_res = BoundLayerRes(heat, vapor, co2)
-
-    # Sh_heat = jnp.zeros([prm.ntime, prm.jtot])
-    # Sh_vapor = jnp.zeros([prm.ntime, prm.jtot])
-    # Sh_CO2 = jnp.zeros([prm.ntime, prm.jtot])
+    jtot = TLF.shape[1]
 
     Tref = TLF
-    deltlf = Tref - prof.Tair_K[:, : prm.jtot]  # make sure K
-    graf = prm.grasshof * deltlf / prof.Tair_K[:, : prm.jtot]
+    deltlf = Tref - prof.Tair_K[:, :jtot]  # make sure K
+    graf = prm.grasshof * deltlf / prof.Tair_K[:, :jtot]
     graf = jnp.clip(graf, a_min=0.0)
 
     nnu_T_P = dot(
         prm.nnu * (101.3 / met.P_kPa),
-        jnp.power(prof.Tair_K[:, : prm.jtot] / 273.16, 1.81),
+        jnp.power(prof.Tair_K[:, :jtot] / 273.16, 1.81),
     )
 
     # Compute profile of UZ
-    Re = prm.lleaf * prof.wind[:, : prm.jtot] / nnu_T_P
+    Re = prm.lleaf * prof.wind[:, :jtot] / nnu_T_P
     Re5 = jnp.power(Re, 0.5)
     Re8 = jnp.power(Re, 0.8)
 
     # Compute res_factor
     nnu_T_P = dot(
         prm.nnu * (101.3 / met.P_kPa),
-        jnp.power(prof.Tair_K[:, : prm.jtot] / 273.16, 1.81),
+        jnp.power(prof.Tair_K[:, :jtot] / 273.16, 1.81),
     )
-    Re = prm.lleaf * prof.wind[:, : prm.jtot] / nnu_T_P
+    Re = prm.lleaf * prof.wind[:, :jtot] / nnu_T_P
 
     @jnp.vectorize
     def turbulence(Re_e, Re8_e, Re5_e):
@@ -157,15 +150,15 @@ def boundary_resistance(
 
     ddh_T_P = dot(
         prm.ddh * (101.3 / met.P_kPa),
-        jnp.power(prof.Tair_K[:, : prm.jtot] / 273.16, 1.81),
+        jnp.power(prof.Tair_K[:, :jtot] / 273.16, 1.81),
     )
     ddv_T_P = dot(
         prm.ddv * (101.3 / met.P_kPa),
-        jnp.power(prof.Tair_K[:, : prm.jtot] / 273.16, 1.81),
+        jnp.power(prof.Tair_K[:, :jtot] / 273.16, 1.81),
     )
     ddc_T_P = dot(
         prm.ddc * (101.3 / met.P_kPa),
-        jnp.power(prof.Tair_K[:, : prm.jtot] / 273.16, 1.81),
+        jnp.power(prof.Tair_K[:, :jtot] / 273.16, 1.81),
     )
 
     # boundary_layer_res.heat = prm.lleaf / (ddh_T_P * Sh_heat)

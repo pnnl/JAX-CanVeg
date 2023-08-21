@@ -166,18 +166,11 @@ def leaf_ps(
        Returns:
            Ps: _description_
     """  # noqa: E501
+    _, jtot = cca.shape
     # Rank roots #1,#2 and #3 according to the minimum, intermediate and maximum
     default_root = 0.0
     pstat273 = 101.3 * 0.022624 / (273.15 * P_kPa)
-    pstat273 = jnp.tile(pstat273, (prm.jtot, 1)).T
-    # default_minroot, default_midroot, default_maxroot = 1.e10, 0., -1.e10
-    # minroot=jnp.ones([prm.ntime,prm.jtot]) * 1.e10
-    # midroot=jnp.zeros([prm.ntime,prm.jtot])
-    # maxroot=-jnp.ones([prm.ntime,prm.jtot])* 1.e10
-    # aphoto=jnp.zeros([prm.ntime,prm.jtot])
-    # root1=jnp.zeros([prm.ntime,prm.jtot])
-    # root2=jnp.zeros([prm.ntime,prm.jtot])
-    # root3=jnp.zeros([prm.ntime,prm.jtot])
+    pstat273 = jnp.tile(pstat273, (jtot, 1)).T
 
     TlC = Tlk - 273.15
     # rt = prm.rugc * Tlk  #  product of universal gas constant and abs temperature

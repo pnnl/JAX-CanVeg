@@ -83,8 +83,8 @@ class ParNir(eqx.Module):
     sun_normal: Float_2D
     sh_flux: Float_2D
     beam_flux: Float_2D
-    inbeam: Float_2D
-    indiffuse: Float_2D
+    inbeam: Float_1D
+    indiffuse: Float_1D
     prob_beam: Float_2D
     sun_lai: Float_2D
     shade_lai: Float_2D
@@ -375,7 +375,7 @@ class Soil(eqx.Module):
 
 
 def initialize_profile(met: Met, para: Para, setup: Setup):
-    ntime, jtot = setup.ntime, para.jtot
+    ntime, jtot = setup.ntime, setup.n_can_layers
     # nlayers = setup.nlayers_atmos
     nlayers = setup.n_total_layers
     zht = para.zht
@@ -430,7 +430,9 @@ def update_profile(
 ) -> Prof:
     # from ..physics.carbon_fluxes import soil_respiration_alfalfa
 
-    nlayers = para.jtot
+    nlayers = sun.Tsfc.shape[1]
+    nlayers_atmos = prof.Tair_K.shape[1]
+
     Ps = (
         quantum.prob_beam[:, :nlayers] * sun.Ps
         + quantum.prob_shade[:, :nlayers] * shade.Ps
@@ -464,8 +466,8 @@ def update_profile(
         met.ustar,
         met.zL,
         met.T_air_K,
-        para.jtot,
-        para.nlayers_atmos,
+        nlayers,
+        nlayers_atmos,
         fact_heatcoef,
     )
     Told_K = prof.Told_K
@@ -481,9 +483,7 @@ def update_profile(
     # need to convert g to Pa
     # eair =rhovair R Tk/mv  Jones
     fact_lecoef = (
-        flambda(Tair_K[:, para.jktot - 1])
-        * 18.01
-        / (1000 * 8.314 * Tair_K[:, para.jktot - 1])
+        flambda(Tair_K[:, nlayers]) * 18.01 / (1000 * 8.314 * Tair_K[:, nlayers])
     )  # noqa: E501
     eair_Pa = conc(
         LE,
@@ -493,8 +493,8 @@ def update_profile(
         met.ustar,
         met.zL,
         met.eair_Pa,
-        para.jtot,
-        para.nlayers_atmos,
+        nlayers,
+        nlayers_atmos,
         fact_lecoef,
     )
     eair_old_Pa = prof.eair_old_Pa
@@ -520,8 +520,8 @@ def update_profile(
         met.ustar,
         met.zL,
         met.CO2,
-        para.jtot,
-        para.nlayers_atmos,
+        nlayers,
+        nlayers_atmos,
         fact_co2,
     )
     # jax.debug.print("soilflux: {a}", a=soilflux[:10])
@@ -554,7 +554,8 @@ def update_profile(
 def calculate_veg(
     para: Para, lai: Lai, quantum: ParNir, sun: SunShadedCan, shade: SunShadedCan
 ) -> Veg:
-    nlayers = para.jtot
+    # nlayers = para.jtot
+    nlayers = sun.Tsfc.shape[1]
     veg_Ps = jnp.sum(
         (
             quantum.prob_beam[:, :nlayers] * sun.Ps
@@ -636,23 +637,23 @@ def initialize_model_states(met: Met, para: Para, setup: Setup):
     nir = initialize_parnir(para, setup, "nir")
 
     # IR
-    ir = initialize_ir(setup, para)
+    ir = initialize_ir(setup)
 
     # Veg
     veg = initialize_veg(setup)
 
     # Qin
-    qin = initialize_qin(setup, para)
+    qin = initialize_qin(setup)
 
     # TODO: remove RNet since it is not used
     # RNet
-    rnet = initialize_rnet(setup, para)
+    rnet = initialize_rnet(setup)
 
     # Sun
-    sun = initialize_sunshade(setup, para, met)
+    sun = initialize_sunshade(setup, met)
 
     # Shade
-    shade = initialize_sunshade(setup, para, met)
+    shade = initialize_sunshade(setup, met)
 
     # Lai
     lai = initialize_lai(setup, para, met)
@@ -661,7 +662,7 @@ def initialize_model_states(met: Met, para: Para, setup: Setup):
 
 
 def initialize_parnir(para: Para, setup: Setup, wavebnd: str) -> ParNir:
-    ntime, jtot = setup.ntime, para.jtot
+    ntime, jtot = setup.ntime, setup.n_can_layers
     jktot = jtot + 1
     sh_abs = jnp.zeros([ntime, jtot])
     sun_abs = jnp.zeros([ntime, jtot])
@@ -715,8 +716,9 @@ def initialize_parnir(para: Para, setup: Setup, wavebnd: str) -> ParNir:
     return rad
 
 
-def initialize_ir(setup: Setup, para: Para) -> Ir:
-    jktot, jtot, ntime = para.jktot, para.jtot, setup.ntime
+def initialize_ir(setup: Setup) -> Ir:
+    jtot, ntime = setup.n_can_layers, setup.ntime
+    jktot = jtot + 1
     ir_in = jnp.zeros(ntime)
     ir_dn = jnp.ones([ntime, jktot])
     ir_up = jnp.ones([ntime, jktot])
@@ -758,15 +760,18 @@ def initialize_veg(setup: Setup) -> Veg:
     return Veg(Ps, gs, Rd, H, LE, Rnet, Tsfc, vpd)
 
 
-def initialize_qin(setup: Setup, para: Para) -> Qin:
-    ntime, jtot = setup.ntime, para.jtot
+def initialize_qin(
+    setup: Setup,
+) -> Qin:
+    ntime, jtot = setup.ntime, setup.n_can_layers
     sun_abs = jnp.zeros([ntime, jtot])
     shade_abs = jnp.zeros([ntime, jtot])
     return Qin(sun_abs, shade_abs)
 
 
-def initialize_rnet(setup: Setup, para: Para) -> Rnet:
-    ntime, jktot = setup.ntime, para.jktot
+def initialize_rnet(setup: Setup) -> Rnet:
+    ntime, jtot = setup.ntime, setup.n_can_layers
+    jktot = jtot + 1
     sun = jnp.zeros([ntime, jktot])
     sh = jnp.zeros([ntime, jktot])
     sun_top = jnp.zeros([ntime, jktot])
@@ -775,8 +780,8 @@ def initialize_rnet(setup: Setup, para: Para) -> Rnet:
     return Rnet(sun, sh, sun_top, sh_top, sh_bottom)
 
 
-def initialize_sunshade(setup: Setup, para: Para, met: Met) -> SunShadedCan:
-    ntime, jtot = setup.ntime, para.jtot
+def initialize_sunshade(setup: Setup, met: Met) -> SunShadedCan:
+    ntime, jtot = setup.ntime, setup.n_can_layers
     Ps = jnp.zeros([ntime, jtot])
     Resp = jnp.zeros([ntime, jtot])
     gs = jnp.zeros([ntime, jtot])
@@ -798,7 +803,7 @@ def initialize_sunshade(setup: Setup, para: Para, met: Met) -> SunShadedCan:
 
 
 def initialize_lai(setup: Setup, para: Para, met: Met) -> Lai:
-    nlayers = para.jtot
+    nlayers = setup.n_can_layers
     lai = met.lai
     dff = jnp.ones([setup.ntime, nlayers]) / nlayers  # (ntime,nlayers)
     dff = dot(lai, dff)  # (ntime, nlayers)

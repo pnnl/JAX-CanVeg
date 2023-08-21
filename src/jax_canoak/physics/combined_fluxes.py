@@ -67,6 +67,8 @@ def energy_carbon_fluxes(
     Returns:
         Tuple[SunShadedCan, SunShadedCan]: _description_
     """
+    ntime, jtot = sun.Tsfc.shape
+
     # Based on sunlit leaf temperature and air temperature of the layer
     # compute boundary layer resistances for heat, vapor and CO2
     boundary_layer_res = boundary_resistance(prof, met, sun.Tsfc, prm)
@@ -74,11 +76,11 @@ def energy_carbon_fluxes(
     # Compute leaf photosynthesis
     ps = leaf_ps(
         quantum.sun_abs,
-        prof.co2[:, : prm.jtot],
+        prof.co2[:, :jtot],
         sun.Tsfc,
         boundary_layer_res.co2,
         met.P_kPa,
-        prof.eair_Pa[:, : prm.jtot],
+        prof.eair_Pa[:, :jtot],
         prm,
         setup,
     )
@@ -98,11 +100,11 @@ def energy_carbon_fluxes(
     boundary_layer_res = boundary_resistance(prof, met, shade.Tsfc, prm)
     ps = leaf_ps(
         quantum.sh_abs,
-        prof.co2[:, : prm.jtot],
+        prof.co2[:, :jtot],
         shade.Tsfc,
         boundary_layer_res.co2,
         met.P_kPa,
-        prof.eair_Pa[:, : prm.jtot],
+        prof.eair_Pa[:, :jtot],
         prm,
         setup,
     )

@@ -58,6 +58,7 @@ def canoak(
     #                     Initialize profiles of scalars/sources/sinks             #
     # ---------------------------------------------------------------------------- #
     prof = initialize_profile(met, para, setup)
+    ntime, jtot = prof.H.shape
 
     # ---------------------------------------------------------------------------- #
     #                     Initialize model states                        #
@@ -139,7 +140,7 @@ def canoak(
 
         # Update canopy wind profile with iteration of z/l and use in boundary layer
         # resistance computations
-        wind = uz(met, para, setup)
+        wind = uz(met, para, setup.n_can_layers)
         prof = eqx.tree_at(lambda t: t.wind, prof, wind)
 
         # Compute IR fluxes with Bonan's algorithms of Norman model
@@ -172,10 +173,10 @@ def canoak(
         # compute met.zL from HH and met.ustar
         HH = jnp.sum(
             (
-                quantum.prob_beam[:, : para.jtot] * sun.H
-                + quantum.prob_shade[:, : para.jtot] * shade.H
+                quantum.prob_beam[:, :jtot] * sun.H
+                + quantum.prob_shade[:, :jtot] * shade.H
             )
-            * lai.dff[:, : para.jtot],
+            * lai.dff[:, :jtot],
             axis=1,
         )
         zL = -(0.4 * 9.8 * HH * para.meas_ht) / (
@@ -197,14 +198,14 @@ def canoak(
 
     # Calculate the states/fluxes across the whole canopy
     rnet_calc = (
-        quantum.beam_flux[:, para.jtot] / 4.6
-        + quantum.dn_flux[:, para.jtot] / 4.6
-        - quantum.up_flux[:, para.jtot] / 4.6
-        + nir.beam_flux[:, para.jtot]
-        + nir.dn_flux[:, para.jtot]
-        - nir.up_flux[:, para.jtot]
-        + ir.ir_dn[:, para.jtot]
-        + -ir.ir_up[:, para.jtot]
+        quantum.beam_flux[:, jtot] / 4.6
+        + quantum.dn_flux[:, jtot] / 4.6
+        - quantum.up_flux[:, jtot] / 4.6
+        + nir.beam_flux[:, jtot]
+        + nir.dn_flux[:, jtot]
+        - nir.up_flux[:, jtot]
+        + ir.ir_dn[:, jtot]
+        + -ir.ir_up[:, jtot]
     )
     LE = veg.LE + soil.evap
     H = veg.H + soil.heat
@@ -212,11 +213,11 @@ def canoak(
     NEE = soil.resp - veg.GPP
     avail = rnet_calc - soil.gsoil
     gsoil = soil.gsoil
-    albedo_calc = (quantum.up_flux[:, para.jtot] / 4.6 + nir.up_flux[:, para.jtot]) / (
+    albedo_calc = (quantum.up_flux[:, jtot] / 4.6 + nir.up_flux[:, jtot]) / (
         quantum.incoming / 4.6 + nir.incoming
     )
-    nir_albedo_calc = nir.up_flux[:, para.jtot] / nir.incoming
-    nir_refl = nir.up_flux[:, para.jtot] - nir.up_flux[:, 0]
+    nir_albedo_calc = nir.up_flux[:, jtot] / nir.incoming
+    nir_refl = nir.up_flux[:, jtot] - nir.up_flux[:, 0]
 
     can = Can(
         rnet_calc,

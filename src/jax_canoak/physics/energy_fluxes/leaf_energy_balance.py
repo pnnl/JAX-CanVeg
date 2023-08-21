@@ -87,6 +87,7 @@ def leaf_energy(
     Returns:
         SunShadedCan: _description_
     """
+    _, jtot = qin.shape
     gb = 1.0 / boundary_layer_res.vapor
 
     def rwater_hypo():
@@ -106,18 +107,18 @@ def leaf_energy(
     # met.P_Pa=1000 * met.P_kPa   # air pressure, Pa
 
     # Compute products of air temperature, K
-    tk2 = prof.Tair_K[:, : prm.jtot] * prof.Tair_K[:, : prm.jtot]
-    tk3 = tk2 * prof.Tair_K[:, : prm.jtot]
-    tk4 = tk3 * prof.Tair_K[:, : prm.jtot]
+    tk2 = prof.Tair_K[:, :jtot] * prof.Tair_K[:, :jtot]
+    tk3 = tk2 * prof.Tair_K[:, :jtot]
+    tk4 = tk3 * prof.Tair_K[:, :jtot]
 
     # Longwave emission at air temperature, W m-2
     llout = prm.epsigma * tk4
-    d2est = fdes2dt(prof.Tair_K[:, : prm.jtot])
-    dest = fdesdt(prof.Tair_K[:, : prm.jtot])
-    est = fes(prof.Tair_K[:, : prm.jtot])
-    vpd_Pa = est - prof.eair_Pa[:, : prm.jtot]
-    llambda = fllambda(prof.Tair_K[:, : prm.jtot])
-    air_density = dot(met.P_kPa, prm.Mair / (prm.rugc * prof.Tair_K[:, : prm.jtot]))
+    d2est = fdes2dt(prof.Tair_K[:, :jtot])
+    dest = fdesdt(prof.Tair_K[:, :jtot])
+    est = fes(prof.Tair_K[:, :jtot])
+    vpd_Pa = est - prof.eair_Pa[:, :jtot]
+    llambda = fllambda(prof.Tair_K[:, :jtot])
+    air_density = dot(met.P_kPa, prm.Mair / (prm.rugc * prof.Tair_K[:, :jtot]))
     vpd_Pa = jnp.clip(vpd_Pa, a_min=0.0, a_max=5000.0)
     # jax.debug.print("vpd: {a}", a=jnp.isnan(vpd_Pa).sum())
 
@@ -180,7 +181,7 @@ def leaf_energy(
     LE = jnp.real(le2)
     del_Tk = (qin - LE - llout2) / repeat
     # del_Tk -= 0.2
-    Tsfc_K = prof.Tair_K[:, : prm.jtot] + del_Tk
+    Tsfc_K = prof.Tair_K[:, :jtot] + del_Tk
     # Tsfc_K = prof.Tair_K[:, : prm.nlayers] + del_Tk
     # jax.debug.print("qin: {a}", a=qin.mean(axis=0))
     # jax.debug.print("LE: {a}", a=LE.mean(axis=0))
