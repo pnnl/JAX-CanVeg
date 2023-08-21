@@ -5,9 +5,12 @@ Author: Peishi Jiang
 Date: 2023.7.24.
 """
 
+import numpy as np
 import jax.numpy as jnp
 
 import equinox as eqx
+
+from typing import Optional, Tuple
 
 # from .parameters import Para
 from ..shared_utilities.types import Float_2D, Int_0D, Float_0D, Float_1D
@@ -138,3 +141,22 @@ def initialize_met(
         lai,
     )
     return met
+
+
+def get_met_forcings(f_forcing: str, lai: Optional[Float_0D] = None) -> Tuple[Met, int]:
+    # Load the modeling forcing text file
+    # This should be a matrix of forcing data with each column representing
+    # a time series of observations
+    forcing_data = np.loadtxt(f_forcing, delimiter=",")
+    forcing_data = jnp.array(forcing_data)
+    n_time = forcing_data.shape[0]
+    # Initialize the zl length with zeros
+    zl0 = jnp.zeros(n_time)
+    # Set up the lai if not None
+    if lai is not None:
+        forcing_data = jnp.concatenate(
+            [forcing_data, jnp.ones([n_time, 1]) * lai], axis=1
+        )
+    # Initialize the met instance
+    met = initialize_met(forcing_data, n_time, zl0)
+    return met, n_time

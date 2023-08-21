@@ -14,7 +14,7 @@ from typing import Tuple
 from jax_canoak.shared_utilities.types import Float_2D
 
 from jax_canoak.subjects import Para, Met, Prof, SunAng, LeafAng, SunShadedCan
-from jax_canoak.subjects import Setup, Veg, Soil, Rnet, Qin, Ir, ParNir, Lai
+from jax_canoak.subjects import Setup, Veg, Soil, Rnet, Qin, Ir, ParNir, Lai, Can
 from jax_canoak.subjects import initialize_profile, initialize_model_states
 
 from jax_canoak.shared_utilities.utils import dot
@@ -27,6 +27,7 @@ from jax_canoak.physics.energy_fluxes import compute_qin, ir_rad_tran_canopy
 from jax_canoak.physics.energy_fluxes import uz, soil_energy_balance
 from jax_canoak.physics.energy_fluxes import diffuse_direct_radiation
 from jax_canoak.physics.carbon_fluxes import angle, leaf_angle
+from jax_canoak.physics.carbon_fluxes import soil_respiration_alfalfa
 
 
 def canoak(
@@ -51,6 +52,7 @@ def canoak(
     SunShadedCan,
     Soil,
     Veg,
+    Can,
 ]:
     # ---------------------------------------------------------------------------- #
     #                     Initialize profiles of scalars/sources/sinks             #
@@ -132,6 +134,8 @@ def canoak(
         met, prof, ir, qin, sun, shade, soil, veg = c
         # jax.debug.print("T soil: {a}", a=soil.T_soil[10,:])
         # jax.debug.print("T sfc: {a}", a=soil.sfc_temperature[10])
+        # jax.debug.print("Tsfc: {a}", a=prof.Tair_K.mean())
+        # jax.debug.print("T soil surface: {a}", a=soil.sfc_temperature.mean())
 
         # Update canopy wind profile with iteration of z/l and use in boundary layer
         # resistance computations
@@ -140,7 +144,6 @@ def canoak(
 
         # Compute IR fluxes with Bonan's algorithms of Norman model
         ir = ir_rad_tran_canopy(leaf_ang, ir, quantum, soil, sun, shade, para)
-        # jax.debug.print("ir: {a}", a=ir.ir_dn[10,:])
 
         # Incoming short and longwave radiation
         qin = compute_qin(quantum, nir, ir, para, qin)
@@ -155,6 +158,12 @@ def canoak(
 
         # Compute soil fluxes
         soil = soil_energy_balance(quantum, nir, ir, met, prof, para, soil, soil_mtime)  # type: ignore  # noqa: E501
+
+        # Compute soil respiration
+        soil_resp = soil_respiration_alfalfa(
+            veg.Ps, soil.T_soil[:, 9], met.soilmoisture, met.zcanopy, veg.Rd, para
+        )
+        soil = eqx.tree_at(lambda t: t.resp, soil, soil_resp)
 
         # Compute profiles of C's, zero layer jtot+1 as that is not a dF/dz or
         # source/sink level
@@ -186,6 +195,42 @@ def canoak(
 
     met, prof, ir, qin, sun, shade, soil, veg = finals
 
+    # Calculate the states/fluxes across the whole canopy
+    rnet_calc = (
+        quantum.beam_flux[:, para.jtot] / 4.6
+        + quantum.dn_flux[:, para.jtot] / 4.6
+        - quantum.up_flux[:, para.jtot] / 4.6
+        + nir.beam_flux[:, para.jtot]
+        + nir.dn_flux[:, para.jtot]
+        - nir.up_flux[:, para.jtot]
+        + ir.ir_dn[:, para.jtot]
+        + -ir.ir_up[:, para.jtot]
+    )
+    LE = veg.LE + soil.evap
+    H = veg.H + soil.heat
+    rnet = veg.Rnet + soil.rnet
+    NEE = soil.resp - veg.GPP
+    avail = rnet_calc - soil.gsoil
+    gsoil = soil.gsoil
+    albedo_calc = (quantum.up_flux[:, para.jtot] / 4.6 + nir.up_flux[:, para.jtot]) / (
+        quantum.incoming / 4.6 + nir.incoming
+    )
+    nir_albedo_calc = nir.up_flux[:, para.jtot] / nir.incoming
+    nir_refl = nir.up_flux[:, para.jtot] - nir.up_flux[:, 0]
+
+    can = Can(
+        rnet_calc,
+        rnet,
+        LE,
+        H,
+        NEE,
+        avail,
+        gsoil,
+        albedo_calc,
+        nir_albedo_calc,
+        nir_refl,
+    )
+
     return (
         met,
         prof,
@@ -201,4 +246,5 @@ def canoak(
         shade,
         soil,
         veg,
+        can,
     )

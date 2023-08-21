@@ -695,13 +695,13 @@ double DW2DZ (double Z, double HH, double ustar)
        
 		// y=sigw2*ustar*ustar;
 
-	 // first compute derivative of sigw^2/u*^2
+	//  // first compute derivative of sigw^2/u*^2
 
     //    dsigw2dz=(turb.sigma_zo*turb.sigma_zo*4.264/HH)*exp(4.264*Z/HH);
 
-	// need to convert to ds2/dz so multiplication by u* times u* is needed
+	// // need to convert to ds2/dz so multiplication by u* times u* is needed
 
-        // y=dsigw2dz*ustar*ustar;
+    //     y=dsigw2dz*ustar*ustar;
 
 
 	}

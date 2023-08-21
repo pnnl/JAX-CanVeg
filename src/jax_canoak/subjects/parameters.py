@@ -31,8 +31,8 @@ class Setup(eqx.Module):
     lat_deg: Float_0D
     long_deg: Float_0D
     # Leaf
-    stomata: int  # amphistomatous = 2; hypostomatous = 1
-    hypo_amphi: int  # hypostomatous, 1, amphistomatous, 2
+    stomata: int  # amphistomatous = 1; hypostomatous = 0
+    # hypo_amphi: int  # hypostomatous, 1, amphistomatous, 2
     # Leaf angle distributions
     # options include spherical - 1, planophile - 2, erectophile - 3, uniform - 4,
     # plagiophile - 5, extremophile - 6
@@ -491,8 +491,7 @@ def initialize_parameters(
     time_zone: int = -8,
     latitude: Float_0D = 38.0991538,
     longitude: Float_0D = -121.49933,
-    stomata: int = 2,
-    hypo_amphi: int = 1,
+    stomata: int = 1,
     leafangle: int = 1,
     leaf_clumping_factor: Float_0D = 0.95,
     veg_ht: Float_0D = 0.8,
@@ -531,7 +530,6 @@ def initialize_parameters(
         lat_deg=latitude,
         long_deg=longitude,
         stomata=stomata,
-        hypo_amphi=hypo_amphi,
         leafangle=leafangle,
         n_hr_per_day=n_hr_per_day,
         ntime=n_time,

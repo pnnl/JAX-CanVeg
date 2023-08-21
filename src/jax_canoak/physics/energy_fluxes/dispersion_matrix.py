@@ -8,15 +8,18 @@ Author: Peishi Jiang
 Date: 2023.7.25.
 """
 
-# import os
+import os
+
 # import time
 # import jax
 import jax.numpy as jnp
 import numpy as np
 
+from typing import Optional
+
 # import pandas as pd
 
-from ...subjects import Para
+from ...subjects import Para, Setup
 from ...shared_utilities.types import Float_0D, Float_2D
 
 # from ...shared_utilities.utils import dot
@@ -24,6 +27,7 @@ from .dispersion import disp_mx
 
 
 def disp_canveg(
+    setup: Setup,
     prm: Para,
     timemax: Float_0D = 1000.0,
     ustar: Float_0D = 1.0,
@@ -33,13 +37,15 @@ def disp_canveg(
     dd = prm.dht
 
     # dij = np.zeros([prm.jktot3, prm.jktot])
-    dij = np.zeros([prm.nlayers_atmos + 1, prm.jktot])
+    # dij = np.zeros([prm.nlayers_atmos + 1, prm.jktot])
+    dij = np.zeros([setup.n_total_layers + 1, setup.n_can_layers + 1])
     # Generate the Dij file
     disp_mx(
-        int(prm.jktot),
-        # int(prm.jktot3),
-        int(prm.nlayers_atmos + 1),
-        float(prm.npart),
+        # int(prm.jktot),
+        # int(prm.nlayers_atmos + 1),
+        int(setup.n_can_layers + 1),
+        int(setup.n_total_layers + 1),
+        float(setup.npart),
         float(timemax),
         float(ustar),
         float(hh),
@@ -66,6 +72,22 @@ def disp_canveg(
     # Remove the file
     # os.remove(f_dij)
 
+    return dij
+
+
+def get_dispersion_matrix(
+    setup: Setup, para: Para, f_dij: Optional[str] = None, timemax: Float_0D = 1000.0
+) -> Float_2D:
+    # Get dij from an existing csv file
+    if f_dij is not None:
+        if os.path.isfile(f_dij):
+            dij = np.loadtxt(f_dij, delimiter=",")
+            dij = jnp.array(dij)
+        else:
+            raise Exception(f"The following file does not exist: {f_dij}!")
+    # Otherwise, generate dij
+    else:
+        dij = disp_canveg(setup, para, timemax=timemax)
     return dij
 
 

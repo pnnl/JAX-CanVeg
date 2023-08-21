@@ -1,4 +1,7 @@
-from .dispersion_matrix import disp_canveg  # noqa: F401
+from .dispersion_matrix import (
+    disp_canveg,  # noqa: F401
+    get_dispersion_matrix,  # noqa: F401
+)
 
 from .radiation_transfer import (
     diffuse_direct_radiation,  # noqa: F401

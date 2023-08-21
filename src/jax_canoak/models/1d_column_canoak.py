@@ -7,14 +7,16 @@ Date: 2023.08.13.
 """
 
 import jax
-import jax.numpy as jnp
+
+# import jax.numpy as jnp
 
 # import h5py
-import numpy as np
+# import numpy as np
 
 import equinox as eqx
 
-from jax_canoak.subjects import initialize_met, initialize_parameters
+from jax_canoak.subjects import get_met_forcings, initialize_parameters
+from jax_canoak.physics.energy_fluxes import get_dispersion_matrix
 from jax_canoak.models import canoak
 
 import matplotlib.pyplot as plt
@@ -36,8 +38,7 @@ plot = True
 time_zone = -8
 latitude = 38.0991538
 longitude = -121.49933
-stomata = 2
-hypo_amphi = 1
+stomata = 1
 veg_ht = 0.8
 leafangle = 1
 n_can_layers = 50
@@ -45,19 +46,13 @@ meas_ht = 5.0
 n_hr_per_day = 48
 lai = 5.0
 niter = 15
-
-
-# ---------------------------------------------------------------------------- #
-#                     Set the model forcings                                   #
-# ---------------------------------------------------------------------------- #
-# f_forcing = "../shared_utilities/forcings/AlfMetBouldinInput.csv"
 f_forcing = "../shared_utilities/forcings/AlfBouldinMetInput.csv"
-forcing_data = np.loadtxt(f_forcing, delimiter=",")
-forcing_data = jnp.array(forcing_data)
-n_time = forcing_data.shape[0]
-zl0 = jnp.zeros(n_time)
-forcing_data = jnp.concatenate([forcing_data, jnp.ones([n_time, 1]) * lai], axis=1)
-met = initialize_met(forcing_data, n_time, zl0)
+
+
+# ---------------------------------------------------------------------------- #
+#                     Get the model forcings                                   #
+# ---------------------------------------------------------------------------- #
+met, n_time = get_met_forcings(f_forcing, lai)
 
 
 # ---------------------------------------------------------------------------- #
@@ -68,7 +63,6 @@ setup, para = initialize_parameters(
     latitude=latitude,
     longitude=longitude,
     stomata=stomata,
-    hypo_amphi=hypo_amphi,
     veg_ht=veg_ht,
     leafangle=leafangle,
     n_can_layers=n_can_layers,
@@ -83,9 +77,8 @@ setup, para = initialize_parameters(
 # ---------------------------------------------------------------------------- #
 #                     Generate or read the Dispersion matrix                   #
 # ---------------------------------------------------------------------------- #
-# dij = disp_canveg(para, timemax=5000.0)
-dij = np.loadtxt("Dij_Alfalfa.csv", delimiter=",")
-dij = jnp.array(dij)
+# dij = get_dispersion_matrix(setup, para)
+dij = get_dispersion_matrix(setup, para, "Dij_Alfalfa.csv")
 
 
 # ---------------------------------------------------------------------------- #
@@ -108,20 +101,15 @@ canoak = eqx.filter_jit(canoak)
     shade,
     soil,
     veg,
+    can,
 ) = canoak(para, setup, met, dij, setup.soil_mtime, setup.niter)
 
 
-# Net radiation budget at top of the canopy
-can_rnet = (
-    quantum.beam_flux[:, para.jtot] / 4.6
-    + quantum.dn_flux[:, para.jtot] / 4.6
-    - quantum.up_flux[:, para.jtot] / 4.6
-    + nir.beam_flux[:, para.jtot]
-    + nir.dn_flux[:, para.jtot]
-    - nir.up_flux[:, para.jtot]
-    + ir.ir_dn[:, para.jtot]
-    + -ir.ir_up[:, para.jtot]
-)
+# ---------------------------------------------------------------------------- #
+#                     Read observations                #
+# ---------------------------------------------------------------------------- #
+# f_obs = ''
+
 
 # ---------------------------------------------------------------------------- #
 #                     Plot                                              #

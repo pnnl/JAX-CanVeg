@@ -266,8 +266,8 @@ def leaf_ps(
     alpha_ps, bbeta, gamma, theta_ps = jax.lax.switch(
         setup.stomata,
         [
-            cubic_coef_hypo,  # hypostomatous = 1
-            cubic_coef_amphi,  # amphistomatous = 2
+            cubic_coef_hypo,  # hypostomatous = 0
+            cubic_coef_amphi,  # amphistomatous = 1
         ],
     )
 
@@ -389,6 +389,7 @@ def leaf_ps(
         ],
     )
     rh_leaf = jnp.clip(rh_leaf, a_max=1.0)
+    # TODO: the following should be computed after aphoto is corrected based on Aps
     gs_leaf_mole = (prm.kball * rh_leaf * aphoto / cs) + prm.bprime
     gs_co2 = gs_leaf_mole / 1.6
     # Stomatal conductance is mol m-2 s-1
@@ -396,7 +397,6 @@ def leaf_ps(
     # gs_m_s = gs_leaf_mole * Tlk * 101.3* 0.022624 /(273.15 * P_kPa)
     gs_m_s = gs_leaf_mole * Tlk * pstat273
     rstom = 1.0 / gs_m_s
-    # jax.debug.print('gs_m_s: {a}', a=gs_m_s[:2,:])
     # jax.debug.print('rh_leaf: {a}', a=rh_leaf[:2,:])
     # jax.debug.print('aphoto: {a}', a=aphoto[:2,:])
     # jax.debug.print('cs: {a}', a=cs[:2,:])
@@ -413,17 +413,64 @@ def leaf_ps(
     Aps2 = (-bb - jnp.sqrt(bb * bb - 4 * aa * cc)) / (2 * aa)
     Aps = jnp.minimum(Aps1, Aps2)
     # print(Aps.shape, rd.shape, aphoto.shape)
+    # @jnp.vectorize
+    # def update_aphoto2(aphoto_e, Aps_e, rd_e):
+    #     tst = (Aps_e < aphoto_e) & (Aps_e > 0)
+    #     return jax.lax.cond(tst, lambda: Aps_e - rd_e, lambda: aphoto_e)
+    # aphoto = update_aphoto2(aphoto, Aps, rd)
+    # jax.debug.print('gs_m_s-before quad: {a}', a=gs_m_s.mean(axis=0))
     @jnp.vectorize
-    def update_aphoto2(aphoto_e, Aps_e, rd_e):
+    def update_aphoto_gs(
+        aphoto_e,
+        Aps_e,
+        rd_e,
+        rh_leaf_e,
+        cs_e,
+        tlk_e,
+        PkPa_e,
+        gs_leaf_mole_e,
+        gs_co2_e,
+        gs_m_s_e,
+        rstom_e,
+    ):
         tst = (Aps_e < aphoto_e) & (Aps_e > 0)
-        return jax.lax.cond(tst, lambda: Aps_e - rd_e, lambda: aphoto_e)
+        aphoto_e_new = Aps_e - rd_e
+        gs_leaf_mole_e_new = (
+            prm.kball * rh_leaf_e * aphoto_e_new / cs_e
+        ) / 1.6 + prm.bprime16
+        gs_m_s_e_new = (
+            1.6 * gs_leaf_mole_e_new * tlk_e * 101.3 * 0.022624 / (273.15 * PkPa_e)
+        )
+        return jax.lax.cond(
+            tst,
+            lambda: (
+                aphoto_e_new,
+                gs_leaf_mole_e_new,
+                gs_leaf_mole_e_new,
+                gs_m_s_e_new,
+                gs_m_s_e_new,
+            ),
+            lambda: (aphoto_e, gs_leaf_mole_e, gs_co2_e, gs_m_s_e, rstom_e),
+        )
 
-    aphoto = update_aphoto2(aphoto, Aps, rd)
-    # jax.debug.print('gs_m_s: {a}', a=gs_m_s[:2,:])
+    PkPa = dot(P_kPa, jnp.ones(Tlk.shape))  # (ntime, jtot)
+    aphoto, gs_leaf_mole, gs_co2, gs_m_s, rstom = update_aphoto_gs(
+        aphoto, Aps, rd, rh_leaf, cs, Tlk, PkPa, gs_leaf_mole, gs_co2, gs_m_s, rstom
+    )
+    # jax.debug.print('gs_m_s-before quad-2: {a}', a=gs_m_s.mean(axis=0))
     # jax.debug.print('aphoto: {a}', a=aphoto[:2,:])
     # jax.debug.print('Iphoton: {a}', a=Iphoton[:2,:])
     # jax.debug.print('wc: {a}', a=wc[:2,:])
     # jax.debug.print('rd: {a}', a=rd[:2,:])
+
+    # Eliminate few conditions with negative conductance
+    @jnp.vectorize
+    def clean_negative_gs_leaf(gs_leaf_mole_e):
+        return jax.lax.cond(
+            gs_leaf_mole_e < 0, lambda: prm.bprime16, lambda: gs_leaf_mole_e
+        )
+
+    gs_leaf_mole = clean_negative_gs_leaf(gs_leaf_mole)
 
     # Correct the solution using quadratic method if necessary
     @jnp.vectorize
@@ -510,6 +557,7 @@ def leaf_ps(
         B_ps,
         dd,
     )
+    # jax.debug.print('gs_m_s: {a}', a=gs_m_s.mean(axis=0))
 
     ps = Ps(
         aphoto,

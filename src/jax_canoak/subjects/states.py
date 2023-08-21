@@ -166,6 +166,10 @@ class Veg(eqx.Module):
     Tsfc: Float_1D
     vpd: Float_1D
 
+    @property
+    def GPP(self):
+        return self.Ps + self.Rd
+
 
 class Lai(eqx.Module):
     lai: Float_1D
@@ -193,6 +197,29 @@ class Ps(eqx.Module):
     r: Float_2D
     rd: Float_2D
     rstom: Float_2D
+
+
+class Can(eqx.Module):
+    rnet_calc: Float_1D
+    rnet: Float_1D
+    LE: Float_1D
+    H: Float_1D
+    NEE: Float_1D
+    avail: Float_1D
+    gsoil: Float_1D
+    albedo_calc: Float_1D
+    nir_albedo_calc: Float_1D
+    nir_refl: Float_1D
+
+
+class Obs(eqx.Module):
+    LE: Float_1D
+    H: Float_1D
+    GPP: Float_1D
+    rnet: Float_1D
+    albedo: Float_1D
+    Fco2: Float_1D
+    gsoil: Float_1D
 
 
 class Soil(eqx.Module):
@@ -229,6 +256,7 @@ class Soil(eqx.Module):
     gsoil: Float_1D
     lout: Float_1D
     llout: Float_1D
+    resp: Float_1D
 
     @property
     def bulkdensity_kg_m3(self):
@@ -400,7 +428,7 @@ def update_profile(
     lai: Lai,
     dij: Float_2D,
 ) -> Prof:
-    from ..physics.carbon_fluxes import soil_respiration_alfalfa
+    # from ..physics.carbon_fluxes import soil_respiration_alfalfa
 
     nlayers = para.jtot
     Ps = (
@@ -427,10 +455,10 @@ def update_profile(
     # Compute scalar profiles
     # it needs information on source/sink, Dij, soil boundary flux and factor for units
     fact_heatcoef = met.air_density * para.Cp
-    soilflux = soil.heat  # assume soil heat flux is 20 W m-2 until soil sub is working
+    # soilflux = soil.heat # assume soil heat flux is 20 W m-2 until soil sub is working
     Tair_K = conc(
         H,
-        soilflux,
+        soil.heat,
         prof.delz,
         dij,
         met.ustar,
@@ -447,7 +475,7 @@ def update_profile(
     Told_K = Tair_K
 
     # Compute vapor pressure profiles
-    soilflux = soil.evap  # W m-2
+    # soilflux = soil.evap  # W m-2
     # in fConcMatrix fact.lecoef is in the denominator insteat of multiplier
     # if we divide W m -2 = J m-2 s-1 by Lambda we have g m-2 s-1
     # need to convert g to Pa
@@ -480,13 +508,13 @@ def update_profile(
     # soilflux=Rsoil.Respiration;
     # [prof.co2]=fConcMatrix(-prof.Ps,soilflux, prof.delz, Dij,met,met.CO2,prm,fact.co2)
     fact_co2 = (28.97 / 44.0) * met.air_density_mole
-    respiration = soil_respiration_alfalfa(
-        veg.Ps, soil.T_soil[:, 9], met.soilmoisture, met.zcanopy, veg.Rd, para
-    )
-    soilflux = respiration
+    # soil_resp = soil_respiration_alfalfa(
+    #     veg.Ps, soil.T_soil[:, 9], met.soilmoisture, met.zcanopy, veg.Rd, para
+    # )
+    # soilflux = soil_resp
     co2 = conc(
         -Ps,
-        soilflux,
+        soil.resp,
         prof.delz,
         dij,
         met.ustar,
@@ -894,6 +922,7 @@ def initialize_soil(
     # self.lout=jnp.zeros(setup.ntime)
     rnet = jnp.zeros(setup.ntime)
     gsoil = jnp.zeros(setup.ntime)
+    resp = jnp.zeros(setup.ntime)
     lout = para.epsigma * jnp.power(met.T_air_K, 4)  # initialization
     llout = lout
 
@@ -956,4 +985,5 @@ def initialize_soil(
         gsoil,
         lout,
         llout,
+        resp,
     )

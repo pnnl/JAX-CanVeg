@@ -102,6 +102,7 @@ def leaf_energy(
     # gw = (gb * radcan.gs) / (gb + radcan.gs)
     rwater = jax.lax.switch(setup.stomata, [rwater_hypo, rwater_amphi])
     gw = 1.0 / rwater
+    # jax.debug.print("gw: {a}", a=gw.mean(axis=0))
     # met.P_Pa=1000 * met.P_kPa   # air pressure, Pa
 
     # Compute products of air temperature, K
@@ -126,6 +127,9 @@ def leaf_energy(
     hcoef2 = 2 * hcoef
     repeat = hcoef2 + prm.epsigma8 * tk3
     llout2 = 2 * llout
+    # jax.debug.print("qin: {a}", a=qin.mean(axis=0))
+    # jax.debug.print("lecoef: {a}", a=lecoef.mean(axis=0))
+    # jax.debug.print("hcoef2: {a}", a=hcoef2.mean(axis=0))
     # jax.debug.print("qin: {a}", a=qin[:2,:])
     # jax.debug.print("Tair_K: {a}", a=prof.Tair_K[:2,:])
     # jax.debug.print("d2est: {a}", a=d2est[:2,:])
@@ -141,20 +145,20 @@ def leaf_energy(
         return Acoef, Bcoef, Ccoef
 
     def calculate_coef_amphi():
-        Acoef = lecoef * d2est / (2 * repeat)
+        Acoef = lecoef * d2est / (2.0 * repeat)
         Bcoef = (
             -repeat
             - lecoef * dest
-            - (qin / repeat) * (2 * Acoef)
-            + 2 * Acoef * (2.0 * llout / repeat)
+            - (qin / repeat) * (2.0 * Acoef)
+            + 2.0 * Acoef * (2.0 * llout / repeat)
         )
         Ccoef = (
             repeat * lecoef * vpd_Pa
             + lecoef * dest * (qin - llout2)
             + lecoef
             * d2est
-            / 2
-            * (qin * qin - 4 * qin * llout + 4 * llout * llout)
+            / 2.0
+            * (qin * qin - 4.0 * qin * llout + 4.0 * llout * llout)
             / repeat
         )
         return Acoef, Bcoef, Ccoef
@@ -162,9 +166,9 @@ def leaf_energy(
     Acoef, Bcoef, Ccoef = jax.lax.switch(
         setup.stomata, [calculate_coef_hypo, calculate_coef_amphi]
     )
-    # jax.debug.print("Acoef: {a}", a=Acoef[:2,:])
-    # jax.debug.print("Bcoef: {a}", a=Bcoef[:2,:])
-    # jax.debug.print("Ccoef: {a}", a=Ccoef[:2,:])
+    # jax.debug.print("Acoef: {a}", a=Acoef.mean(axis=0))
+    # jax.debug.print("Bcoef: {a}", a=Bcoef.mean(axis=0))
+    # jax.debug.print("Ccoef: {a}", a=Ccoef.mean(axis=0))
 
     #  solve for LE
     #  a LE^2 + bLE + c = 0
