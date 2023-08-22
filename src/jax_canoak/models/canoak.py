@@ -11,23 +11,22 @@ import equinox as eqx
 
 from typing import Tuple
 
-from jax_canoak.shared_utilities.types import Float_2D
+from ..shared_utilities.types import Float_2D
+from ..subjects import Para, Met, Prof, SunAng, LeafAng, SunShadedCan
+from ..subjects import Setup, Veg, Soil, Rnet, Qin, Ir, ParNir, Lai, Can
+from ..subjects import initialize_profile, initialize_model_states
 
-from jax_canoak.subjects import Para, Met, Prof, SunAng, LeafAng, SunShadedCan
-from jax_canoak.subjects import Setup, Veg, Soil, Rnet, Qin, Ir, ParNir, Lai, Can
-from jax_canoak.subjects import initialize_profile, initialize_model_states
-
-from jax_canoak.shared_utilities.utils import dot
-from jax_canoak.subjects import update_profile, calculate_veg
-from jax_canoak.physics import energy_carbon_fluxes
+from ..shared_utilities.utils import dot
+from ..subjects import update_profile, calculate_veg
+from ..physics import energy_carbon_fluxes
 
 # from jax_canoak.physics.energy_fluxes import rad_tran_canopy, sky_ir_v2
-from jax_canoak.physics.energy_fluxes import rad_tran_canopy, sky_ir
-from jax_canoak.physics.energy_fluxes import compute_qin, ir_rad_tran_canopy
-from jax_canoak.physics.energy_fluxes import uz, soil_energy_balance
-from jax_canoak.physics.energy_fluxes import diffuse_direct_radiation
-from jax_canoak.physics.carbon_fluxes import angle, leaf_angle
-from jax_canoak.physics.carbon_fluxes import soil_respiration_alfalfa
+from ..physics.energy_fluxes import rad_tran_canopy, sky_ir
+from ..physics.energy_fluxes import compute_qin, ir_rad_tran_canopy
+from ..physics.energy_fluxes import uz, soil_energy_balance
+from ..physics.energy_fluxes import diffuse_direct_radiation
+from ..physics.carbon_fluxes import angle, leaf_angle
+from ..physics.carbon_fluxes import soil_respiration_alfalfa
 
 
 def canoak(

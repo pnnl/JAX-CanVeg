@@ -17,14 +17,14 @@ from ..shared_utilities.types import Float_2D, Int_0D, Float_0D, Float_1D
 from .utils import es as fes
 from .utils import llambda, desdt, des2dt
 
-Mair_default = 28.97  # the molecular weight of air
-rugc_default = 8.314  # J mole-1 K-1
+Mair = 28.97  # the molecular weight of air
+rugc = 8.314  # J mole-1 K-1
 
 
 class Met(eqx.Module):
     # ntime: Int_0D
-    Mair: Float_0D
-    rugc: Float_0D
+    # Mair: Float_0D
+    # rugc: Float_0D
     zL: Float_1D
     day: Float_1D
     hhour: Float_1D
@@ -67,11 +67,11 @@ class Met(eqx.Module):
     @property
     def air_density(self):
         # air density, kg m-3
-        return self.P_kPa * self.Mair / (self.rugc * self.T_air_K)
+        return self.P_kPa * Mair / (rugc * self.T_air_K)
 
     @property
     def air_density_mole(self):
-        return 1000.0 * self.air_density / self.Mair
+        return 1000.0 * self.air_density / Mair
 
     @property
     def dest(self):
@@ -87,13 +87,7 @@ class Met(eqx.Module):
         return jnp.vectorize(llambda)(self.T_air_K)
 
 
-def initialize_met(
-    data: Float_2D,
-    ntime: Int_0D,
-    zL0: Float_1D,
-    Mair: Float_0D = Mair_default,
-    rugc: Float_0D = rugc_default,
-) -> Met:
+def initialize_met(data: Float_2D, ntime: Int_0D, zL0: Float_1D) -> Met:
     assert ntime == data.shape[0]
     day = jnp.array(data[:, 0])  # day of year
     hhour = jnp.array(data[:, 1])  # hour
@@ -118,13 +112,13 @@ def initialize_met(
 
     # Convert the following int and float to jax.ndarray
     # ntime = jnp.array(ntime)
-    Mair = jnp.array(Mair)
-    rugc = jnp.array(rugc)
+    # Mair = jnp.array(Mair)
+    # rugc = jnp.array(rugc)
 
     met = Met(
         # ntime,
-        Mair,
-        rugc,
+        # Mair,
+        # rugc,
         zL0,
         day,
         hhour,

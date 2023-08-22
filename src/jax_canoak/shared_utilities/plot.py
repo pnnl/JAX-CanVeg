@@ -222,6 +222,22 @@ def plot_daily(met, soil, veg, prm, axes=None):
     ax.legend()
 
 
+def plot_obs_1to1(obs, can, lim, varn="varn", ax=None):
+    # ------ Obs versus can ------
+    if ax is None:
+        fig, ax = plt.subplots(1, 1, figsize=(5, 5))
+    l2 = jnp.mean((obs - can) ** 2)
+    ax.scatter(obs, can)
+    ax.plot(lim, lim, "k--")
+    ax.set(
+        xlim=lim,
+        ylim=lim,
+        xlabel="Measured",
+        ylabel="Simulated",
+        title=f"{varn} (L2: {l2:.3f})",
+    )
+
+
 def plot_obs_comparison(obs, can, axes=None):
     # ------ Obs versus can ------
     if axes is None:
@@ -229,33 +245,13 @@ def plot_obs_comparison(obs, can, axes=None):
     LE_lim, H_lim = [-10, 750], [-220, 400]
     rnet_lim, gsoil_lim = [-50, 800], [-60, 70]
     ax = axes[0, 0]
-    ax.scatter(obs.LE, can.LE)
-    ax.plot(LE_lim, LE_lim, "k--")
-    ax.set(xlim=LE_lim, ylim=LE_lim, xlabel="Measured", ylabel="Simulated", title="LE")
+    plot_obs_1to1(obs.LE, can.LE, LE_lim, varn="LE", ax=ax)
     ax = axes[0, 1]
-    ax.scatter(obs.H, can.H)
-    ax.plot(H_lim, H_lim, "k--")
-    ax.set(xlim=H_lim, ylim=H_lim, xlabel="Measured", ylabel="Simulated", title="H")
+    plot_obs_1to1(obs.H, can.H, H_lim, varn="H", ax=ax)
     ax = axes[1, 0]
-    ax.scatter(obs.rnet, can.rnet)
-    ax.plot(rnet_lim, rnet_lim, "k--")
-    ax.set(
-        xlim=rnet_lim,
-        ylim=rnet_lim,
-        xlabel="Measured",
-        ylabel="Simulated",
-        title="Rnet",
-    )
+    plot_obs_1to1(obs.rnet, can.rnet, rnet_lim, varn="Rnet", ax=ax)
     ax = axes[1, 1]
-    ax.scatter(obs.gsoil, can.gsoil)
-    ax.plot(gsoil_lim, gsoil_lim, "k--")
-    ax.set(
-        xlim=gsoil_lim,
-        ylim=gsoil_lim,
-        xlabel="Measured",
-        ylabel="Simulated",
-        title="Gsoil",
-    )
+    plot_obs_1to1(obs.gsoil, can.gsoil, gsoil_lim, varn="Gsoil", ax=ax)
 
 
 def plot_obs_energy_closure(obs, ax=None):
