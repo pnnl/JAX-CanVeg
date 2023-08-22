@@ -34,7 +34,7 @@ pip install --upgrade "jax[cuda11_pip]" -f https://storage.googleapis.com/jax-re
 pip install equinox diffrax optax pre-commit
 ```
 
-5. Compile the C++ code for generating dispersion matrix (make sure you have a suitable compiler installed):
+5. Compile [the C++ code](./src/jax_canoak/physics/energy_fluxes/DispersionMatrix.cpp) with [pybind11](https://github.com/pybind/pybind11) for generating dispersion matrix (make sure you have a suitable compiler installed):
 ```
 cd ./src/jax_canoak/physics/energy_fluxes/
 
