@@ -46,7 +46,7 @@ meas_ht = 5.0
 n_hr_per_day = 48
 lai = 5.0
 niter = 15
-f_forcing = "../../../data/fluxtower/Alf/AlfBouldinMetInput.csv"
+f_forcing = "../data/fluxtower/Alf/AlfBouldinMetInput.csv"
 
 
 # ---------------------------------------------------------------------------- #
@@ -78,7 +78,7 @@ setup, para = initialize_parameters(
 #                     Generate or read the Dispersion matrix                   #
 # ---------------------------------------------------------------------------- #
 # dij = get_dispersion_matrix(setup, para)
-dij = get_dispersion_matrix(setup, para, "../../../data/dij/Dij_Alfalfa.csv")
+dij = get_dispersion_matrix(setup, para, "../data/dij/Dij_Alfalfa.csv")
 
 
 # ---------------------------------------------------------------------------- #
