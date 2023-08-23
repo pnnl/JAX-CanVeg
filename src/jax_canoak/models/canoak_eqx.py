@@ -45,3 +45,7 @@ class CanoakBase(eqx.Module):
         soil_mtime, niter = setup.soil_mtime, setup.niter
         results = canoak(para, setup, met, dij, soil_mtime, niter)
         return results
+
+    def get_can_rnet(self, met: Met):
+        results = self(met)
+        return results[-1].rnet
