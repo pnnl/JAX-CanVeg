@@ -15,9 +15,10 @@ start, end = "2018-01-01 00:00:00", "2020-10-01 12:00:00"
 ########################################################################
 # dir_data = Path('.')
 dir_data = Path(
-    "/Users/jian449/Library/CloudStorage/OneDrive-PNNL/Codes/jax-watershed/src/jax_canoak/shared_utilities/forcings"
+    # "/Users/jian449/Library/CloudStorage/OneDrive-PNNL/Codes/jax-watershed/src/jax_canoak/shared_utilities/forcings"
+    "../../../../data"
 )
-f_obs = dir_data / "AlfMetInput.csv"
+f_obs = dir_data / "fluxtower" / "Alf" / "AlfMetInput.csv"
 df_obs = pd.read_csv(f_obs)
 df_obs["year"] = 2018
 df_obs.index = pd.to_datetime(
@@ -32,7 +33,7 @@ df_obs["LAI"] = 4.0
 ########################################################################
 # Turbulance divergence data
 ########################################################################
-f_div = dir_data / "AlfDIJ5000.csv"
+f_div = dir_data / "dij" / "Alf" / "AlfDIJ5000.csv"
 df_div = pd.read_csv(f_div, header=None)
 divergence = df_div.iloc[:, 0].values.reshape([30, 150]).T
 divergence = jnp.array(divergence)

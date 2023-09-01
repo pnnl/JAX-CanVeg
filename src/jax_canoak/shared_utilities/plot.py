@@ -28,7 +28,13 @@ figsize_2_2 = (10, 10)
 
 # Plotting functions
 def plot_timeseries(
-    array, timesteps=None, ax=None, title=None, label=None, tunit="[day of year]"
+    array,
+    timesteps=None,
+    ax=None,
+    title=None,
+    label=None,
+    tunit="[day of year]",
+    xticks=None,
 ):
     if ax is None:
         fig, ax = plt.subplots(1, 1, figsize=figsize_1b)
@@ -36,7 +42,20 @@ def plot_timeseries(
         ax.plot(array, label=label)
     else:
         ax.plot(timesteps, array, label=label)
-    ax.set(xlabel=f"Time {tunit}", title=title)
+    if xticks is None:
+        ax.set(
+            xlabel=f"Time {tunit}",
+            title=title,
+            xlim=[timesteps[0], timesteps[-1]] if timesteps is not None else None,
+        )
+    else:
+        ax.set(
+            xlabel=f"Time {tunit}",
+            title=title,
+            xlim=[timesteps[0], timesteps[-1]] if timesteps is not None else None,
+            xticks=xticks,
+        )
+    # ax.set_xticklabels(ax.get_xticklabels(), rotation=15, ha='right')
     return ax
 
 
@@ -50,7 +69,8 @@ def plot_imshow(
     tunit="[day of year]",
     is_canopy=True,
 ):
-    times = get_time_doy(met)
+    # times = get_time_doy(met)
+    times = get_time(met)
     if is_canopy:
         extent = [times[0], times[-1], verticals[0], verticals[-1]]
         origin = "lower"
@@ -78,7 +98,8 @@ def plot_imshow(
     else:
         ax1, ax2, axbar = axes[0], axes[1], axes[2]
     im = ax1.imshow(array, extent=extent, origin=origin, cmap=cmap, aspect="auto")
-    ax1.set(xlabel=f"Time {tunit}", ylabel=ylabel, title=title)
+    ax1.set(ylabel=ylabel, title=title)
+    ax1.set_xticklabels(ax1.get_xticklabels(), rotation=15, ha="right")
     plt.colorbar(im, cax=axbar, orientation="horizontal")
     # mean = compute_daily_average(array.mean(axis=0), met.hhour)
     if is_canopy:
@@ -100,7 +121,8 @@ def plot_imshow2(
     tunit="[day of year]",
     is_canopy=True,
 ):
-    times = get_time_doy(met)
+    # times = get_time_doy(met)
+    times = get_time(met)
     if axes is None:
         fig = plt.figure(figsize=(12, 8))
         gs = fig.add_gridspec(
@@ -113,10 +135,10 @@ def plot_imshow2(
             bottom=0.1,
             top=0.9,
             wspace=0.1,
-            hspace=0.5,
+            hspace=0.4,
         )
         ax0 = fig.add_subplot(gs[0, 0])
-        ax1 = fig.add_subplot(gs[1, 0], sharex=ax0)
+        ax1 = fig.add_subplot(gs[1, 0])
         ax2 = fig.add_subplot(gs[1, 1], sharey=ax1)
         axbar = fig.add_subplot(gs[2, 0])
         axes_imshow = [ax1, ax2, axbar]
@@ -131,7 +153,9 @@ def plot_imshow2(
         met_array, met_title = met.CO2, "Air CO2 [ppm]"
     else:
         raise Exception(f"Unknown key: {key}")
-    plot_timeseries(met_array, times, ax=ax0, title=met_title, tunit="[day of year]")
+    plot_timeseries(
+        met_array, times, ax=ax0, title=met_title, tunit="[day of year]", xticks=[]
+    )
     ax0.set(xlabel=None)
     plot_imshow(
         array,
@@ -162,7 +186,9 @@ def plot_obs_1to1(obs, can, lim, varn="varn", ax=None):
     return ax
 
 
-def plot_timeseries_obs_1to1(obs, sim, lim, timesteps=None, varn="varn", axes=None):
+def plot_timeseries_obs_1to1(
+    obs, sim, lim, met=None, timesteps=None, varn="varn", axes=None
+):
     if axes is None:
         fig = plt.figure(figsize=(15, 5))
         gs = fig.add_gridspec(
@@ -180,6 +206,8 @@ def plot_timeseries_obs_1to1(obs, sim, lim, timesteps=None, varn="varn", axes=No
         ax2 = fig.add_subplot(gs[0, 1], sharey=ax1)
     else:
         ax1, ax2 = axes[0], axes[1]
+    if met is not None:
+        timesteps = get_time(met)
     plot_timeseries(obs, timesteps=timesteps, ax=ax1, title=None, label="observation")
     plot_timeseries(sim, timesteps=timesteps, ax=ax1, title=None, label="simulation")
     ax1.legend()
@@ -481,7 +509,7 @@ def plot_daily(met, soil, veg, prm, axes=None, wspace=0.5, hspace=0.0):
     ax.plot(Rnet_mean.index, Rnet_mean.values, label="Rnet")
     ax.plot(LE_mean.index, LE_mean.values, label="LE")
     ax.plot(H_mean.index, H_mean.values, label="H")
-    ax.plot(G_mean.index, G_mean.values, label="G")
+    ax.plot(G_mean.index, G_mean.values, "k", label="G")
     ax.set(xlabel="Hr", ylabel="Energy fluxes [W m-2]")
     ax.legend()
 
@@ -532,3 +560,19 @@ def compute_daily_average(values, hhours):
 def get_time_doy(met):
     day, hour = met.day, met.hhour / 24.0
     return day + hour
+
+
+def get_time(met):
+    yr, day, hour = met.year, met.day, met.hhour
+    df = pd.DataFrame(jnp.array([yr, day, hour]).T, columns=["yr", "day", "hr"])
+    df["yr"] = df["yr"].astype(int)
+    df["day"] = df["day"].astype(int)
+    # date = pd.to_datetime(df[['yr', 'day']].assign(month=1, day=1)) + \
+    #    pd.to_timedelta(df['hr'], unit='h')
+    # Create a date string column in 'YYYY-DDD' format
+    date_str = df["yr"].astype(str) + "-" + df["day"].astype(str).str.zfill(3)
+    # Convert the date string column into datetime
+    parsed_date = pd.to_datetime(date_str, format="%Y-%j") + pd.to_timedelta(
+        df["hr"], unit="h"
+    )
+    return parsed_date.values

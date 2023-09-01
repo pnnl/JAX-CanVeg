@@ -1,3 +1,6 @@
+import requests
+from statistics import mean
+import pandas as pd
 import jax.numpy as jnp
 
 from typing import Tuple
@@ -5,6 +8,86 @@ from .point_data import PointData
 from ..types import Float_0D
 
 from ..constants import bprime, mass_air, rugc, cp
+
+
+def get_modis(
+    site: str,
+    start: str,
+    end: str,
+    network: str = "AMERIFLUX",
+    product: str = "MCD15A3H",
+    sample_freq: str = "D",
+) -> pd.core.frame.DataFrame:
+    modis_baseurl = "https://modis.ornl.gov/rst/api/v1/"
+    urlheader_txt = {"Accept": "text/csv"}
+    urlheader_json = {"Accept": "json"}
+
+    # Query the dates in the MODIS product
+    query = "".join([modis_baseurl, product, f"/{network}/", site, "/dates"])
+    response = requests.get(query, headers=urlheader_txt)
+    dates = response.text.split(",")
+
+    # Query the product data
+    query = "".join(
+        [
+            modis_baseurl,
+            product,
+            "/AMERIFLUX/",
+            site,
+            "/subset?",
+            "&startDate=",
+            dates[0],
+            "&endDate=",
+            dates[-1],
+        ]
+    )
+    response = requests.get(query, headers=urlheader_json)
+    data_json = response.json()
+
+    # Get LAI, FparLai_QC, and Fpar_500m
+    nt = int(len(data_json["subset"]) / 6)
+    # time_set, lai_set, fpar_set, qc_set = [], [], [], []
+    time_set, lai_set, fpar_set = [], [], []
+    for i in range(nt):
+        lai = data_json["subset"][i * 6 + 5]
+        fpar = data_json["subset"][i * 6 + 3]
+        qc = data_json["subset"][i * 6 + 1]
+        assert lai["calendar_date"] == qc["calendar_date"]
+        assert fpar["calendar_date"] == qc["calendar_date"]
+        assert lai["band"] == "Lai_500m"
+        assert fpar["band"] == "Fpar_500m"
+        assert qc["band"] == "FparLai_QC"
+
+        # Calculate the mean of lai and fpar on the valid data
+        time = lai["calendar_date"]
+        lai, fpar, qc = lai["data"], fpar["data"], qc["data"]
+        lai = [l for l in lai if (l >= 0) and (l <= 100)]  # noqa: E741
+        fpar = [l for l in fpar if (l >= 0) and (l <= 100)]  # noqa: E741
+
+        # if time=='2016-01-05':
+        #     print(qc)
+
+        if (len(lai) == 0) or (len(fpar) == 0):
+            continue
+        else:
+            lai, fpar = mean(lai), mean(fpar)
+            if lai == 0:
+                continue
+
+        # Append them to the sets
+        time_set.append(time)
+        lai_set.append(lai)
+        fpar_set.append(fpar)
+
+    # Convert it to pandas dataframe
+    df_modis = pd.DataFrame(
+        jnp.array([lai_set, fpar_set]).T, index=time_set, columns=["LAI", "FPAR"]
+    )
+    df_modis.index = pd.to_datetime(df_modis.index, format="%Y-%m-%d")
+    df_modis = df_modis.resample(sample_freq).interpolate()
+    df_modis = df_modis[start:end]
+
+    return df_modis
 
 
 def get_input_t(forcings: PointData, t: Float_0D) -> Tuple:

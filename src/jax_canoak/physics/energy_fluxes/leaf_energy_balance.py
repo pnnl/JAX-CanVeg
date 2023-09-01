@@ -91,7 +91,11 @@ def leaf_energy(
     gb = 1.0 / boundary_layer_res.vapor
 
     def rwater_hypo():
-        return (gb * radcan.gs) / (gb + radcan.gs)
+        return (gb + radcan.gs) / (gb * radcan.gs)
+        # return (gb + 0.0005) / (gb * 0.0005)
+
+    # jax.debug.print("gb: {x}", x=gb.mean())
+    # jax.debug.print("radcan.gs: {x}", x=radcan.gs.mean())
 
     def rwater_amphi():
         # gs_1side = radcan.gs/2.
@@ -137,8 +141,10 @@ def leaf_energy(
 
     # coefficients analytical solution
     def calculate_coef_hypo():
+        # TODO:
         Acoef1 = lecoef * d2est / (2.0 * repeat)
         Acoef = Acoef1 / 2.0
+        # Acoef = lecoef * d2est / (2.0 * repeat)
         Bcoef = -repeat - lecoef * dest + Acoef * (-2.0 * qin + 4.0 * llout)
         Ccoef = Acoef * (qin * qin - 4 * qin * llout + 4 * llout * llout) + lecoef * (
             vpd_Pa * repeat + dest * (qin - 2 * llout)
@@ -179,8 +185,27 @@ def leaf_energy(
     le2 = (-Bcoef - jnp.sqrt(product)) / (2.0 * Acoef)
     # jax.debug.print("{a}", a=product.mean(axis=1))
     LE = jnp.real(le2)
-    del_Tk = (qin - LE - llout2) / repeat
-    # del_Tk -= 0.2
+
+    # Solve for leaf temperature
+    # C++ --
+    atlf = prm.epsigma12 * tk2 + d2est * lecoef / 2.0
+    btlf = prm.epsigma8 * tk3 + hcoef2 + lecoef * dest
+    ctlf = -qin + 2 * llout + lecoef * vpd_Pa
+    product = btlf * btlf - 4 * atlf * ctlf
+
+    @jnp.vectorize
+    def calculate_del_Tk(atlf_e, btlf_e, product_e):
+        return jax.lax.cond(
+            product_e >= 0.0,
+            lambda: (-btlf_e + jnp.sqrt(product_e)) / (2 * atlf_e),
+            lambda: 0.0,
+        )
+
+    del_Tk = calculate_del_Tk(atlf, btlf, product)
+
+    # #  Matlab ---
+    # del_Tk = (qin - LE - llout2) / repeat
+
     Tsfc_K = prof.Tair_K[:, :jtot] + del_Tk
     # Tsfc_K = prof.Tair_K[:, : prm.nlayers] + del_Tk
     # jax.debug.print("qin: {a}", a=qin.mean(axis=0))

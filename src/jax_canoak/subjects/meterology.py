@@ -26,6 +26,7 @@ class Met(eqx.Module):
     # Mair: Float_0D
     # rugc: Float_0D
     zL: Float_1D
+    year: Float_1D
     day: Float_1D
     hhour: Float_1D
     T_air: Float_1D
@@ -89,20 +90,21 @@ class Met(eqx.Module):
 
 def initialize_met(data: Float_2D, ntime: Int_0D, zL0: Float_1D) -> Met:
     assert ntime == data.shape[0]
-    day = jnp.array(data[:, 0])  # day of year
-    hhour = jnp.array(data[:, 1])  # hour
+    year = jnp.array(data[:, 0])  # day of year
+    day = jnp.array(data[:, 1])  # day of year
+    hhour = jnp.array(data[:, 2])  # hour
     # self.T_air_K = jnp.array(data[:, 2]) + 273.15  # air temperature, K
-    T_air = jnp.array(data[:, 2])  # air temperature, degC
-    rglobal = jnp.array(data[:, 3])  # global shortwave radiation, W m-2
-    eair = jnp.array(data[:, 4])  # vapor pressure, kPa
-    wind = jnp.array(data[:, 5])  # wind velocity, m/s
-    CO2 = jnp.array(data[:, 6])  # CO2, ppm
-    P_kPa = jnp.array(data[:, 7])  # atmospheric pressure, kPa
-    ustar = jnp.array(data[:, 8])  # friction velocity, m/s
-    Tsoil = jnp.array(data[:, 9])  # soil temperature, C...16 cm
-    soilmoisture = jnp.array(data[:, 10])  # soil moisture, fraction
-    zcanopy = jnp.array(data[:, 11])  # aerodynamic canopy height
-    lai = jnp.array(data[:, 12])  # leaf area index [-]
+    T_air = jnp.array(data[:, 3])  # air temperature, degC
+    rglobal = jnp.array(data[:, 4])  # global shortwave radiation, W m-2
+    eair = jnp.array(data[:, 5])  # vapor pressure, kPa
+    wind = jnp.array(data[:, 6])  # wind velocity, m/s
+    CO2 = jnp.array(data[:, 7])  # CO2, ppm
+    P_kPa = jnp.array(data[:, 8])  # atmospheric pressure, kPa
+    ustar = jnp.array(data[:, 9])  # friction velocity, m/s
+    Tsoil = jnp.array(data[:, 10])  # soil temperature, C...16 cm
+    soilmoisture = jnp.array(data[:, 11])  # soil moisture, fraction
+    zcanopy = jnp.array(data[:, 12])  # aerodynamic canopy height
+    lai = jnp.array(data[:, 13])  # leaf area index [-]
 
     # Some operations to ensure stability
     wind = jnp.clip(wind, a_min=0.75)
@@ -120,6 +122,7 @@ def initialize_met(data: Float_2D, ntime: Int_0D, zL0: Float_1D) -> Met:
         # Mair,
         # rugc,
         zL0,
+        year,
         day,
         hhour,
         T_air,
@@ -149,7 +152,7 @@ def get_met_forcings(f_forcing: str, lai: Optional[Float_0D] = None) -> Tuple[Me
     # Set up the lai if not None
     if lai is not None:
         forcing_data = jnp.concatenate(
-            [forcing_data, jnp.ones([n_time, 1]) * lai], axis=1
+            [forcing_data[:, :12], jnp.ones([n_time, 1]) * lai], axis=1
         )
     # Initialize the met instance
     met = initialize_met(forcing_data, n_time, zl0)

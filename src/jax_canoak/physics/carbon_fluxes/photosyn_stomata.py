@@ -346,6 +346,7 @@ def leaf_ps(
     root = root.sort(axis=0)
     minroot, midroot, maxroot = root[0], root[1], root[2]
     # find out where roots plop down relative to the x-y axis
+    # TODO:
     @jnp.vectorize
     def get_aphoto(minr, midr, maxr):
         conds = jnp.array(
@@ -353,15 +354,24 @@ def leaf_ps(
                 (minr > 0.0) & (midr > 0.0) & (maxr > 0.0),
                 (minr < 0.0) & (midr < 0.0) & (maxr > 0.0),
                 (minr < 0.0) & (midr > 0.0) & (maxr > 0.0),
+                # The following conditions are added by Peishi --
+                (minr < 0.0) & (midr < 0.0) & (maxr < 0.0),
             ]
         )
         index = jnp.where(conds, size=1)[0][0]
-        return jax.lax.switch(index, [lambda: minr, lambda: maxr, lambda: midr])
+        return jax.lax.switch(
+            index, [lambda: minr, lambda: maxr, lambda: midr, lambda: maxr]
+        )
 
     aphoto = get_aphoto(minroot, midroot, maxroot)
     aphoto = aphoto - rd
     # also test for sucrose limitation of photosynthesis, as suggested by
     # Collatz.  Js=Vmax/2
+    # jax.debug.print('aphoto: {a}', a=aphoto[18950, 28:36])
+    # jax.debug.print('rd: {a}', a=rd[18950, 28:36])
+    # jax.debug.print('minroot: {a}', a=minroot[18950, 28:36])
+    # jax.debug.print('midroot: {a}', a=midroot[18950, 28:36])
+    # jax.debug.print('maxroot: {a}', a=maxroot[18950, 28:36])
     j_sucrose = vcmax / 2.0 - rd
 
     @jnp.vectorize
@@ -377,22 +387,19 @@ def leaf_ps(
     cs = jax.lax.switch(
         setup.stomata,
         [
-            lambda: cca - aphoto / gb_mole,  # hypostomatous = 1
-            lambda: cca - aphoto / (2 * gb_mole),  # amphistomatous = 2
+            lambda: cca - aphoto / gb_mole,  # hypostomatous = 0
+            lambda: cca - aphoto / (2 * gb_mole),  # amphistomatous = 1
         ],
     )
     rh_leaf = jnp.clip(rh_leaf, a_max=1.0)
     # TODO: the following should be computed after aphoto is corrected based on Aps
-    gs_leaf_mole = (prm.kball * rh_leaf * aphoto / cs) + prm.bprime
-    gs_co2 = gs_leaf_mole / 1.6
     # Stomatal conductance is mol m-2 s-1
     # convert back to resistance (s/m) for energy balance routine
     # gs_m_s = gs_leaf_mole * Tlk * 101.3* 0.022624 /(273.15 * P_kPa)
+    gs_leaf_mole = (prm.kball * rh_leaf * aphoto / cs) + prm.bprime
     gs_m_s = gs_leaf_mole * Tlk * pstat273
     rstom = 1.0 / gs_m_s
-    # jax.debug.print('rh_leaf: {a}', a=rh_leaf[:2,:])
-    # jax.debug.print('aphoto: {a}', a=aphoto[:2,:])
-    # jax.debug.print('cs: {a}', a=cs[:2,:])
+    gs_co2 = gs_leaf_mole / 1.6
     ci = cs - aphoto / gs_co2
     # recompute wj and wc with ci
     wj = j_photon * (ci - dd) / (4.0 * ci + b8_dd)
@@ -430,18 +437,26 @@ def leaf_ps(
         aphoto_e_new = Aps_e - rd_e
         gs_leaf_mole_e_new = (
             prm.kball * rh_leaf_e * aphoto_e_new / cs_e
-        ) / 1.6 + prm.bprime16
+        ) / 1.0 + prm.bprime
+        # ) / 1.6 + prm.bprime16
+        gs_co2_e = gs_leaf_mole_e_new / 1.6
         gs_m_s_e_new = (
-            1.6 * gs_leaf_mole_e_new * tlk_e * 101.3 * 0.022624 / (273.15 * PkPa_e)
+            gs_leaf_mole_e_new
+            * tlk_e
+            * 101.3
+            * 0.022624
+            / (273.15 * PkPa_e)
+            # 1.6 * gs_leaf_mole_e_new * tlk_e * 101.3 * 0.022624 / (273.15 * PkPa_e)
         )
+        rstom_e = 1.0 / gs_m_s_e_new
         return jax.lax.cond(
             tst,
             lambda: (
                 aphoto_e_new,
                 gs_leaf_mole_e_new,
-                gs_leaf_mole_e_new,
+                gs_co2_e,
                 gs_m_s_e_new,
-                gs_m_s_e_new,
+                rstom_e,
             ),
             lambda: (aphoto_e, gs_leaf_mole_e, gs_co2_e, gs_m_s_e, rstom_e),
         )
@@ -451,7 +466,9 @@ def leaf_ps(
         aphoto, Aps, rd, rh_leaf, cs, Tlk, PkPa, gs_leaf_mole, gs_co2, gs_m_s, rstom
     )
     # jax.debug.print('gs_m_s-before quad-2: {a}', a=gs_m_s.mean(axis=0))
-    # jax.debug.print('aphoto: {a}', a=aphoto[:2,:])
+    # jax.debug.print('aphoto: {a}', a=aphoto[18950, :36])
+    # jax.debug.print('rd: {a}', a=rd[18950, :36])
+    # jax.debug.print('Aps: {a}', a=Aps[18950, :36])
     # jax.debug.print('Iphoton: {a}', a=Iphoton[:2,:])
     # jax.debug.print('wc: {a}', a=wc[:2,:])
     # jax.debug.print('rd: {a}', a=rd[:2,:])
