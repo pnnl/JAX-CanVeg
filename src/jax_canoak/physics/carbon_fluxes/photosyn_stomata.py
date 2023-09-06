@@ -326,7 +326,8 @@ def leaf_ps(
     # Peishi made some value checks to make sure numerical stability
     qqq = jnp.clip(qqq, a_min=0.01)  # Added by Peishi..
     arg_U = R / jnp.sqrt(qqq)
-    arg_U = jnp.clip(arg_U, a_min=-1, a_max=1)  # Added by Peishi..
+    # arg_U = jnp.clip(arg_U, a_min=-1, a_max=1)  # Added by Peishi..
+    arg_U = jnp.clip(arg_U, a_min=-0.99, a_max=0.99)  # Added by Peishi..
     ang_L = jnp.arccos(arg_U)
     Q = jnp.clip(Q, a_min=0.01)  # Added by Peishi..
     sqrtQ = jnp.sqrt(Q)
