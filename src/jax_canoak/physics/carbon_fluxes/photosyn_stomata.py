@@ -15,7 +15,7 @@ import jax.numpy as jnp
 
 from typing import Tuple
 from ...shared_utilities.types import Float_2D, Float_1D, Float_0D
-from ...subjects import Setup, Para, Ps
+from ...subjects import Para, Ps
 from ...subjects.utils import es
 
 from ...shared_utilities.utils import dot, add
@@ -31,7 +31,7 @@ def leaf_ps(
     P_kPa: Float_1D,
     eair_Pa: Float_2D,
     prm: Para,
-    setup: Setup,
+    stomata: int,
 ) -> Ps:
     """This program solves a cubic equation to calculate
           leaf photosynthesis.  This cubic expression is derived from solving
@@ -257,7 +257,7 @@ def leaf_ps(
         return alpha_ps, bbeta, gamma, theta_ps
 
     alpha_ps, bbeta, gamma, theta_ps = jax.lax.switch(
-        setup.stomata,
+        stomata,
         [
             cubic_coef_hypo,  # hypostomatous = 0
             cubic_coef_amphi,  # amphistomatous = 1
@@ -322,8 +322,13 @@ def leaf_ps(
     rr = R * R
     qqq = Q * Q * Q
     tstroots = qqq - rr
+
+    # Peishi made some value checks to make sure numerical stability
+    qqq = jnp.clip(qqq, a_min=0.01)  # Added by Peishi..
     arg_U = R / jnp.sqrt(qqq)
+    arg_U = jnp.clip(arg_U, a_min=-1, a_max=1)  # Added by Peishi..
     ang_L = jnp.arccos(arg_U)
+    Q = jnp.clip(Q, a_min=0.01)  # Added by Peishi..
     sqrtQ = jnp.sqrt(Q)
 
     @jnp.vectorize
@@ -385,7 +390,7 @@ def leaf_ps(
     # alfalfa is amphistomatous...be careful on where the factor of two is applied
     # just did on LE on energy balance..dont want to double count
     cs = jax.lax.switch(
-        setup.stomata,
+        stomata,
         [
             lambda: cca - aphoto / gb_mole,  # hypostomatous = 0
             lambda: cca - aphoto / (2 * gb_mole),  # amphistomatous = 1

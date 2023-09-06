@@ -9,11 +9,13 @@ import jax
 import jax.numpy as jnp
 import equinox as eqx
 
+# from functools import partial
+
 from typing import Tuple
 
-from ..shared_utilities.types import Float_2D
+from ..shared_utilities.types import Float_0D, Float_2D
 from ..subjects import Para, Met, Prof, SunAng, LeafAng, SunShadedCan
-from ..subjects import Setup, Veg, Soil, Rnet, Qin, Ir, ParNir, Lai, Can
+from ..subjects import Veg, Soil, Rnet, Qin, Ir, ParNir, Lai, Can
 from ..subjects import initialize_profile, initialize_model_states
 
 from ..shared_utilities.utils import dot
@@ -29,13 +31,25 @@ from ..physics.carbon_fluxes import angle, leaf_angle
 from ..physics.carbon_fluxes import soil_respiration_alfalfa
 
 
+# @eqx.filter_jit
 def canoak(
     para: Para,
-    setup: Setup,
     met: Met,
     dij: Float_2D,
+    # Location parameters
+    lat_deg: Float_0D,
+    long_deg: Float_0D,
+    time_zone: int,
+    # Static parameters
+    leafangle: int,
+    stomata: int,
+    n_can_layers: int,
+    n_total_layers: int,
+    n_soil_layers: int,
+    ntime: int,
+    dt_soil: int,
     soil_mtime: int,
-    niter: int = 15,
+    niter: int,
 ) -> Tuple[
     Met,
     Prof,
@@ -53,28 +67,33 @@ def canoak(
     Veg,
     Can,
 ]:
+    jtot, jtot_total = n_can_layers, n_total_layers
+    # ntime, jtot, jtot_total = met.zL.size, setup.n_can_layers, setup.n_total_layers
+    # dt_soil, soil_mtime = setup.dt_soil, setup.soil_mtime
+    # n_soil_layers = setup.n_soil_layers
+    # z = jnp.zeros(jtot)
+
     # ---------------------------------------------------------------------------- #
     #                     Initialize profiles of scalars/sources/sinks             #
     # ---------------------------------------------------------------------------- #
-    prof = initialize_profile(met, para, setup)
-    ntime, jtot = prof.H.shape
+    prof = initialize_profile(met, para, ntime, jtot, jtot_total)
 
     # ---------------------------------------------------------------------------- #
     #                     Initialize model states                        #
     # ---------------------------------------------------------------------------- #
     soil, quantum, nir, ir, qin, rnet, sun, shade, veg, lai = initialize_model_states(
-        met, para, setup
+        met, para, ntime, jtot, dt_soil, soil_mtime, n_soil_layers
     )
 
     # ---------------------------------------------------------------------------- #
     #                     Compute sun angles                                       #
     # ---------------------------------------------------------------------------- #
-    sun_ang = angle(setup.lat_deg, setup.long_deg, setup.time_zone, met.day, met.hhour)
+    sun_ang = angle(lat_deg, long_deg, time_zone, met.day, met.hhour)
 
     # ---------------------------------------------------------------------------- #
     #                     Compute leaf angle                                       #
     # ---------------------------------------------------------------------------- #
-    leaf_ang = leaf_angle(sun_ang, para, setup, lai)
+    leaf_ang = leaf_angle(sun_ang, para, leafangle, lai)
 
     # ---------------------------------------------------------------------------- #
     #                     Compute direct and diffuse radiations                    #
@@ -139,7 +158,7 @@ def canoak(
 
         # Update canopy wind profile with iteration of z/l and use in boundary layer
         # resistance computations
-        wind = uz(met, para, setup.n_can_layers)
+        wind = uz(met, para, jtot)
         prof = eqx.tree_at(lambda t: t.wind, prof, wind)
 
         # Compute IR fluxes with Bonan's algorithms of Norman model
@@ -153,7 +172,7 @@ def canoak(
         # and delta T, in case convection occurs
         # Different coefficients will be assigned if amphistomatous or hypostomatous
         sun, shade = energy_carbon_fluxes(
-            sun, shade, qin, quantum, met, prof, para, setup
+            sun, shade, qin, quantum, met, prof, para, stomata
         )
 
         # Compute soil fluxes
@@ -195,6 +214,56 @@ def canoak(
 
     met, prof, ir, qin, sun, shade, soil, veg = finals
 
+    # # Update canopy wind profile with iteration of z/l and use in boundary layer
+    # # resistance computations
+    # wind = uz(met, para, jtot)
+    # prof = eqx.tree_at(lambda t: t.wind, prof, wind)
+
+    # # Compute IR fluxes with Bonan's algorithms of Norman model
+    # ir = ir_rad_tran_canopy(leaf_ang, ir, quantum, soil, sun, shade, para)
+
+    # # Incoming short and longwave radiation
+    # qin = compute_qin(quantum, nir, ir, para, qin)
+
+    # # Compute energy fluxes for H, LE, gs, A on Sun and Shade leaves
+    # # Compute new boundary layer conductances based on new leaf energy balance
+    # # and delta T, in case convection occurs
+    # # Different coefficients will be assigned if amphistomatous or hypostomatous
+    # sun, shade = energy_carbon_fluxes(
+    #     sun, shade, qin, quantum, met, prof, para, stomata
+    # )
+
+    # # Compute soil fluxes
+    # soil = soil_energy_balance(quantum, nir, ir, met, prof, para, soil, soil_mtime)  # type: ignore  # noqa: E501
+
+    # # Compute soil respiration
+    # soil_resp = soil_respiration_alfalfa(
+    #     veg.Ps, soil.T_soil[:, 9], met.soilmoisture, met.zcanopy, veg.Rd, para
+    # )
+    # soil = eqx.tree_at(lambda t: t.resp, soil, soil_resp)
+
+    # # Compute profiles of C's, zero layer jtot+1 as that is not a dF/dz or
+    # # source/sink level
+    # prof = update_profile(met, para, prof, quantum, sun, shade, soil, veg, lai, dij)
+
+    # # compute met.zL from HH and met.ustar
+    # HH = jnp.sum(
+    #     (
+    #         quantum.prob_beam[:, :jtot] * sun.H
+    #         + quantum.prob_shade[:, :jtot] * shade.H
+    #     )
+    #     * lai.dff[:, :jtot],
+    #     axis=1,
+    # )
+    # zL = -(0.4 * 9.8 * HH * para.meas_ht) / (
+    #     met.air_density * 1005 * met.T_air_K * jnp.power(met.ustar, 3.0)
+    # )
+    # zL = jnp.clip(zL, a_min=-3, a_max=0.25)
+    # met = eqx.tree_at(lambda t: t.zL, met, zL)
+
+    # # Compute canopy integrated fluxes
+    # veg = calculate_veg(para, lai, quantum, sun, shade)
+
     # Calculate the states/fluxes across the whole canopy
     rnet_calc = (
         quantum.beam_flux[:, jtot] / 4.6
@@ -212,10 +281,10 @@ def canoak(
     NEE = soil.resp - veg.GPP
     avail = rnet_calc - soil.gsoil
     gsoil = soil.gsoil
-    albedo_calc = (quantum.up_flux[:, jtot] / 4.6 + nir.up_flux[:, jtot]) / (
-        quantum.incoming / 4.6 + nir.incoming
-    )
-    nir_albedo_calc = nir.up_flux[:, jtot] / nir.incoming
+    # albedo_calc = (quantum.up_flux[:, jtot] / 4.6 + nir.up_flux[:, jtot]) / (
+    #     quantum.incoming / 4.6 + nir.incoming
+    # )
+    # nir_albedo_calc = nir.up_flux[:, jtot] / nir.incoming
     nir_refl = nir.up_flux[:, jtot] - nir.up_flux[:, 0]
 
     can = Can(
@@ -226,8 +295,8 @@ def canoak(
         NEE,
         avail,
         gsoil,
-        albedo_calc,
-        nir_albedo_calc,
+        # albedo_calc,
+        # nir_albedo_calc,
         nir_refl,
     )
 

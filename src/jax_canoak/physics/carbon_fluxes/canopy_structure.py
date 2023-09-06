@@ -10,7 +10,7 @@ Date: 2023.06.28.
 import jax
 import jax.numpy as jnp
 
-from ...subjects import Para, Setup, SunAng, LeafAng, Lai
+from ...subjects import Para, SunAng, LeafAng, Lai
 from ...shared_utilities.types import Float_0D, Float_1D
 from ...shared_utilities.types import Int_0D, Int_1D
 from ...shared_utilities.constants import PI
@@ -111,7 +111,7 @@ def angle(
 
 # @jax.jit
 def leaf_angle(
-    sunang: SunAng, prm: Para, setup: Setup, lai: Lai, num_leaf_class: int = 50
+    sunang: SunAng, prm: Para, leafangle: int, lai: Lai, num_leaf_class: int = 50
 ) -> LeafAng:
     # leafang = LeafAng(setup.ntime, setup.jtot, num_leaf_class)
     # estimate leaf angle for 50 classes between 0 and pi/2
@@ -132,7 +132,7 @@ def leaf_angle(
     # jax.debug.print("leaf angle: {a}", a=branches[setup.leafangle]())
     # pdf = jax.lax.switch(setup.leafangle, branches)
     # jax.debug.print("leaf angle: {a}", a=pdf)
-    pdf = jax.lax.switch(setup.leafangle, branches)
+    pdf = jax.lax.switch(leafangle, branches)
 
     # using the algorithm from Warren Wilson and Wang et al
     # Wang, W. M., Z. L. Li, and H. B. Su. 2007.
@@ -194,12 +194,16 @@ def Gfunc_dir(theta_rad: Float_1D, theta_leaf: Float_1D, pdf: Float_1D) -> Float
         Float_1D: _description_
     """
     product1 = jnp.outer(1.0 / jnp.tan(theta_rad), 1.0 / jnp.tan(theta_leaf))
+    # jax.debug.print('product: {x}', x=product1)
+    # jax.debug.print('theta_rad: {x}', x=theta_rad)
+    # jax.debug.print('theta_leaf: {x}', x=theta_leaf)
 
-    @jnp.vectorize
-    def calculate_psi(p_e):
-        return jax.lax.cond(jnp.abs(p_e) > 1.0, lambda: 0.0, lambda: jnp.arccos(p_e))
-
-    psi = calculate_psi(product1)
+    # @jnp.vectorize
+    # def calculate_psi(p_e):
+    #     return jax.lax.cond(jnp.abs(p_e) > 1.0, lambda: 0.0, lambda: jnp.arccos(p_e))
+    # psi = calculate_psi(product1)
+    product1 = jnp.clip(product1, a_min=-1.0, a_max=1.0)
+    psi = jnp.arccos(product1)
 
     product2 = jnp.outer(jnp.cos(theta_rad), jnp.cos(theta_leaf))
 
@@ -249,11 +253,12 @@ def Gfunc_diff(thetaSky: Float_1D, thetaLeaf: Float_1D, pdf: Float_1D) -> Float_
     """
     product1 = jnp.outer(1.0 / jnp.tan(thetaSky), 1.0 / jnp.tan(thetaLeaf))
 
-    @jnp.vectorize
-    def calculate_psi(p_e):
-        return jax.lax.cond(jnp.abs(p_e) > 1.0, lambda: 0.0, lambda: jnp.arccos(p_e))
-
-    psi = calculate_psi(product1)
+    # @jnp.vectorize
+    # def calculate_psi(p_e):
+    #     return jax.lax.cond(jnp.abs(p_e) > 1.0, lambda: 0.0, lambda: jnp.arccos(p_e))
+    # psi = calculate_psi(product1)
+    product1 = jnp.clip(product1, a_min=-1.0, a_max=1.0)
+    psi = jnp.arccos(product1)
 
     product2 = jnp.outer(jnp.cos(thetaSky), jnp.cos(thetaLeaf))
 

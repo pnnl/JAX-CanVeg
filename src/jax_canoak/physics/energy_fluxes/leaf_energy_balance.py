@@ -12,7 +12,7 @@ import jax.numpy as jnp
 
 import equinox as eqx
 
-from ...subjects import ParNir, Ir, Setup, Para, Qin, BoundLayerRes
+from ...subjects import ParNir, Ir, Para, Qin, BoundLayerRes
 from ...subjects import Met, SunShadedCan, Prof
 from ...subjects.utils import desdt as fdesdt
 from ...subjects.utils import des2dt as fdes2dt
@@ -72,7 +72,7 @@ def leaf_energy(
     prof: Prof,
     radcan: SunShadedCan,
     prm: Para,
-    setup: Setup,
+    stomata: int,
 ) -> SunShadedCan:
     """_summary_
 
@@ -105,7 +105,7 @@ def leaf_energy(
         return rtop * rbottom / (rtop + rbottom)
 
     # gw = (gb * radcan.gs) / (gb + radcan.gs)
-    rwater = jax.lax.switch(setup.stomata, [rwater_hypo, rwater_amphi])
+    rwater = jax.lax.switch(stomata, [rwater_hypo, rwater_amphi])
     gw = 1.0 / rwater
     # jax.debug.print("gw: {a}", a=gw.mean(axis=0))
     # met.P_Pa=1000 * met.P_kPa   # air pressure, Pa
@@ -171,7 +171,7 @@ def leaf_energy(
         return Acoef, Bcoef, Ccoef
 
     Acoef, Bcoef, Ccoef = jax.lax.switch(
-        setup.stomata, [calculate_coef_hypo, calculate_coef_amphi]
+        stomata, [calculate_coef_hypo, calculate_coef_amphi]
     )
     # jax.debug.print("Acoef: {a}", a=Acoef.mean(axis=0))
     # jax.debug.print("Bcoef: {a}", a=Bcoef.mean(axis=0))
@@ -181,10 +181,14 @@ def leaf_energy(
     #  a LE^2 + bLE + c = 0
     # solve for both roots, but LE tends to be second root, le2
     product = Bcoef * Bcoef - 4.0 * Acoef * Ccoef
+    # jax.debug.print("product min: {a}", a=product.min())
     # le1 = (-Bcoef + jnp.sqrt(Bcoef*Bcoef - 4.*Acoef*Ccoef)) / (2.*Acoef)
     le2 = (-Bcoef - jnp.sqrt(product)) / (2.0 * Acoef)
     # jax.debug.print("{a}", a=product.mean(axis=1))
+    # le1 = (-Bcoef + jnp.sqrt(Bcoef*Bcoef - 4.*Acoef*Ccoef)) / (2.*Acoef)
     LE = jnp.real(le2)
+    # jax.debug.print("# of negative le2: {a}", a=jnp.sum(jnp.isnan(le2)))
+    # jax.debug.print("# of negative LE: {a}", a=jnp.sum(jnp.isnan(le2)))
 
     # Solve for leaf temperature
     # C++ --

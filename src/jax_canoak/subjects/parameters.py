@@ -41,6 +41,7 @@ class Setup(eqx.Module):
     n_hr_per_day: int
     ntime: int
     dt_soil: int
+    soil_mtime: int
     # Number of layers
     n_can_layers: int
     n_total_layers: int
@@ -50,9 +51,9 @@ class Setup(eqx.Module):
     # Number of iteration
     niter: int
 
-    @property
-    def soil_mtime(self):
-        return floor(3600 * 24 / self.n_hr_per_day / self.dt_soil)
+    # @property
+    # def soil_mtime(self):
+    #     return floor(3600 * 24 / self.n_hr_per_day / self.dt_soil)
 
     @property
     def ndays(self):
@@ -85,6 +86,7 @@ class Para(eqx.Module):
     zht2: Float_1D
     delz1: Float_1D
     delz2: Float_1D
+    soil_depth: Float_0D
     # Leaf
     leaf_clumping_factor: Float_0D
     # Par and Nir
@@ -162,6 +164,7 @@ class Para(eqx.Module):
         zht2: Float_1D,
         delz1: Float_1D,
         delz2: Float_1D,
+        soil_depth: Float_0D,
         # Leaf
         leaf_clumping_factor: Float_0D,
         # Par and Nir
@@ -171,12 +174,41 @@ class Para(eqx.Module):
         nir_reflect: Float_0D = 0.60,
         nir_trans: Float_0D = 0.20,
         nir_soil_refl: Float_0D = 0.10,
+        # parameters for the Farquhar et al photosynthesis model
+        vcopt: Float_0D = 171.0,
+        jmopt: Float_0D = 259.0,
+        rd25: Float_0D = 2.68,
+        hkin: Float_0D = 200000.0,
+        skin: Float_0D = 710.0,
+        ejm: Float_0D = 55000.0,
+        evc: Float_0D = 55000.0,
+        # Enzyme constants & partial pressure of O2 and CO2
+        # Michaelis-Menten K values. From survey of literature.
+        kc25: Float_0D = 274.6,
+        ko25: Float_0D = 419.8,
+        o2: Float_0D = 210.0,
+        ekc: Float_0D = 80500.0,
+        eko: Float_0D = 14500.0,
+        erd: Float_0D = 38000.0,
+        ektau: Float_0D = -29000.0,
+        # Ps code was blowing up at high leaf temperatures, so reduced opt
+        # and working perfectly
+        toptvc: Float_0D = 303.0,
+        toptjm: Float_0D = 303.0,
+        kball: Float_0D = 8.17,
+        bprime: Float_0D = 0.05,
+        # simple values for priors and first iteration
+        rsm: Float_0D = 145.0,
+        brs: Float_0D = 60.0,
+        qalpha: Float_0D = 0.22,
+        lleaf: Float_0D = 0.04,
     ) -> None:
         # Vertical profiles
         self.zht1 = zht1
         self.zht2 = zht2
         self.delz1 = delz1
         self.delz2 = delz2
+        self.soil_depth = jnp.array(soil_depth)
 
         # Leaf clumping
         self.leaf_clumping_factor = jnp.array(leaf_clumping_factor)
@@ -207,56 +239,56 @@ class Para(eqx.Module):
         # these variables were computed from A-Ci measurements and the
         # Sharkey Excel spreadsheet tool
         self.vcopt = jnp.array(
-            171.0
+            vcopt
         )  # carboxylation rate at 25 C temperature, umol m-2 s-1; from field measurements Rey Sanchez alfalfa  # noqa: E501
         self.jmopt = jnp.array(
-            259.0
+            jmopt
         )  # electron transport rate at 25 C temperature, umol m-2 s-1, field measuremetns Jmax = 1.64 Vcmax  # noqa: E501
         self.rd25 = jnp.array(
-            2.68
+            rd25
         )  # dark respiration at 25 C, rd25= 0.34 umol m-2 s-1, field measurements   # noqa: E501
-        self.hkin = jnp.array(200000.0)  # enthalpy term, J mol-1
-        self.skin = jnp.array(710.0)  # entropy term, J K-1 mol-1
+        self.hkin = jnp.array(hkin)  # enthalpy term, J mol-1
+        self.skin = jnp.array(skin)  # entropy term, J K-1 mol-1
         self.ejm = jnp.array(
-            55000.0
+            ejm
         )  # activation energy for electron transport, J mol-1  # noqa: E501
-        self.evc = jnp.array(55000.0)  # activation energy for carboxylation, J mol-1
+        self.evc = jnp.array(evc)  # activation energy for carboxylation, J mol-1
 
         # Enzyme constants & partial pressure of O2 and CO2
         # Michaelis-Menten K values. From survey of literature.
-        self.kc25 = jnp.array(274.6)  # kinetic coef for CO2 at 25 C, microbars
-        self.ko25 = jnp.array(419.8)  # kinetic coef for O2 at 25C,  millibars
-        self.o2 = jnp.array(210.0)  # oxygen concentration  mmol mol-1
-        self.ekc = jnp.array(80500.0)  # Activation energy for K of CO2; J mol-1
-        self.eko = jnp.array(14500.0)  # Activation energy for K of O2, J mol-1
+        self.kc25 = jnp.array(kc25)  # kinetic coef for CO2 at 25 C, microbars
+        self.ko25 = jnp.array(ko25)  # kinetic coef for O2 at 25C,  millibars
+        self.o2 = jnp.array(o2)  # oxygen concentration  mmol mol-1
+        self.ekc = jnp.array(ekc)  # Activation energy for K of CO2; J mol-1
+        self.eko = jnp.array(eko)  # Activation energy for K of O2, J mol-1
         self.erd = jnp.array(
-            38000.0
+            erd
         )  # activation energy for dark respiration, eg Q10=2  # noqa: E501
-        self.ektau = jnp.array(-29000.0)  # J mol-1 (Jordan and Ogren, 1984)
+        self.ektau = jnp.array(ektau)  # J mol-1 (Jordan and Ogren, 1984)
         self.tk_25 = jnp.array(298.16)  # absolute temperature at 25 C
 
         # Ps code was blowing up at high leaf temperatures, so reduced opt
         # and working perfectly
         self.toptvc = jnp.array(
-            303.0
+            toptvc
         )  # optimum temperature for maximum carboxylation, 311 K  # noqa: E501
         self.toptjm = jnp.array(
-            303.0
+            toptjm
         )  # optimum temperature for maximum electron transport,311 K  # noqa: E501
         self.kball = jnp.array(
-            8.17
+            kball
         )  # Ball-Berry stomatal coefficient for stomatal conductance, data from Camilo Rey Sanchez bouldin Alfalfa  # noqa: E501
         self.bprime = jnp.array(
-            0.05
+            bprime
         )  # intercept leads to too big LE0.14;    % mol m-2 s-1 h2o..Camilo Rey Sanchez..seems high  # noqa: E501
         # self.bprime16 = self.bprime / 1.6  # intercept for CO2, bprime16 = bprime /1.6;  # noqa: E501
 
         # simple values for priors and first iteration
-        self.rsm = jnp.array(145.0)  # Minimum stomatal resistance, s m-1.
-        self.brs = jnp.array(60.0)  # curvature coeffient for light response
-        self.qalpha = jnp.array(0.22)  #  leaf quantum yield, electrons
+        self.rsm = jnp.array(rsm)  # Minimum stomatal resistance, s m-1.
+        self.brs = jnp.array(brs)  # curvature coeffient for light response
+        self.qalpha = jnp.array(qalpha)  #  leaf quantum yield, electrons
         # self.qalpha2 = 0.0484  # qalpha squared, qalpha2 = pow(qalpha, 2.0);
-        self.lleaf = jnp.array(0.04)  # leaf length, m, alfalfa, across the trifoliate
+        self.lleaf = jnp.array(lleaf)  # leaf length, m, alfalfa, across the trifoliate
 
         # Diffusivity values for 273 K and 1013 mb (STP) using values from Massman (1998) Atmos Environment  # noqa: E501
         # These values are for diffusion in air.  When used these values must be adjusted for  # noqa: E501
@@ -499,6 +531,7 @@ def initialize_parameters(
     leaf_clumping_factor: Float_0D = 0.95,
     veg_ht: Float_0D = 0.8,
     meas_ht: Float_0D = 5.0,
+    soil_depth: Float_0D = 0.15,
     n_can_layers: int = 30,
     n_atmos_layers: int = 50,
     n_soil_layers: int = 10,
@@ -528,6 +561,8 @@ def initialize_parameters(
     zht2 = jnp.arange(1, n_total_layers - n_can_layers + 1) * dht_atmos + veg_ht
     delz2 = jnp.ones(n_total_layers - n_can_layers) * dht_atmos
 
+    # Number of time steps for solving soil energy balancd
+    soil_mtime = floor(3600 * 24 / n_hr_per_day / dt_soil)
     setup = Setup(
         time_zone=time_zone,
         lat_deg=latitude,
@@ -540,6 +575,7 @@ def initialize_parameters(
         n_total_layers=n_total_layers,
         n_soil_layers=n_soil_layers,
         dt_soil=dt_soil,
+        soil_mtime=soil_mtime,
         npart=npart,
         niter=niter,
     )
@@ -550,6 +586,7 @@ def initialize_parameters(
         zht2=zht2,
         delz1=delz1,
         delz2=delz2,
+        soil_depth=soil_depth,
         par_reflect=par_reflect,
         par_trans=par_trans,
         par_soil_refl=par_soil_refl,

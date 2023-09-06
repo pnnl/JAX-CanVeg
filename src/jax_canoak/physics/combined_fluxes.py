@@ -16,7 +16,7 @@ import equinox as eqx
 
 from typing import Tuple
 
-from ..subjects import ParNir, Met, Prof, Para, Setup, SunShadedCan, Qin
+from ..subjects import ParNir, Met, Prof, Para, SunShadedCan, Qin
 from .energy_fluxes import boundary_resistance, leaf_energy
 from .carbon_fluxes import leaf_ps
 
@@ -33,7 +33,7 @@ def energy_carbon_fluxes(
     met: Met,
     prof: Prof,
     prm: Para,
-    setup: Setup,
+    stomata: int,
 ) -> Tuple[SunShadedCan, SunShadedCan]:
     """The ENERGY_AND_CARBON_FLUXES routine to computes coupled fluxes
        of energy, water and CO2 exchange, as well as leaf temperature.  Computataions
@@ -82,7 +82,7 @@ def energy_carbon_fluxes(
         met.P_kPa,
         prof.eair_Pa[:, :jtot],
         prm,
-        setup,
+        stomata,
     )
     # sun.Ps, sun.gs, sun.Resp = ps.aphoto, ps.gs_m_s, ps.rd
     sun = eqx.tree_at(
@@ -91,7 +91,7 @@ def energy_carbon_fluxes(
 
     # Compute energy balance on the top of sunlit leaves
     # pass and use prm if leaf is amphistomatous or hypostomatous
-    sun = leaf_energy(boundary_layer_res, qin.sun_abs, met, prof, sun, prm, setup)
+    sun = leaf_energy(boundary_layer_res, qin.sun_abs, met, prof, sun, prm, stomata)
 
     # Compute energy balance for the bottom of sunlit leaves
     # if assuming hypostomatous assign gs a low value, eg 0.01m/s
@@ -106,12 +106,14 @@ def energy_carbon_fluxes(
         met.P_kPa,
         prof.eair_Pa[:, :jtot],
         prm,
-        setup,
+        stomata,
     )
     # shade.Ps, shade.gs, shade.Resp = ps.aphoto, ps.gs_m_s, ps.rd
     shade = eqx.tree_at(
         lambda t: (t.Ps, t.gs, t.Resp), shade, (ps.aphoto, ps.gs_m_s, ps.rd)
     )
-    shade = leaf_energy(boundary_layer_res, qin.shade_abs, met, prof, shade, prm, setup)
+    shade = leaf_energy(
+        boundary_layer_res, qin.shade_abs, met, prof, shade, prm, stomata
+    )  # noqa: E501
 
     return sun, shade

@@ -3,7 +3,7 @@ One-dimensional hydrobiogeochemical modeling of CANOAK/Canveg.
 Modified from CANOAK's matlab code.
 
 Author: Peishi Jiang
-Date: 2023.08.13.
+Date: 2023.08.29.
 """
 
 import jax
@@ -13,7 +13,9 @@ import jax
 # import h5py
 # import numpy as np
 
-# import equinox as eqx
+from functools import partial
+
+import equinox as eqx
 
 from jax_canoak.subjects import get_met_forcings, initialize_parameters
 from jax_canoak.physics.energy_fluxes import get_dispersion_matrix
@@ -29,7 +31,8 @@ from jax_canoak.shared_utilities.plot import plot_ir, plot_rad, plot_prof2
 # from jax_canoak.shared_utilities import plot_totalenergyplot_prof
 
 jax.config.update("jax_enable_x64", True)
-jax.config.update("jax_debug_nans", True)
+jax.config.update("jax_debug_nans", False)
+jax.config.update("jax_debug_infs", False)
 
 plot = False
 
@@ -37,23 +40,23 @@ plot = False
 #                     Model parameter/properties settings                      #
 # ---------------------------------------------------------------------------- #
 time_zone = -8
-latitude = 38.0991538
-longitude = -121.49933
-stomata = 1
-veg_ht = 0.8
-leafangle = 1
+latitude = 46.4089
+longitude = -119.2750
+stomata = 0
+veg_ht = 1.2
+leafangle = 2  # erectophile
 n_can_layers = 50
 meas_ht = 5.0
+soil_depth = 0.15
 n_hr_per_day = 48
-lai = 5.0
 niter = 15
-f_forcing = "../data/fluxtower/Alf/AlfBouldinMetInput-yr.csv"
+f_forcing = "../data/fluxtower/US-Hn1/US-Hn1-forcings.csv"
 
 
 # ---------------------------------------------------------------------------- #
 #                     Get the model forcings                                   #
 # ---------------------------------------------------------------------------- #
-met, n_time = get_met_forcings(f_forcing, lai)
+met, n_time = get_met_forcings(f_forcing)
 
 
 # ---------------------------------------------------------------------------- #
@@ -78,16 +81,15 @@ setup, para = initialize_parameters(
 # ---------------------------------------------------------------------------- #
 #                     Generate or read the Dispersion matrix                   #
 # ---------------------------------------------------------------------------- #
-# dij = get_dispersion_matrix(setup, para)
-dij = get_dispersion_matrix(setup, para, "../data/dij/Dij_Alfalfa.csv")
+dij = get_dispersion_matrix(setup, para, "../data/dij/Dij_US-Hn1.csv")
 
 
 # ---------------------------------------------------------------------------- #
 #                     Run CANOAK!                #
 # ---------------------------------------------------------------------------- #
 # Let's use a jitted version
-# canoak = eqx.filter_jit(canoak)
 canoak_eqx = CanoakBase(para, setup, dij)
+print("Performing forward runs ...")
 (
     _,
     prof,
@@ -105,31 +107,49 @@ canoak_eqx = CanoakBase(para, setup, dij)
     veg,
     can,
 ) = canoak_eqx(met)
-# other_args = [
-#     dij, setup.lat_deg, setup.long_deg, setup.time_zone,
-#     setup.leafangle, setup.stomata,
-#     setup.n_can_layers, setup.n_total_layers, setup.n_soil_layers,
-#     setup.ntime, setup.dt_soil,
-#     setup.soil_mtime, setup.niter
-# ]
-# # canoak_jit = eqx.filter_jit(canoak)
-# (
-#     met,
-#     prof,
-#     quantum,
-#     nir,
-#     ir,
-#     rnet,
-#     qin,
-#     sun_ang,
-#     leaf_ang,
-#     lai,
-#     sun,
-#     shade,
-#     soil,
-#     veg,
-#     can,
-# ) = canoak(para, met, *other_args)
+
+
+# ---------------------------------------------------------------------------- #
+#                     Sensitivity analysis                #
+# ---------------------------------------------------------------------------- #
+print("Performing local sensitivity analysis ...")
+jax.clear_caches()
+
+
+@eqx.filter_jit
+@partial(jax.grad, argnums=0)
+def df_canoak_le(para, met, canoak_eqx):
+    canoak_eqx = eqx.tree_at(lambda t: t.para, canoak_eqx, para)
+    (
+        _,
+        prof,
+        quantum,
+        nir,
+        ir,
+        rnet,
+        qin,
+        sun_ang,
+        leaf_ang,
+        lai,
+        sun,
+        shade,
+        soil,
+        veg,
+        can,
+    ) = canoak_eqx(met)
+    return can.LE.sum()
+
+
+# start, ntime = 20, 1
+start, ntime = 20, 1000
+canoak_eqx2 = eqx.tree_at(lambda t: (t.ntime), canoak_eqx, replace=(ntime))
+met2 = jax.tree_util.tree_map(lambda x: x[start : start + ntime], met)
+
+jax.profiler.start_trace("./memory_us-hn1")
+gradients = df_canoak_le(para, met2, canoak_eqx2)
+jax.profiler.stop_trace()
+
+# jax.profiler.save_device_memory_profile("memory.prof")
 
 
 # ---------------------------------------------------------------------------- #
@@ -145,18 +165,8 @@ if plot:
     plot_rad(quantum, setup, lai, "par")
     plot_rad(nir, setup, lai, "nir")
     plot_ir(ir, setup, lai)
-    # fig, axes = plt.subplots(2, 1, figsize=(10, 10))
-    # plot_canopy1(sun, qin, para, "sun", axes[0])
-    # plot_canopy1(shade, qin, para, "shade", axes[1])
-    # plot_canopy2(sun, para, "sun")
-    # plot_canopy2(shade, para, "shade")
-    # plot_leafang(leaf_ang, para)
     plot_veg_temp(sun, shade, para, met)
     plot_dij(dij, para)
-    # plot_soil(soil, para)
-    # plot_soiltemp(soil, para)
-    # plot_totalenergy(soil, veg, can_rnet)
-    # plot_prof1(prof)
     plot_prof2(prof, para)
     plot_daily(met, soil, veg, para)
     plt.show()
