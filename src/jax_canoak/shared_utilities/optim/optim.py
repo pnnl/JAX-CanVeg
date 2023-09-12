@@ -5,6 +5,9 @@ Author: Peishi Jiang
 Date: 2023.08.22.
 """
 
+import jax
+import jax.tree_util as jtu
+
 import optax
 import equinox as eqx
 import jax.numpy as jnp
@@ -13,7 +16,7 @@ from typing import Tuple, List
 from jaxtyping import Array
 
 from ...models import CanoakBase
-from ...subjects import Met
+from ...subjects import Met, BatchedMet
 
 
 # Define the loss function
@@ -74,6 +77,60 @@ def perform_optimization(
     for i in range(nsteps):
         model, opt_state, loss, grads = make_step(
             model, filter_model_spec, y, opt_state, met
+        )
+        loss_set.append(loss)
+        print(f"The loss of step {i}: {loss}")
+
+    return model, loss_set
+
+
+def perform_optimization_batch(
+    model: CanoakBase,
+    filter_model_spec: CanoakBase,
+    optim: optax._src.base.GradientTransformation,
+    batched_y: Array,
+    batched_met: BatchedMet,
+    nsteps: int,
+) -> Tuple[CanoakBase, List]:
+    """A wrapped function for performing optimization in batch using optax.
+
+    Args:
+        model (CanoakBase): _description_
+        filter_model_spec (CanoakBase): _description_
+        optim (optax._src.base.GradientTransformation): _description_
+        y (Array): _description_
+        met (Met): _description_
+        nsteps (int): _description_
+
+    Returns:
+        Tuple[CanoakBase, List]: _description_
+    """
+
+    @eqx.filter_jit
+    def make_step(model, filter_model_spec, batched_y, opt_state, batched_met):
+        diff_model, static_model = eqx.partition(model, filter_model_spec)
+        # loss, grads = loss_func(diff_model, static_model, y, met)
+        def loss_func_batch(c, batch):
+            met, y = batch
+            loss, grads = loss_func(diff_model, static_model, y, met)
+            # loss, grads = 0.1, 2.
+            return c, [loss, grads]
+
+        _, results = jax.lax.scan(loss_func_batch, None, xs=[batched_met, batched_y])
+        loss = results[0].mean()
+        # grads = results[1].mean()
+        grads = jtu.tree_map(lambda x: x.mean(), results[1])
+
+        updates, opt_state = optim.update(grads, opt_state)
+        model = eqx.apply_updates(model, updates)
+        return model, opt_state, loss, grads
+
+    loss_set = []
+    # opt_state = optim.init(model)
+    opt_state = optim.init(eqx.filter(model, eqx.is_array))
+    for i in range(nsteps):
+        model, opt_state, loss, grads = make_step(
+            model, filter_model_spec, batched_y, opt_state, batched_met
         )
         loss_set.append(loss)
         print(f"The loss of step {i}: {loss}")

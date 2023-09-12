@@ -32,7 +32,7 @@ from typing import Tuple
 # from .utils import soil_sfc_res, conc
 # from .utils import llambda as flambda
 from .states import Prof, SunAng, LeafAng, ParNir, Ir, Rnet
-from .states import SunShadedCan, Qin
+from .states import SunShadedCan, Qin, Obs
 from .states import Veg, Lai, Soil, Can
 
 from ..shared_utilities.types import Float_3D, Float_2D, Float_1D
@@ -371,6 +371,14 @@ class BatchedSoil(eqx.Module):
     # @property
     # def resistance_h2o(self):
     #     return soil_sfc_res(self.water_content_15cm)
+
+
+def convert_obs_to_batched_obs(obs: Obs, n_batch: int, batch_size: int) -> BatchedObs:
+    n_total = n_batch * batch_size
+    batched_obs = jtu.tree_map(
+        lambda x: x[:n_total].reshape([n_batch, batch_size]), obs
+    )
+    return batched_obs
 
 
 def convert_batchedstates_to_states(

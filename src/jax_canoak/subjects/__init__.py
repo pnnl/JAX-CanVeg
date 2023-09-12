@@ -34,3 +34,4 @@ from .batched_states import (
     BatchedObs,  # noqa: F401
 )
 from .batched_states import convert_batchedstates_to_states  # noqa: F401
+from .batched_states import convert_obs_to_batched_obs  # noqa: F401

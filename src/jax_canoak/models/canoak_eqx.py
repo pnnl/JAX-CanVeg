@@ -34,7 +34,7 @@ class CanoakBase(eqx.Module):
     n_can_layers: int
     n_total_layers: int
     n_soil_layers: int
-    ntime: int
+    # ntime: int
     dt_soil: int
     soil_mtime: int
     # batch_size: int
@@ -56,7 +56,7 @@ class CanoakBase(eqx.Module):
         self.n_soil_layers = setup.n_soil_layers
         self.dt_soil = setup.dt_soil
         self.soil_mtime = setup.soil_mtime
-        self.ntime = setup.time_batch_size
+        # self.ntime = setup.time_batch_size
         # self.ntime = setup.ntime
         # self.batch_size = setup.time_batch_size
         # self.n_batch = ceil(setup.ntime / setup.time_batch_size)
@@ -93,12 +93,15 @@ class CanoakBase(eqx.Module):
         n_can_layers = self.n_can_layers
         n_total_layers = self.n_total_layers
         n_soil_layers = self.n_soil_layers
-        ntime = self.ntime
+        # ntime = self.ntime
         dt_soil = self.dt_soil
         soil_mtime = self.soil_mtime
         niter = self.niter
+
+        # Number of time steps from met
         # batch_size = self.batch_size
         # n_batch = self.n_batch
+        ntime = met.zL.size
 
         results = canoak(
             para,

@@ -42,7 +42,7 @@ class Setup(eqx.Module):
     ntime: int
     dt_soil: int
     soil_mtime: int
-    time_batch_size: int
+    # time_batch_size: int
     # Number of layers
     n_can_layers: int
     n_total_layers: int
@@ -538,7 +538,7 @@ def initialize_parameters(
     n_soil_layers: int = 10,
     n_hr_per_day: int = 48,
     n_time: int = 200,
-    time_batch_size: int = 1,
+    # time_batch_size: int = 1,
     dt_soil: int = 20,
     par_reflect: Float_0D = 0.05,
     par_trans: Float_0D = 0.05,
@@ -573,7 +573,7 @@ def initialize_parameters(
         leafangle=leafangle,
         n_hr_per_day=n_hr_per_day,
         ntime=n_time,
-        time_batch_size=time_batch_size,
+        # time_batch_size=time_batch_size,
         n_can_layers=n_can_layers,
         n_total_layers=n_total_layers,
         n_soil_layers=n_soil_layers,

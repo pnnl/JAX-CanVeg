@@ -12,6 +12,8 @@ Classes for model states.
 - Veg()
 - Lai()
 - Ps()
+- Can()
+- Obs()
 - Soil()
 
 Author: Peishi Jiang

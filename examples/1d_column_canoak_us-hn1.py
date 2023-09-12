@@ -31,8 +31,8 @@ from jax_canoak.shared_utilities.plot import plot_ir, plot_rad, plot_prof2
 # from jax_canoak.shared_utilities import plot_totalenergyplot_prof
 
 jax.config.update("jax_enable_x64", True)
-jax.config.update("jax_debug_nans", False)
-jax.config.update("jax_debug_infs", False)
+jax.config.update("jax_debug_nans", True)
+jax.config.update("jax_debug_infs", True)
 
 plot = False
 
@@ -45,7 +45,8 @@ longitude = -119.2750
 stomata = 0
 veg_ht = 1.2
 leafangle = 2  # erectophile
-n_can_layers = 50
+n_can_layers = 10
+n_atmos_layers = 10
 meas_ht = 5.0
 soil_depth = 0.15
 n_hr_per_day = 48
@@ -70,6 +71,7 @@ setup, para = initialize_parameters(
     veg_ht=veg_ht,
     leafangle=leafangle,
     n_can_layers=n_can_layers,
+    n_atmos_layers=n_atmos_layers,
     meas_ht=meas_ht,
     n_hr_per_day=n_hr_per_day,
     n_time=n_time,
@@ -140,16 +142,17 @@ def df_canoak_le(para, met, canoak_eqx):
     return can.LE.sum()
 
 
-# start, ntime = 20, 1
-start, ntime = 20, 1000
-canoak_eqx2 = eqx.tree_at(lambda t: (t.ntime), canoak_eqx, replace=(ntime))
-met2 = jax.tree_util.tree_map(lambda x: x[start : start + ntime], met)
+gradients4 = df_canoak_le(para, met, canoak_eqx)
 
-jax.profiler.start_trace("./memory_us-hn1")
-gradients = df_canoak_le(para, met2, canoak_eqx2)
-jax.profiler.stop_trace()
+# start, ntime = 20, 1000
+# canoak_eqx2 = eqx.tree_at(lambda t: (t.ntime), canoak_eqx, replace=(ntime))
+# met2 = jax.tree_util.tree_map(lambda x: x[start : start + ntime], met)
 
-# jax.profiler.save_device_memory_profile("memory.prof")
+# # jax.profiler.start_trace("./memory_us-hn1")
+# gradients = df_canoak_le(para, met2, canoak_eqx2)
+# # jax.profiler.stop_trace()
+
+# # jax.profiler.save_device_memory_profile("memory.prof")
 
 
 # ---------------------------------------------------------------------------- #

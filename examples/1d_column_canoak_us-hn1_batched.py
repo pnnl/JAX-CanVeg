@@ -83,7 +83,6 @@ setup, para = initialize_parameters(
     meas_ht=meas_ht,
     n_hr_per_day=n_hr_per_day,
     n_time=n_time,
-    time_batch_size=time_batch_size,
     npart=int(1e6),
     niter=niter,
 )
@@ -196,8 +195,7 @@ def compute_grad(c, met):
     return c, grad
 
 
-jax.debug.print("canoak_eqx: {a}", a=canoak_eqx)
-
+# _, gradients = jax.lax.scan(compute_grad, para, xs=batched_met)
 _, gradients = jax.lax.scan(compute_grad, para, xs=batched_met)
 
 # gradients = jax.vmap(df_canoak_le, in_axes=[None,0,None])(
