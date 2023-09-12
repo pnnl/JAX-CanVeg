@@ -83,6 +83,14 @@ def angle(
         declin
     ) * jnp.cos(hour_rad)
 
+    # Added by Peishi to avoid numerical instability
+    @jnp.vectorize
+    def truncate_small_numbers(v):
+        thres = 0.01
+        return jax.lax.cond(jnp.abs(v) > thres, lambda: v, lambda: jnp.sign(v) * thres)
+
+    sin_beta = truncate_small_numbers(sin_beta)
+
     # Calculate solar elevation, radians
     beta_rad = jnp.arcsin(sin_beta)
 

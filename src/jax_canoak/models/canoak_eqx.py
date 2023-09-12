@@ -9,9 +9,16 @@ import equinox as eqx
 
 from typing import Tuple
 
+# from math import ceil
+
 from .canoak import canoak
-from ..subjects import Para, Met, Prof, SunAng, LeafAng, SunShadedCan
-from ..subjects import Setup, Veg, Soil, Rnet, Qin, Ir, ParNir, Lai, Can
+
+# from ..subjects import Para, Met, Prof, SunAng, LeafAng, SunShadedCan
+# from ..subjects import Setup, Veg, Soil, Rnet, Qin, Ir, ParNir, Lai, Can
+from ..subjects import Para, Met, Prof, SunAng
+from ..subjects import LeafAng, SunShadedCan, Can
+from ..subjects import Setup, Veg, Soil, Rnet
+from ..subjects import Qin, Ir, ParNir, Lai
 from ..shared_utilities.types import Float_2D, Float_0D
 
 
@@ -30,6 +37,8 @@ class CanoakBase(eqx.Module):
     ntime: int
     dt_soil: int
     soil_mtime: int
+    # batch_size: int
+    # n_batch: int
     niter: int
 
     def __init__(self, para: Para, setup: Setup, dij: Float_2D):
@@ -45,9 +54,13 @@ class CanoakBase(eqx.Module):
         self.n_can_layers = setup.n_can_layers
         self.n_total_layers = setup.n_total_layers
         self.n_soil_layers = setup.n_soil_layers
-        self.ntime = setup.ntime
         self.dt_soil = setup.dt_soil
         self.soil_mtime = setup.soil_mtime
+        self.ntime = setup.time_batch_size
+        # self.ntime = setup.ntime
+        # self.batch_size = setup.time_batch_size
+        # self.n_batch = ceil(setup.ntime / setup.time_batch_size)
+        # self.ntime = self.batch_size * self.n_batch
         self.niter = setup.niter
 
     def __call__(
@@ -84,6 +97,8 @@ class CanoakBase(eqx.Module):
         dt_soil = self.dt_soil
         soil_mtime = self.soil_mtime
         niter = self.niter
+        # batch_size = self.batch_size
+        # n_batch = self.n_batch
 
         results = canoak(
             para,

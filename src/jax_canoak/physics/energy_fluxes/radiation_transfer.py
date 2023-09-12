@@ -503,6 +503,14 @@ def rad_tran_canopy(
     def convert_night_to_zero(v, sin_beta_e):
         return jax.lax.cond(sin_beta_e <= 0, lambda: jnp.zeros(jktot), lambda: v)
 
+    # a = dot(
+    #         leafang.Gfunc / sunang.sin_beta,  # (ntime,)
+    #         # a,  # (ntime,)
+    #         # -(prm.dff * prm.markov),  # (ntime, jtot)
+    #         -(lai.dff * prm.markov),  # (ntime, jtot)
+    #     )
+    # jax.debug.print("# of infs: {x}", x=jnp.isinf(a).sum())
+    # jax.debug.print("a stats: {x1}, {x2}", x1=a.min(), x2=a.max())
     exp_direct = jnp.exp(
         dot(
             leafang.Gfunc / sunang.sin_beta,  # (ntime,)
@@ -537,11 +545,12 @@ def rad_tran_canopy(
     # (ntime, jtot)
     incoming_beam = dot(rad.incoming * fraction_beam, Tbeam[:, 1:])
     incoming_beam = incoming_beam * (1 - exp_direct[:, :-1])
-    sdn = incoming_beam * rad.trans
+    sdn = incoming_beam * trans
 
     # Calculate beam PAR that is reflected upward
     # (ntime, jtot)
-    sup = incoming_beam * rad.reflect
+    # sup = incoming_beam * rad.reflect
+    sup = incoming_beam * reflect
 
     # Calculate the transmission and reflection of each layer
     # reflectance_layer = (1 - leafang.integ_exp_diff) * rad.reflect  # (ntime, jtot)

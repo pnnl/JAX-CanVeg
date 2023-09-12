@@ -6,6 +6,8 @@ Date: 2023.8.13.
 """
 
 import jax
+
+# import jax.tree_util as jtu
 import jax.numpy as jnp
 import equinox as eqx
 
@@ -30,9 +32,65 @@ from ..physics.energy_fluxes import diffuse_direct_radiation
 from ..physics.carbon_fluxes import angle, leaf_angle
 from ..physics.carbon_fluxes import soil_respiration_alfalfa
 
+# TODO: implement the batching
 
 # @eqx.filter_jit
+# def canoak(
+#     para: Para,
+#     met_batched: Met,
+#     dij: Float_2D,
+#     # Location parameters
+#     lat_deg: Float_0D,
+#     long_deg: Float_0D,
+#     time_zone: int,
+#     # Static parameters
+#     leafangle: int,
+#     stomata: int,
+#     n_can_layers: int,
+#     n_total_layers: int,
+#     n_soil_layers: int,
+#     # ntime: int,
+#     dt_soil: int,
+#     soil_mtime: int,
+#     niter: int,
+# ) -> Tuple[
+#     Met,
+#     Prof,
+#     ParNir,
+#     ParNir,
+#     Ir,
+#     Rnet,
+#     Qin,
+#     SunAng,
+#     LeafAng,
+#     Lai,
+#     SunShadedCan,
+#     SunShadedCan,
+#     Soil,
+#     Veg,
+#     Can,
+# ]:
+#     # Perform the calculation through batch
+#     def calculate_canoak_batch(c, met_per_batch):
+#         time_batch_size = met_per_batch.zL.size
+#         results_per_batch = canoak_batch(
+#             para, met_per_batch, dij, lat_deg, long_deg, time_zone,
+#             leafangle, stomata,
+#             n_can_layers, n_total_layers, n_soil_layers,
+#             time_batch_size, dt_soil, soil_mtime, niter,
+#         )
+#         return None, results_per_batch
+
+#     _, results = jax.lax.scan(
+#         calculate_canoak_batch, None, xs=met_batched
+#     )
+
+#     return results
+
+
+@eqx.filter_jit
 def canoak(
+    # def canoak_batch(
     para: Para,
     met: Met,
     dij: Float_2D,
@@ -46,7 +104,8 @@ def canoak(
     n_can_layers: int,
     n_total_layers: int,
     n_soil_layers: int,
-    ntime: int,
+    # ntime: int,
+    time_batch_size: int,
     dt_soil: int,
     soil_mtime: int,
     niter: int,
@@ -68,6 +127,8 @@ def canoak(
     Can,
 ]:
     jtot, jtot_total = n_can_layers, n_total_layers
+    ntime = time_batch_size
+
     # ntime, jtot, jtot_total = met.zL.size, setup.n_can_layers, setup.n_total_layers
     # dt_soil, soil_mtime = setup.dt_soil, setup.soil_mtime
     # n_soil_layers = setup.n_soil_layers
@@ -211,6 +272,7 @@ def canoak(
 
     initials = [met, prof, ir, qin, sun, shade, soil, veg]
     finals, _ = jax.lax.scan(iteration, initials, xs=None, length=niter)
+    # finals, _ = jax.lax.scan(iteration, initials, xs=None, length=99)
 
     met, prof, ir, qin, sun, shade, soil, veg = finals
 

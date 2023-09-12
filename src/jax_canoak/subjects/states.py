@@ -34,8 +34,8 @@ from ..shared_utilities.constants import PI
 
 
 class Prof(eqx.Module):
-    zht: Float_1D
-    delz: Float_1D
+    # zht: Float_1D
+    # delz: Float_1D
     co2: Float_2D
     Tair_K: Float_2D
     Told_K: Float_2D
@@ -88,9 +88,9 @@ class ParNir(eqx.Module):
     prob_beam: Float_2D
     sun_lai: Float_2D
     shade_lai: Float_2D
-    reflect: Float_0D
-    trans: Float_0D
-    soil_refl: Float_0D
+    # reflect: Float_0D
+    # trans: Float_0D
+    # soil_refl: Float_0D
 
     @property
     def total(self):
@@ -104,9 +104,9 @@ class ParNir(eqx.Module):
     def prob_shade(self):
         return 1 - self.prob_beam
 
-    @property
-    def absorbed(self):
-        return 1 - self.reflect - self.trans
+    # @property
+    # def absorbed(self):
+    #     return 1 - self.reflect - self.trans
 
 
 class Ir(eqx.Module):
@@ -379,8 +379,8 @@ def initialize_profile(met: Met, para: Para, ntime: int, jtot: int, nlayers: int
     # nlayers = setup.n_total_layers
     # ntime, jtot = met.zL.size, para.zht1.size
     # nlayers = para.zht.size
-    zht = para.zht
-    delz = para.delz
+    # zht = para.zht
+    # delz = para.delz
     co2 = jnp.ones([ntime, nlayers])
     Tair_K = jnp.ones([ntime, nlayers])
     Told_K = jnp.ones([ntime, nlayers])
@@ -400,8 +400,8 @@ def initialize_profile(met: Met, para: Para, ntime: int, jtot: int, nlayers: int
     eair_old_Pa = dot(met.eair_Pa, eair_old_Pa)
 
     prof = Prof(
-        zht,
-        delz,
+        # zht,
+        # delz,
         co2,
         Tair_K,
         Told_K,
@@ -462,7 +462,7 @@ def update_profile(
     Tair_K = conc(
         H,
         soil.heat,
-        prof.delz,
+        para.delz,
         dij,
         met.ustar,
         met.zL,
@@ -489,7 +489,7 @@ def update_profile(
     eair_Pa = conc(
         LE,
         soil.evap,
-        prof.delz,
+        para.delz,
         dij,
         met.ustar,
         met.zL,
@@ -516,7 +516,7 @@ def update_profile(
     co2 = conc(
         -Ps,
         soil.resp,
-        prof.delz,
+        para.delz,
         dij,
         met.ustar,
         met.zL,
@@ -695,23 +695,23 @@ def initialize_parnir(para: Para, ntime: int, jtot: int, wavebnd: int) -> ParNir
     # prob_shade = jnp.ones([ntime, jktot])
     sun_lai = jnp.zeros([ntime, jktot])
     shade_lai = jnp.zeros([ntime, jktot])
-    # TODO: how to link this with model parameters?
-    ratios = jax.lax.switch(
-        wavebnd,
-        [
-            lambda: (
-                jnp.array(para.par_reflect),
-                jnp.array(para.par_trans),
-                jnp.array(para.par_soil_refl),
-            ),
-            lambda: (
-                jnp.array(para.nir_reflect),
-                jnp.array(para.nir_trans),
-                jnp.array(para.nir_soil_refl),
-            ),
-        ],
-    )
-    reflect, trans, soil_refl = ratios[0], ratios[1], ratios[2]
+    # # TODO: how to link this with model parameters?
+    # ratios = jax.lax.switch(
+    #     wavebnd,
+    #     [
+    #         lambda: (
+    #             jnp.array(para.par_reflect),
+    #             jnp.array(para.par_trans),
+    #             jnp.array(para.par_soil_refl),
+    #         ),
+    #         lambda: (
+    #             jnp.array(para.nir_reflect),
+    #             jnp.array(para.nir_trans),
+    #             jnp.array(para.nir_soil_refl),
+    #         ),
+    #     ],
+    # )
+    # reflect, trans, soil_refl = ratios[0], ratios[1], ratios[2]
     # if wavebnd == "par":
     #     reflect = jnp.array(para.par_reflect)
     #     trans = jnp.array(para.par_trans)
@@ -739,9 +739,9 @@ def initialize_parnir(para: Para, ntime: int, jtot: int, wavebnd: int) -> ParNir
         # prob_shade,
         sun_lai,
         shade_lai,
-        reflect,  # pyright: ignore
-        trans,  # pyright: ignore
-        soil_refl,  # pyright: ignore
+        # reflect,  # pyright: ignore
+        # trans,  # pyright: ignore
+        # soil_refl,  # pyright: ignore
         # absorbed,  # pyright: ignore
     )
     return rad
