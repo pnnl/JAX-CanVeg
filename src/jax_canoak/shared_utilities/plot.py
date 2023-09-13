@@ -1,7 +1,11 @@
+import numpy as np
 import jax.numpy as jnp
-import matplotlib.pyplot as plt
+import jax.tree_util as jtu
 
 import pandas as pd
+
+import matplotlib.pyplot as plt
+
 
 # from ..subjects import ParNir, Ir, Para
 
@@ -34,14 +38,15 @@ def plot_timeseries(
     title=None,
     label=None,
     tunit="[day of year]",
+    alpha=1.0,
     xticks=None,
 ):
     if ax is None:
         fig, ax = plt.subplots(1, 1, figsize=figsize_1b)
     if timesteps is None:
-        ax.plot(array, label=label)
+        ax.plot(array, label=label, alpha=alpha)
     else:
-        ax.plot(timesteps, array, label=label)
+        ax.plot(timesteps, array, label=label, alpha=alpha)
     if xticks is None:
         ax.set(
             xlabel=f"Time {tunit}",
@@ -209,7 +214,9 @@ def plot_timeseries_obs_1to1(
     if met is not None:
         timesteps = get_time(met)
     plot_timeseries(obs, timesteps=timesteps, ax=ax1, title=None, label="observation")
-    plot_timeseries(sim, timesteps=timesteps, ax=ax1, title=None, label="simulation")
+    plot_timeseries(
+        sim, timesteps=timesteps, ax=ax1, title=None, label="simulation", alpha=0.5
+    )
     ax1.legend()
     ax1.set(title=varn)
     plot_obs_1to1(obs, sim, lim, ax=ax2)
@@ -548,6 +555,51 @@ def plot_obs_energy_closure(obs, ax=None):
         ylim=rnet_lim,
     )
     return ax
+
+
+def plot_para_sensitivity_ranking(para_gradients, category=None, ax=None):
+    # Compute the averaged sensitivity
+    gm = jtu.tree_map(lambda x: x.mean(), para_gradients)
+
+    # Get the values and keys
+    values, tree = jtu.tree_flatten(gm)
+    keys = list(tree.node_data()[1].dynamic_field_names)  # pyright: ignore
+    if category == "photosyn":
+        keys_selected = [
+            "vcopt",
+            "jmopt",
+            "rd25",
+            "hkin",
+            "skin",
+            "ejm",
+            "evc",
+            "kc25",
+            "ko25",
+            "o2",
+            "ekc",
+            "eko",
+            "erd",
+            "ektau",
+            "toptvc",
+            "toptjm",
+            "kball",
+            "bprime",
+            "lleaf",
+            "qalpha",
+            "leaf_clumping_factor",
+        ]
+        values = [values[keys.index(k)] for k in keys_selected]
+        keys = keys_selected
+
+    values, keys = np.array(values), np.array(keys)
+    values = np.abs(values)
+
+    sort_indices = np.array(jnp.argsort(jnp.array(values)))
+
+    if ax is None:
+        fig, ax = plt.subplots(1, 1, figsize=(5, 10))
+    ax.barh(keys[sort_indices], values[sort_indices])
+    ax.set(ylabel="Parameters", xlabel="Gradients", xscale="symlog")
 
 
 # Some utility functions
