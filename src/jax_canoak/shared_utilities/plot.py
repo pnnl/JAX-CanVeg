@@ -587,6 +587,11 @@ def plot_para_sensitivity_ranking(para_gradients, category=None, ax=None):
             "lleaf",
             "qalpha",
             "leaf_clumping_factor",
+            "ep",
+            "par_reflect",
+            "nir_reflect",
+            "par_trans",
+            "nir_trans",
         ]
         values = [values[keys.index(k)] for k in keys_selected]
         keys = keys_selected
