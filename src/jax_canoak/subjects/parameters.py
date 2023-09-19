@@ -1,7 +1,7 @@
 """
 Classes for model general parameters.
 
-- 
+- Setup
 - Para()
 
 Author: Peishi Jiang

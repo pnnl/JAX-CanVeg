@@ -113,7 +113,6 @@ def perform_optimization_batch(
         def loss_func_batch(c, batch):
             met, y = batch
             loss, grads = loss_func(diff_model, static_model, y, met)
-            # loss, grads = 0.1, 2.
             return c, [loss, grads]
 
         _, results = jax.lax.scan(loss_func_batch, None, xs=[batched_met, batched_y])

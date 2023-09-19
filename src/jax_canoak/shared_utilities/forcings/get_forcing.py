@@ -1,7 +1,10 @@
 import requests
 from statistics import mean
+import numpy as np
 import pandas as pd
 import jax.numpy as jnp
+from scipy import spatial
+import pyproj
 
 from typing import Tuple
 from .point_data import PointData
@@ -10,12 +13,13 @@ from ..types import Float_0D
 from ..constants import bprime, mass_air, rugc, cp
 
 
-def get_modis(
+def get_modis_et(
     site: str,
     start: str,
     end: str,
     network: str = "AMERIFLUX",
-    product: str = "MCD15A3H",
+    product: str = "MOD16A2",
+    method: str = "point",
     sample_freq: str = "D",
 ) -> pd.core.frame.DataFrame:
     modis_baseurl = "https://modis.ornl.gov/rst/api/v1/"
@@ -44,6 +48,127 @@ def get_modis(
     response = requests.get(query, headers=urlheader_json)
     data_json = response.json()
 
+    # Get the cell index that includes the site
+    xl, yl = float(data_json["xllcorner"]), float(data_json["yllcorner"])
+    dcell = float(data_json["cellsize"])
+    ny, nx = int(data_json["nrows"]), int(data_json["ncols"])
+    lon_site, lat_site = data_json["longitude"], data_json["latitude"]
+    xset = [xl + (i + 1 / 2) * dcell for i in range(nx)]
+    yset = [yl + (i + 1 / 2) * dcell for i in range(ny)]
+    xv, yv = np.meshgrid(xset, yset)
+
+    sinu = pyproj.Proj("+proj=sinu +R=6371007.181 +nadgrids=@null +wktext")
+    wgs84 = pyproj.Proj("EPSG:4326")
+    lon, lat = pyproj.transform(  # pyright: ignore
+        sinu, wgs84, xv.flatten(), yv.flatten()
+    )
+    tree = spatial.KDTree(list(zip(lon, lat)))
+    _, site_ind = tree.query(np.array([[lat_site, lon_site]]))
+
+    # Get LAI, FparLai_QC, and Fpar_500m
+    nt = int(len(data_json["subset"]) / 6)
+    # time_set, lai_set, fpar_set, qc_set = [], [], [], []
+    time_set, et_set, le_set = [], [], []
+    for i in range(nt):
+        et = data_json["subset"][i * 5 + 0]
+        le = data_json["subset"][i * 5 + 2]
+        qc = data_json["subset"][i * 5 + 1]
+        assert et["calendar_date"] == qc["calendar_date"]
+        assert le["calendar_date"] == qc["calendar_date"]
+        assert et["band"] == "ET_500m"
+        assert le["band"] == "LE_500m"
+        assert qc["band"] == "ET_QC_500m"
+
+        # Calculate the mean of lai and fpar on the valid data
+        time = et["calendar_date"]
+        et, le, qc = et["data"], le["data"], qc["data"]
+        et = [l for l in et if (l >= 0) and (l <= 100)]  # noqa: E741
+        le = [l for l in le if (l >= 0) and (l <= 100)]  # noqa: E741
+
+        # if time=='2016-01-05':
+        #     print(qc)
+
+        if (len(et) == 0) or (len(le) == 0):
+            continue
+        else:
+            if method == "mean":
+                et, le = mean(et), mean(le)
+            elif method == "point":
+                et, le = et[site_ind], le[site_ind]
+            if et == 0:
+                continue
+
+        # Append them to the sets
+        time_set.append(time)
+        et_set.append(et)
+        le_set.append(le)
+
+    # Convert it to pandas dataframe
+    df_modis = pd.DataFrame(
+        jnp.array([et_set, le_set]).T, index=time_set, columns=["ET", "LE"]
+    )
+    df_modis.index = pd.to_datetime(df_modis.index, format="%Y-%m-%d")
+    df_modis = df_modis.resample(sample_freq).interpolate()
+    df_modis = df_modis[start:end]
+
+    return df_modis
+
+
+def get_modis_lai(
+    site: str,
+    start: str,
+    end: str,
+    network: str = "AMERIFLUX",
+    product: str = "MCD15A3H",
+    method: str = "point",
+    sample_freq: str = "D",
+) -> pd.core.frame.DataFrame:
+    modis_baseurl = "https://modis.ornl.gov/rst/api/v1/"
+    urlheader_txt = {"Accept": "text/csv"}
+    urlheader_json = {"Accept": "json"}
+
+    # Query the dates in the MODIS product
+    query = "".join([modis_baseurl, product, f"/{network}/", site, "/dates"])
+    response = requests.get(query, headers=urlheader_txt)
+    dates = response.text.split(",")
+
+    # Query the product data
+    query = "".join(
+        [
+            modis_baseurl,
+            product,
+            "/AMERIFLUX/",
+            site,
+            "/subset?",
+            "&startDate=",
+            dates[0],
+            "&endDate=",
+            dates[-1],
+        ]
+    )
+    response = requests.get(query, headers=urlheader_json)
+    data_json = response.json()
+
+    # Get the cell index that includes the site
+    xl, yl = float(data_json["xllcorner"]), float(data_json["yllcorner"])
+    dcell = float(data_json["cellsize"])
+    ny, nx = int(data_json["nrows"]), int(data_json["ncols"])
+    lon_site, lat_site = data_json["longitude"], data_json["latitude"]
+    xset = [xl + (i + 1 / 2) * dcell for i in range(nx)]
+    yset = [yl + (i + 1 / 2) * dcell for i in range(ny)]
+    xv, yv = np.meshgrid(xset, yset)
+
+    sinu = pyproj.Proj("+proj=sinu +R=6371007.181 +nadgrids=@null +wktext")
+    wgs84 = pyproj.Proj("EPSG:4326")
+    lon, lat = pyproj.transform(  # pyright: ignore
+        sinu, wgs84, xv.flatten(), yv.flatten()
+    )
+    tree = spatial.KDTree(list(zip(lon, lat)))
+    # _, site_ind = tree.query(np.array([[lat_site, lon_site]]))
+    _, site_ind = tree.query(np.array([[lon_site, lat_site]]))
+    site_ind = site_ind[0]
+    print(site_ind)
+
     # Get LAI, FparLai_QC, and Fpar_500m
     nt = int(len(data_json["subset"]) / 6)
     # time_set, lai_set, fpar_set, qc_set = [], [], [], []
@@ -61,8 +186,6 @@ def get_modis(
         # Calculate the mean of lai and fpar on the valid data
         time = lai["calendar_date"]
         lai, fpar, qc = lai["data"], fpar["data"], qc["data"]
-        lai = [l for l in lai if (l >= 0) and (l <= 100)]  # noqa: E741
-        fpar = [l for l in fpar if (l >= 0) and (l <= 100)]  # noqa: E741
 
         # if time=='2016-01-05':
         #     print(qc)
@@ -70,7 +193,12 @@ def get_modis(
         if (len(lai) == 0) or (len(fpar) == 0):
             continue
         else:
-            lai, fpar = mean(lai), mean(fpar)
+            if method == "mean":
+                lai = [l for l in lai if (l >= 0) and (l <= 100)]  # noqa: E741
+                fpar = [l for l in fpar if (l >= 0) and (l <= 100)]  # noqa: E741
+                lai, fpar = mean(lai), mean(fpar)
+            elif method == "point":
+                lai, fpar = lai[site_ind], fpar[site_ind]
             if lai == 0:
                 continue
 
@@ -87,7 +215,8 @@ def get_modis(
     df_modis = df_modis.resample(sample_freq).interpolate()
     df_modis = df_modis[start:end]
 
-    return df_modis
+    return df_modis, data_json
+    # return df_modis
 
 
 def get_input_t(forcings: PointData, t: Float_0D) -> Tuple:

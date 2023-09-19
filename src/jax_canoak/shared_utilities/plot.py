@@ -28,6 +28,7 @@ figsize_1b = (8, 5)
 figsize_1_2 = (12, 5)
 figsize_2_1 = (5, 12)
 figsize_2_2 = (10, 10)
+figsize_3_1 = (10, 10)
 
 
 # Plotting functions
@@ -102,7 +103,13 @@ def plot_imshow(
         axbar = fig.add_subplot(gs[1, 0], sharey=ax1)
     else:
         ax1, ax2, axbar = axes[0], axes[1], axes[2]
-    im = ax1.imshow(array, extent=extent, origin=origin, cmap=cmap, aspect="auto")
+    im = ax1.imshow(
+        array,
+        extent=extent,  # pyright: ignore  # noqa: E501
+        origin=origin,
+        cmap=cmap,
+        aspect="auto",
+    )
     ax1.set(ylabel=ylabel, title=title)
     ax1.set_xticklabels(ax1.get_xticklabels(), rotation=15, ha="right")
     plt.colorbar(im, cax=axbar, orientation="horizontal")
@@ -213,9 +220,17 @@ def plot_timeseries_obs_1to1(
         ax1, ax2 = axes[0], axes[1]
     if met is not None:
         timesteps = get_time(met)
-    plot_timeseries(obs, timesteps=timesteps, ax=ax1, title=None, label="observation")
     plot_timeseries(
-        sim, timesteps=timesteps, ax=ax1, title=None, label="simulation", alpha=0.5
+        obs, timesteps=timesteps, ax=ax1, title=None, label="observation", tunit=""
+    )
+    plot_timeseries(
+        sim,
+        timesteps=timesteps,
+        ax=ax1,
+        title=None,
+        label="simulation",
+        alpha=0.5,
+        tunit="",
     )
     ax1.legend()
     ax1.set(title=varn)
@@ -345,6 +360,54 @@ def plot_canopy2(can, waveband: str, ax=None):
     ax.legend()
     ax.set(xlabel="Rnet", ylabel="LE+H", title=waveband)
     return ax
+
+
+def plot_le_gs_lai(le, le_obs, gs, lai, axes=None, met=None, timesteps=None):
+    if axes is None:
+        fig, axes = plt.subplots(3, 1, figsize=figsize_3_1, sharex=True)
+    if met is not None:
+        timesteps = get_time(met)
+    ax1 = axes[0]
+    plot_timeseries(
+        le_obs,
+        timesteps=timesteps,
+        ax=ax1,
+        title="Latent heat flux [W m-2]",
+        label="observation",
+        tunit="",
+    )
+    plot_timeseries(
+        le,
+        timesteps=timesteps,
+        ax=ax1,
+        title="Latent heat flux [W m-2]",
+        alpha=0.5,
+        label="simulation",
+        tunit="",
+    )
+    ax1.set(xlabel="")
+    ax1.legend()
+    ax2 = axes[1]
+    plot_timeseries(
+        gs,
+        timesteps=timesteps,
+        ax=ax2,
+        title="Stomatal conductance [m s-1]",
+        alpha=0.5,
+        label="observation",
+        tunit="",
+    )
+    ax2.set(xlabel="")
+    ax3 = axes[2]
+    plot_timeseries(
+        lai,
+        timesteps=timesteps,
+        ax=ax3,
+        title="MODIS LAI [-]",
+        alpha=0.5,
+        label="observation",
+        tunit="",
+    )
 
 
 # def plot_canopy3(can, prm, waveband: str, ax=None):
@@ -529,7 +592,7 @@ def plot_obs_comparison(obs, can, axes=None):
     # ------ Obs versus can ------
     if axes is None:
         fig, axes = plt.subplots(2, 2, figsize=figsize_2_2)
-    LE_lim, H_lim = [-10, 750], [-220, 400]
+    LE_lim, H_lim = [-10, 300], [-220, 600]
     rnet_lim, gsoil_lim = [-50, 800], [-60, 70]
     ax = axes[0, 0]
     plot_obs_1to1(obs.LE, can.LE, LE_lim, varn="LE", ax=ax)
@@ -605,6 +668,27 @@ def plot_para_sensitivity_ranking(para_gradients, category=None, ax=None):
         fig, ax = plt.subplots(1, 1, figsize=(5, 10))
     ax.barh(keys[sort_indices], values[sort_indices])
     ax.set(ylabel="Parameters", xlabel="Gradients", xscale="symlog")
+
+
+def visualize_tree_diff(tree1, tree2, parent_key="", indent=0):
+    # Tree1
+    values1, tree1 = jtu.tree_flatten(tree1)
+    keys1 = list(tree1.node_data()[1].dynamic_field_names)  # pyright: ignore
+
+    # Tree2
+    values2, tree2 = jtu.tree_flatten(tree2)
+    keys2 = list(tree2.node_data()[1].dynamic_field_names)  # pyright: ignore
+
+    assert keys1 == keys2
+
+    # diff = {}
+    for i, key in enumerate(keys1):
+        val1, val2 = values1[i], values2[i]
+        if jnp.all(val1 != val2):
+            print(" " * indent + f"Key: {key}")
+            print(" " * indent + f"Value 1: {val1}")
+            print(" " * indent + f"Value 2: {val2}")
+            print()
 
 
 # Some utility functions

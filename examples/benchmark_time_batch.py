@@ -69,17 +69,19 @@ dij = get_dispersion_matrix(setup, para)
 print("Forward runs ...")
 canoak_eqx = CanoakBase(para, setup, dij)
 batch_size_set = [1, 2, 4, 8, 16, 48, 100, 240, 1274, 3792, 18960]
+batch_size_set.reverse()
 time_set = []
 for i, batch_size in enumerate(batch_size_set):
     print(f"Batch size: {batch_size}")
     n_batch = floor(n_time / batch_size)
     batched_met = convert_met_to_batched_met(met, n_batch, batch_size)
-    if i == 0:  # run once to avoid the compilation time effect
-        run_canoak_in_batch(batched_met, canoak_eqx)
+    run_canoak_in_batch(batched_met, canoak_eqx)
     start = time()
     run_canoak_in_batch(batched_met, canoak_eqx)
     end = time()
-    time_set.append(end - start)
+    simulation_time = end - start
+    print(f"Simulation time: {simulation_time} sec")
+    time_set.append(simulation_time)
 
 fig, ax = plt.subplots(1, 1, figsize=(8, 5))
 ax.plot(batch_size_set, time_set, "k*-")
@@ -122,17 +124,19 @@ def df_canoak_le_batched(para, batched_met, canoak_eqx):
 
 print("Compute gradients ...")
 batch_size_set = [1, 2, 4, 8, 16, 48, 100, 240, 1274, 3792]
+batch_size_set.reverse()
 time_set = []
 for i, batch_size in enumerate(batch_size_set):
     print(f"Batch size: {batch_size}")
     n_batch = floor(n_time / batch_size)
     batched_met = convert_met_to_batched_met(met, n_batch, batch_size)
-    if i == 0:  # run once to avoid the compilation time effect
-        df_canoak_le_batched(para, batched_met, canoak_eqx)
+    df_canoak_le_batched(para, batched_met, canoak_eqx)
     start = time()
     df_canoak_le_batched(para, batched_met, canoak_eqx)
     end = time()
-    time_set.append(end - start)
+    simulation_time = end - start
+    print(f"Simulation time: {simulation_time} sec")
+    time_set.append(simulation_time)
 
 fig, ax = plt.subplots(1, 1, figsize=(8, 5))
 ax.plot(batch_size_set, time_set, "k*-")
@@ -144,6 +148,3 @@ ax.set(
     xscale="log",
 )
 plt.savefig("Benchmark_time_batch_gradients.png", dpi=150)
-
-
-plt.show()

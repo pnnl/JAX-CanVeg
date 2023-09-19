@@ -11,4 +11,5 @@ pip install --upgrade "jax[cpu]"
 pip install diffrax
 pip install optax
 pip install pre-commit
+pip install pyproj
 # pip install equinox

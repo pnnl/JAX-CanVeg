@@ -19,6 +19,13 @@ from ..subjects import convert_batchedstates_to_states
 from ..subjects import convert_batchedmet_to_met
 
 
+def run_canoak_in_batch_any(batched_met: BatchedMet, canoak_eqx: CanoakBase):
+    # Run batch simulation
+    result = jax.vmap(canoak_eqx)(batched_met)
+
+    return result
+
+
 def run_canoak_in_batch(
     batched_met: BatchedMet, canoak_eqx: CanoakBase
 ) -> Tuple[
