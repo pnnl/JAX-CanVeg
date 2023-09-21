@@ -232,6 +232,7 @@ def canoak(
         # Compute new boundary layer conductances based on new leaf energy balance
         # and delta T, in case convection occurs
         # Different coefficients will be assigned if amphistomatous or hypostomatous
+        # sun, shade = energy_carbon_fluxes(
         sun, shade = energy_carbon_fluxes(
             sun, shade, qin, quantum, met, prof, para, stomata
         )

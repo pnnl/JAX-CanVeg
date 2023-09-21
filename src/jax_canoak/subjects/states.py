@@ -215,6 +215,7 @@ class Can(eqx.Module):
 
 
 class Obs(eqx.Module):
+    P: Float_1D
     LE: Float_1D
     H: Float_1D
     GPP: Float_1D

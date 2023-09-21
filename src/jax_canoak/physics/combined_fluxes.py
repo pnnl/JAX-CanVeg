@@ -25,6 +25,7 @@ from .carbon_fluxes import leaf_ps
 
 
 # @eqx.filter_jit
+# This version uses the modified stomatal conductance calculation routine
 def energy_carbon_fluxes(
     sun: SunShadedCan,
     shade: SunShadedCan,
@@ -81,6 +82,7 @@ def energy_carbon_fluxes(
         boundary_layer_res.co2,
         met.P_kPa,
         prof.eair_Pa[:, :jtot],
+        met.soilmoisture,
         prm,
         stomata,
     )
@@ -105,6 +107,7 @@ def energy_carbon_fluxes(
         boundary_layer_res.co2,
         met.P_kPa,
         prof.eair_Pa[:, :jtot],
+        met.soilmoisture,
         prm,
         stomata,
     )

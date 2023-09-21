@@ -139,6 +139,9 @@ class Para(eqx.Module):
     brs: Float_0D
     qalpha: Float_0D
     lleaf: Float_0D
+    # Water content thresholds
+    theta_min: Float_0D  # field capacity
+    theta_max: Float_0D  # wilting point
     # Diffusivity values for 273 K and 1013 mb (STP) using values from Massman (1998) Atmos Environment  # noqa: E501
     # These values are for diffusion in air.  When used these values must be adjusted for  # noqa: E501
     # temperature and pressure
@@ -203,6 +206,9 @@ class Para(eqx.Module):
         brs: Float_0D = 60.0,
         qalpha: Float_0D = 0.22,
         lleaf: Float_0D = 0.04,
+        # Water content thresholds
+        theta_min: Float_0D = 0.03,  # wilting point
+        theta_max: Float_0D = 0.2,  # field capacity
     ) -> None:
         # Vertical profiles
         self.zht1 = zht1
@@ -290,6 +296,10 @@ class Para(eqx.Module):
         self.qalpha = jnp.array(qalpha)  #  leaf quantum yield, electrons
         # self.qalpha2 = 0.0484  # qalpha squared, qalpha2 = pow(qalpha, 2.0);
         self.lleaf = jnp.array(lleaf)  # leaf length, m, alfalfa, across the trifoliate
+
+        # Water content thresholds
+        self.theta_min = theta_min  # wilting point
+        self.theta_max = theta_max  # field capacity
 
         # Diffusivity values for 273 K and 1013 mb (STP) using values from Massman (1998) Atmos Environment  # noqa: E501
         # These values are for diffusion in air.  When used these values must be adjusted for  # noqa: E501
@@ -546,6 +556,8 @@ def initialize_parameters(
     nir_reflect: Float_0D = 0.60,
     nir_trans: Float_0D = 0.20,
     nir_soil_refl: Float_0D = 0.10,
+    theta_min: Float_0D = 0.05,  # wilting point
+    theta_max: Float_0D = 0.2,  # field capacity
     npart: int = 1000000,
     niter: int = 15,
 ) -> Tuple[Setup, Para]:
@@ -596,6 +608,8 @@ def initialize_parameters(
         nir_reflect=nir_reflect,
         nir_trans=nir_trans,
         nir_soil_refl=nir_soil_refl,
+        theta_min=theta_min,
+        theta_max=theta_max,
     )
 
     return setup, para

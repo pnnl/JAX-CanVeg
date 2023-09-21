@@ -41,13 +41,14 @@ def plot_timeseries(
     tunit="[day of year]",
     alpha=1.0,
     xticks=None,
+    linestyle="-",
 ):
     if ax is None:
         fig, ax = plt.subplots(1, 1, figsize=figsize_1b)
     if timesteps is None:
-        ax.plot(array, label=label, alpha=alpha)
+        ax.plot(array, linestyle, label=label, alpha=alpha, markersize=3)
     else:
-        ax.plot(timesteps, array, label=label, alpha=alpha)
+        ax.plot(timesteps, array, linestyle, label=label, alpha=alpha, markersize=3)
     if xticks is None:
         ax.set(
             xlabel=f"Time {tunit}",
@@ -199,10 +200,10 @@ def plot_obs_1to1(obs, can, lim, varn="varn", ax=None):
 
 
 def plot_timeseries_obs_1to1(
-    obs, sim, lim, met=None, timesteps=None, varn="varn", axes=None
+    obs, sim, lim, met=None, timesteps=None, varn="varn", axes=None, linestyle="-"
 ):
     if axes is None:
-        fig = plt.figure(figsize=(15, 5))
+        fig = plt.figure(figsize=(15, 4))
         gs = fig.add_gridspec(
             1,
             2,
@@ -211,7 +212,7 @@ def plot_timeseries_obs_1to1(
             right=0.9,
             bottom=0.1,
             top=0.9,
-            wspace=0.1,
+            wspace=0.2,
             hspace=0.5,
         )
         ax1 = fig.add_subplot(gs[0, 0])
@@ -221,7 +222,13 @@ def plot_timeseries_obs_1to1(
     if met is not None:
         timesteps = get_time(met)
     plot_timeseries(
-        obs, timesteps=timesteps, ax=ax1, title=None, label="observation", tunit=""
+        obs,
+        timesteps=timesteps,
+        ax=ax1,
+        title=None,
+        label="observation",
+        tunit="",
+        linestyle=linestyle,
     )
     plot_timeseries(
         sim,
@@ -229,14 +236,17 @@ def plot_timeseries_obs_1to1(
         ax=ax1,
         title=None,
         label="simulation",
-        alpha=0.5,
+        alpha=0.7,
         tunit="",
+        linestyle=linestyle,
     )
     ax1.legend()
     ax1.set(title=varn)
-    plot_obs_1to1(obs, sim, lim, ax=ax2)
-    plt.subplots_adjust(wspace=0.5)
-    return [ax1, ax2]
+    ax2.yaxis.set_label_position("right")
+    ax2.yaxis.tick_right()
+    plot_obs_1to1(obs, sim, lim, ax=ax2, varn="")
+    # plt.subplots_adjust(hspace=0.9)
+    return fig, ax1, ax2  # pyright: ignore
 
 
 def plot_rad(rad, setup, lai, waveband: str, ax=None):
@@ -394,9 +404,12 @@ def plot_le_gs_lai(le, le_obs, gs, lai, axes=None, met=None, timesteps=None):
         ax=ax2,
         title="Stomatal conductance [m s-1]",
         alpha=0.5,
-        label="observation",
+        label="simulation",
         tunit="",
     )
+    ax22 = ax2.twinx()
+    ax22.plot(timesteps, met.soilmoisture, "k")  # pyright: ignore
+    ax22.set(ylabel="Soil moisture [%]")
     ax2.set(xlabel="")
     ax3 = axes[2]
     plot_timeseries(
