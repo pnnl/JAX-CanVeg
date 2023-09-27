@@ -2,7 +2,8 @@
 Classes for model general parameters.
 
 - Setup
-- Para()
+- Para
+- Rsoil_DL
 
 Author: Peishi Jiang
 Date: 2023.7.24.
@@ -11,11 +12,13 @@ Date: 2023.7.24.
 # import jax
 import jax.numpy as jnp
 
-from math import floor
+# from math import floor
 
 import equinox as eqx
 
-from typing import Tuple
+# from equinox.nn import MLP
+
+from typing import Optional
 from ..shared_utilities.types import Float_0D, Float_1D
 
 # from ..shared_utilities.utils import dot, minus
@@ -79,6 +82,23 @@ class Setup(eqx.Module):
     # @property
     # def jktot3(self):
     #     return self.jtot3 + 1
+
+
+class VarStats(eqx.Module):
+    T_air: Float_0D
+    rglobal: Float_0D
+    eair: Float_0D
+    wind: Float_0D
+    CO2: Float_0D
+    P_kPa: Float_0D
+    ustar: Float_0D
+    Tsoil: Float_0D
+    soilmoisture: Float_0D
+    zcanopy: Float_0D
+    lai: Float_0D
+    rsoil: Float_0D
+    LE: Float_0D
+    H: Float_0D
 
 
 class Para(eqx.Module):
@@ -160,6 +180,13 @@ class Para(eqx.Module):
     Mair: Float_0D
     dLdT: Float_0D
     extinct: Float_0D
+    # # Deep learning models
+    # RsoilDL: MLP
+    # Meterological stats
+    var_mean: Optional[VarStats]
+    var_std: Optional[VarStats]
+    var_max: Optional[VarStats]
+    var_min: Optional[VarStats]
 
     def __init__(
         self,
@@ -209,6 +236,11 @@ class Para(eqx.Module):
         # Water content thresholds
         theta_min: Float_0D = 0.03,  # wilting point
         theta_max: Float_0D = 0.2,  # field capacity
+        # Meterological stats
+        var_mean: Optional[VarStats] = None,
+        var_std: Optional[VarStats] = None,
+        var_max: Optional[VarStats] = None,
+        var_min: Optional[VarStats] = None,
     ) -> None:
         # Vertical profiles
         self.zht1 = zht1
@@ -328,6 +360,16 @@ class Para(eqx.Module):
         self.Mair = jnp.array(28.97)
         self.dLdT = jnp.array(-2370.0)
         self.extinct = jnp.array(2.0)  # extinction coefficient wind in canopy
+
+        # Initialize the Rsoil DL module
+        # TODO: this is a hack to make sure that the RsoilDL module is initialized
+        # self.RsoilDL = MLP(in_size=2, out_size=1, width_size=6, depth=2, key=jax.random.PRNGKey(0))  # noqa: E501
+
+        # Get the variable stats
+        self.var_mean = var_mean
+        self.var_std = var_std
+        self.var_max = var_max
+        self.var_min = var_min
 
     @property
     def dht(self):
@@ -533,83 +575,132 @@ class Para(eqx.Module):
         return 9.8 * self.lleaf**3 / (self.nnu**2)
 
 
-def initialize_parameters(
-    time_zone: int = -8,
-    latitude: Float_0D = 38.0991538,
-    longitude: Float_0D = -121.49933,
-    stomata: int = 1,
-    leafangle: int = 1,
-    leaf_clumping_factor: Float_0D = 0.95,
-    veg_ht: Float_0D = 0.8,
-    meas_ht: Float_0D = 5.0,
-    soil_depth: Float_0D = 0.15,
-    n_can_layers: int = 30,
-    n_atmos_layers: int = 50,
-    n_soil_layers: int = 10,
-    n_hr_per_day: int = 48,
-    n_time: int = 200,
-    # time_batch_size: int = 1,
-    dt_soil: int = 20,
-    par_reflect: Float_0D = 0.05,
-    par_trans: Float_0D = 0.05,
-    par_soil_refl: Float_0D = 0.05,
-    nir_reflect: Float_0D = 0.60,
-    nir_trans: Float_0D = 0.20,
-    nir_soil_refl: Float_0D = 0.10,
-    theta_min: Float_0D = 0.05,  # wilting point
-    theta_max: Float_0D = 0.2,  # field capacity
-    npart: int = 1000000,
-    niter: int = 15,
-) -> Tuple[Setup, Para]:
+# class RsoilDL(eqx.Module):
+#     layers: List[Linear]
 
-    dht_canopy = veg_ht / n_can_layers
-    ht_atmos = meas_ht - veg_ht
-    dht_atmos = ht_atmos / n_atmos_layers
+#     def __init__(
+#         self,
+#         n_input: int,
+#         n_hidden: int,
+#         n_output: int,
+#         depth: int=1,
+#         random_seed: int=0,
+#     ):
+#         super().__init__()
+#         key = jax.random.PRNGKey(random_seed)
 
-    n_total_layers = n_can_layers + n_atmos_layers
+#         layers = []
+#         # First layer
+#         layer1 = Linear(n_input, n_hidden, key=key)
+#         layers.append(layer1)
+#         # Hidden layers
+#         for i in range(depth):
+#             key_used, key = jax.random.split(key)
+#             if i == depth - 1:
+#                 layer = Linear(n_hidden, n_output, key=key)
+#             else:
+#                 layer = Linear(n_hidden, n_hidden, key=key)
+#             layers.append(layer)
+#         self.layers = layers
 
-    # Layer depths
-    zht1 = jnp.arange(1, n_can_layers + 1)
-    zht1 = zht1 * dht_canopy
-    delz1 = jnp.ones(n_can_layers) * dht_canopy
-    zht2 = jnp.arange(1, n_total_layers - n_can_layers + 1) * dht_atmos + veg_ht
-    delz2 = jnp.ones(n_total_layers - n_can_layers) * dht_atmos
+#     def __call__(self, x):
+#         layers = self.layers
 
-    # Number of time steps for solving soil energy balancd
-    soil_mtime = floor(3600 * 24 / n_hr_per_day / dt_soil)
-    setup = Setup(
-        time_zone=time_zone,
-        lat_deg=latitude,
-        long_deg=longitude,
-        stomata=stomata,
-        leafangle=leafangle,
-        n_hr_per_day=n_hr_per_day,
-        ntime=n_time,
-        # time_batch_size=time_batch_size,
-        n_can_layers=n_can_layers,
-        n_total_layers=n_total_layers,
-        n_soil_layers=n_soil_layers,
-        dt_soil=dt_soil,
-        soil_mtime=soil_mtime,
-        npart=npart,
-        niter=niter,
-    )
+#         def calculate_layer(x, layer):
+#             x = layer(x)
+#             x = jax.nn.relu(x)
+#             return x, x
+#         _, x = jax.lax.scan(calculate_layer, x, layers)
+#         return x
 
-    para = Para(
-        leaf_clumping_factor=leaf_clumping_factor,
-        zht1=zht1,
-        zht2=zht2,
-        delz1=delz1,
-        delz2=delz2,
-        soil_depth=soil_depth,
-        par_reflect=par_reflect,
-        par_trans=par_trans,
-        par_soil_refl=par_soil_refl,
-        nir_reflect=nir_reflect,
-        nir_trans=nir_trans,
-        nir_soil_refl=nir_soil_refl,
-        theta_min=theta_min,
-        theta_max=theta_max,
-    )
 
-    return setup, para
+# def initialize_parameters(
+#     time_zone: int = -8,
+#     latitude: Float_0D = 38.0991538,
+#     longitude: Float_0D = -121.49933,
+#     stomata: int = 1,
+#     leafangle: int = 1,
+#     leaf_clumping_factor: Float_0D = 0.95,
+#     veg_ht: Float_0D = 0.8,
+#     meas_ht: Float_0D = 5.0,
+#     soil_depth: Float_0D = 0.15,
+#     n_can_layers: int = 30,
+#     n_atmos_layers: int = 50,
+#     n_soil_layers: int = 10,
+#     n_hr_per_day: int = 48,
+#     n_time: int = 200,
+#     # time_batch_size: int = 1,
+#     dt_soil: int = 20,
+#     par_reflect: Float_0D = 0.05,
+#     par_trans: Float_0D = 0.05,
+#     par_soil_refl: Float_0D = 0.05,
+#     nir_reflect: Float_0D = 0.60,
+#     nir_trans: Float_0D = 0.20,
+#     nir_soil_refl: Float_0D = 0.10,
+#     theta_min: Float_0D = 0.05,  # wilting point
+#     theta_max: Float_0D = 0.2,  # field capacity
+#     npart: int = 1000000,
+#     niter: int = 15,
+#     met: Optional[Met] = None,
+#     obs: Optional[Obs] = None,
+# ) -> Tuple[Setup, Para]:
+
+#     dht_canopy = veg_ht / n_can_layers
+#     ht_atmos = meas_ht - veg_ht
+#     dht_atmos = ht_atmos / n_atmos_layers
+
+#     n_total_layers = n_can_layers + n_atmos_layers
+
+#     # Layer depths
+#     zht1 = jnp.arange(1, n_can_layers + 1)
+#     zht1 = zht1 * dht_canopy
+#     delz1 = jnp.ones(n_can_layers) * dht_canopy
+#     zht2 = jnp.arange(1, n_total_layers - n_can_layers + 1) * dht_atmos + veg_ht
+#     delz2 = jnp.ones(n_total_layers - n_can_layers) * dht_atmos
+
+#     # Calculate meterological mean and standard deviation
+#     if obs is None:
+#         var_mean, var_std = None, None
+#     else:
+#         var_mean, var_std = calculate_var_stats(met, obs)
+
+#     # Number of time steps for solving soil energy balancd
+#     soil_mtime = floor(3600 * 24 / n_hr_per_day / dt_soil)
+#     setup = Setup(
+#         time_zone=time_zone,
+#         lat_deg=latitude,
+#         long_deg=longitude,
+#         stomata=stomata,
+#         leafangle=leafangle,
+#         n_hr_per_day=n_hr_per_day,
+#         ntime=n_time,
+#         # time_batch_size=time_batch_size,
+#         n_can_layers=n_can_layers,
+#         n_total_layers=n_total_layers,
+#         n_soil_layers=n_soil_layers,
+#         dt_soil=dt_soil,
+#         soil_mtime=soil_mtime,
+#         npart=npart,
+#         niter=niter,
+#     )
+
+#     para = Para(
+#         leaf_clumping_factor=leaf_clumping_factor,
+#         zht1=zht1,
+#         zht2=zht2,
+#         delz1=delz1,
+#         delz2=delz2,
+#         soil_depth=soil_depth,
+#         par_reflect=par_reflect,
+#         par_trans=par_trans,
+#         par_soil_refl=par_soil_refl,
+#         nir_reflect=nir_reflect,
+#         nir_trans=nir_trans,
+#         nir_soil_refl=nir_soil_refl,
+#         theta_min=theta_min,
+#         theta_max=theta_max,
+#         var_mean=var_mean,
+#         var_std=var_std,
+#     )
+
+#     return setup, para

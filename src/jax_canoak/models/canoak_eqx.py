@@ -5,13 +5,16 @@ Author: Peishi Jiang
 Date: 2023.08.22.
 """
 
+import jax
 import equinox as eqx
+from equinox.nn import MLP
 
-from typing import Tuple
+from typing import Tuple, Optional
 
 # from math import ceil
 
 from .canoak import canoak
+from .canoak_rsoil_hybrid import canoak_rsoil_hybrid
 
 # from ..subjects import Para, Met, Prof, SunAng, LeafAng, SunShadedCan
 # from ..subjects import Setup, Veg, Soil, Rnet, Qin, Ir, ParNir, Lai, Can
@@ -129,3 +132,87 @@ class CanoakBase(eqx.Module):
     def get_can_le(self, met: Met):
         results = self(met)
         return results[-1].LE
+
+    def get_soil_resp(self, met: Met):
+        results = self(met)
+        soil = results[-3]
+        return soil.resp
+
+
+class CanoakRsoilHybrid(CanoakBase):
+    RsoilDL: eqx.Module
+
+    def __init__(
+        self,
+        para: Para,
+        setup: Setup,
+        dij: Float_2D,
+        RsoilDL: Optional[eqx.Module] = None,
+    ):
+        super(CanoakRsoilHybrid, self).__init__(para, setup, dij)
+        if RsoilDL is None:
+            RsoilDL = MLP(
+                in_size=2, out_size=1, width_size=6, depth=2, key=jax.random.PRNGKey(0)
+            )
+        self.RsoilDL = RsoilDL
+
+    def __call__(
+        self, met: Met
+    ) -> Tuple[
+        Met,
+        Prof,
+        ParNir,
+        ParNir,
+        Ir,
+        Rnet,
+        Qin,
+        SunAng,
+        LeafAng,
+        Lai,
+        SunShadedCan,
+        SunShadedCan,
+        Soil,
+        Veg,
+        Can,
+    ]:
+        para, dij = self.para, self.dij
+        RsoilDL = self.RsoilDL
+        # Location parameters
+        lat_deg = self.lat_deg
+        long_deg = self.long_deg
+        time_zone = self.time_zone
+        # Static parameters
+        leafangle = self.leafangle
+        stomata = self.stomata
+        n_can_layers = self.n_can_layers
+        n_total_layers = self.n_total_layers
+        n_soil_layers = self.n_soil_layers
+        # ntime = self.ntime
+        dt_soil = self.dt_soil
+        soil_mtime = self.soil_mtime
+        niter = self.niter
+
+        # Number of time steps from met
+        # batch_size = self.batch_size
+        # n_batch = self.n_batch
+        ntime = met.zL.size
+
+        results = canoak_rsoil_hybrid(
+            para,
+            met,
+            dij,
+            RsoilDL,
+            lat_deg,
+            long_deg,
+            time_zone,
+            leafangle,
+            stomata,
+            n_can_layers,
+            n_total_layers,
+            n_soil_layers,
+            ntime,
+            dt_soil,
+            soil_mtime,
+            niter,
+        )
+        return results

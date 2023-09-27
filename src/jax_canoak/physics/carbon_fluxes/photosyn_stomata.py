@@ -13,6 +13,8 @@ Date: 2023.08.01.
 import jax
 import jax.numpy as jnp
 
+import equinox as eqx
+
 from typing import Tuple
 from ...shared_utilities.types import Float_2D, Float_1D, Float_0D
 from ...subjects import Para, Ps
@@ -241,7 +243,7 @@ def leaf_ps(
     # rh is relative humidity, which comes from a coupled
     # leaf energy balance model
     rh_leaf = eair_Pa / es(Tlk)  # need to transpose matrix
-    # rh_leaf = dot(fw, rh_leaf)  # include the impact of soil moisture
+    rh_leaf = dot(fw, rh_leaf)  # include the impact of soil moisture
     k_rh = rh_leaf * prm.kball  # combine product of rh and K ball-berry
 
     # Gs from Ball-Berry is for water vapor.  It must be divided
@@ -719,6 +721,7 @@ def soil_respiration_alfalfa(
     Rd: Float_1D,
     prm: Para,
 ) -> Float_1D:
+    # Use statistical model derived from ACE analysis on alfalfa
     x = jnp.array([Ac + Rd, Tsoil, soilmoisture, veght])  # (4, ntime)
 
     b1 = jnp.array(
@@ -744,3 +747,42 @@ def soil_respiration_alfalfa(
     resp = b0_0 + b0_1 * phisum + b0_2 * phisum * phisum - Rd
 
     return resp
+
+
+def soil_respiration_dnn(
+    Tsoil_K: Float_2D,
+    swc: Float_1D,
+    prm: Para,
+    RsoilDL: eqx.Module,
+) -> Float_1D:
+    # Normalize the inputs
+    Tsoil = Tsoil_K - 273.15
+    # Tsfc_norm = (Tsfc - prm.var_mean.Tsoil) / prm.var_std.Tsoil
+    # swc_norm = (swc - prm.var_mean.soilmoisture) / prm.var_std.soilmoisture
+    Tsoil_norm = (Tsoil - prm.var_min.T_air) / (  # pyright: ignore
+        prm.var_max.T_air - prm.var_min.T_air  # pyright: ignore
+    )  # pyright: ignore
+    swc_norm = (swc - prm.var_min.soilmoisture) / (  # pyright: ignore
+        prm.var_max.soilmoisture - prm.var_min.soilmoisture  # pyright: ignore
+    )  # pyright: ignore
+
+    # Get the inputs
+    # x = Tsoil_norm
+    # jax.debug.print("Tsoil shape: {a}", a=x.shape)
+    x = jnp.array([Tsoil_norm[:, 0], swc_norm]).T
+    # x = jnp.expand_dims(Tsfc_norm, axis=-1)
+
+    # Perform the Rsoil calculation
+    rsoil_norm = jax.vmap(RsoilDL)(x)
+    rsoil_norm = rsoil_norm.flatten()
+
+    # jax.debug.print("rsoil_norm: {x}", x=rsoil_norm)
+
+    # Transform it back
+    # rsoil = rsoil_norm * prm.var_std.rsoil + prm.var_mean.rsoil
+    rsoil = (
+        rsoil_norm * (prm.var_max.rsoil - prm.var_min.rsoil)  # pyright: ignore
+        + prm.var_min.rsoil  # pyright: ignore
+    )
+
+    return rsoil

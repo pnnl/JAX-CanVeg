@@ -20,7 +20,7 @@ from ..shared_utilities.types import Float_2D
 from .utils import es as fes
 from .utils import llambda, desdt, des2dt
 
-from .states import Met
+from .meterology import Met
 
 Mair = 28.97  # the molecular weight of air
 rugc = 8.314  # J mole-1 K-1

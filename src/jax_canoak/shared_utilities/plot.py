@@ -637,6 +637,8 @@ def plot_para_sensitivity_ranking(para_gradients, category=None, ax=None):
     # Compute the averaged sensitivity
     gm = jtu.tree_map(lambda x: x.mean(), para_gradients)
 
+    keys_to_remove = ["var_mean", "var_std", "var_min", "var_max"]
+
     # Get the values and keys
     values, tree = jtu.tree_flatten(gm)
     keys = list(tree.node_data()[1].dynamic_field_names)  # pyright: ignore
@@ -668,9 +670,14 @@ def plot_para_sensitivity_ranking(para_gradients, category=None, ax=None):
             "nir_reflect",
             "par_trans",
             "nir_trans",
+            # "theta_min",
+            # "theta_max",
         ]
         values = [values[keys.index(k)] for k in keys_selected]
         keys = keys_selected
+
+    keys = [k for k in keys if k not in keys_to_remove]
+    values = [values[keys.index(k)] for k in keys]
 
     values, keys = np.array(values), np.array(keys)
     values = np.abs(values)
@@ -680,7 +687,8 @@ def plot_para_sensitivity_ranking(para_gradients, category=None, ax=None):
     if ax is None:
         fig, ax = plt.subplots(1, 1, figsize=(5, 10))
     ax.barh(keys[sort_indices], values[sort_indices])
-    ax.set(ylabel="Parameters", xlabel="Gradients", xscale="symlog")
+    ax.set(ylabel="Parameters", xlabel="E[|Gradient|] / Nt", xscale="linear")
+    # ax.set(ylabel="Parameters", xlabel="E[Gradient] / Nt", xscale="symlog")
 
 
 def visualize_tree_diff(tree1, tree2, parent_key="", indent=0):
