@@ -230,9 +230,9 @@ class Obs(eqx.Module):
 
 class Soil(eqx.Module):
     dt: Float_0D
-    n_soil: int
+    # n_soil: int
     depth: Float_0D
-    mtime: int
+    # mtime: int
     water_content_15cm: Float_1D
     water_content_litter: Float_0D
     bulkdensity: Float_0D
@@ -282,13 +282,13 @@ class Soil(eqx.Module):
     def air_fraction(self):
         return self.pore_fraction - self.water_content_15cm
 
-    @property
-    def n_soil_1(self):
-        return self.n_soil + 1
+    # @property
+    # def n_soil_1(self):
+    #     return self.n_soil + 1
 
-    @property
-    def n_soil_2(self):
-        return self.n_soil + 2
+    # @property
+    # def n_soil_2(self):
+    #     return self.n_soil + 2
 
     @property
     def z_soil(self):

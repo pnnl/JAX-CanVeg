@@ -8,6 +8,7 @@ conda activate jax-watershed
 
 # Install JAX using pip
 pip install --upgrade "jax[cpu]"
+pip install optimistix
 pip install diffrax
 pip install optax
 pip install pre-commit

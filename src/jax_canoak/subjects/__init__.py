@@ -38,6 +38,7 @@ from .initialization_update import (
     calculate_veg,  # noqa: F401
     calculate_var_stats,  # noqa: F401
     initialize_model_states,  # noqa: F401
+    calculate_can,  # noqa: F401
 )
 
 # from .parameters import initialize_parameters  # noqa: F401

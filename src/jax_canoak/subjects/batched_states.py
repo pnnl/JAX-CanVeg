@@ -435,7 +435,8 @@ def convert_batchedstates_to_states(
     shade = jtu.tree_map(lambda x: x.reshape(n_total, -1), shade)
     sun = jtu.tree_map(lambda x: x.reshape(n_total, -1), sun)
     qin = jtu.tree_map(lambda x: x.reshape(n_total, -1), qin)
-    rnet = rnet.reshape(n_total)
+    # rnet = rnet.reshape(n_total)
+    rnet = jtu.tree_map(lambda x: x.reshape(n_total, -1), rnet)
     sun_ang = jtu.tree_map(lambda x: x.reshape(n_total), sun_ang)
 
     ir = jtu.tree_map(lambda x: x.reshape(n_total, -1), ir)
@@ -467,9 +468,9 @@ def convert_batchedstates_to_states(
     soil = eqx.tree_at(
         lambda t: (
             t.dt,
-            t.n_soil,
+            # t.n_soil,
             t.depth,
-            t.mtime,
+            # t.mtime,
             t.water_content_15cm,
             t.water_content_litter,
             t.bulkdensity,
@@ -504,9 +505,9 @@ def convert_batchedstates_to_states(
         soil,
         replace=(
             soil.dt[0],  # pyright: ignore
-            soil.n_soil[0],  # pyright: ignore
+            # soil.n_soil[0],  # pyright: ignore
             soil.depth[0],  # pyright: ignore
-            soil.mtime[0],  # pyright: ignore
+            # soil.mtime[0],  # pyright: ignore
             soil.water_content_15cm.reshape(n_total),
             soil.water_content_litter[0],  # pyright: ignore
             soil.bulkdensity[0],  # pyright: ignore

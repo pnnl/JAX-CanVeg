@@ -18,7 +18,7 @@ from math import floor
 from .meterology import Met
 from .parameters import Para, Setup, VarStats
 from .states import Obs, Prof, Qin, Veg, Lai, Soil
-from .states import ParNir, Ir, Rnet, SunShadedCan
+from .states import ParNir, Ir, Rnet, SunShadedCan, Can
 from ..shared_utilities.utils import dot, minus
 from ..shared_utilities.types import Float_2D, Int_0D, Float_0D, Float_1D
 from .utils import conc
@@ -44,7 +44,7 @@ def initialize_parameters(
     n_hr_per_day: int = 48,
     n_time: int = 200,
     # time_batch_size: int = 1,
-    dt_soil: int = 20,
+    dt_soil: Float_0D = 20.0,
     par_reflect: Float_0D = 0.05,
     par_trans: Float_0D = 0.05,
     par_soil_refl: Float_0D = 0.05,
@@ -73,10 +73,10 @@ def initialize_parameters(
     delz2 = jnp.ones(n_total_layers - n_can_layers) * dht_atmos
 
     # Calculate meterological mean and standard deviation
-    if obs is None:
-        var_mean, var_std, var_max, var_min = None, None, None, None
-    else:
+    if (met is not None) and (obs is not None):
         var_mean, var_std, var_max, var_min = calculate_var_stats(met, obs)
+    else:
+        var_mean, var_std, var_max, var_min = None, None, None, None
 
     # Number of time steps for solving soil energy balancd
     soil_mtime = floor(3600 * 24 / n_hr_per_day / dt_soil)
@@ -462,7 +462,7 @@ def initialize_model_states(
     para: Para,
     ntime: int,
     jtot: int,
-    dt_soil: int,
+    dt_soil: Float_0D,
     soil_mtime: int,
     n_soil_layers: int,
 ):
@@ -500,7 +500,10 @@ def initialize_model_states(
     # Lai
     lai = initialize_lai(ntime, jtot, para, met)
 
-    return soil, quantum, nir, ir, qin, rnet, sun, shade, veg, lai
+    # Can
+    can = calculate_can(quantum, nir, ir, veg, soil, jtot)
+
+    return soil, quantum, nir, ir, qin, rnet, sun, shade, veg, lai, can
 
 
 # def initialize_parnir(para: Para, setup: Setup, wavebnd: str) -> ParNir:
@@ -682,7 +685,8 @@ def initialize_soil(
     para: Para,
     met: Met,
     ntime: int,
-    dt_soil: int,
+    # dt_soil: int,
+    dt_soil: Float_0D,
     soil_mtime: int,
     n_soil_layers: int,
     depth: Float_0D = 0.15,
@@ -721,7 +725,7 @@ def initialize_soil(
 
     # Time step in seconds
     dt = dt_soil
-    mtime = soil_mtime
+    # mtime = soil_mtime
     # mtime = floor(1800.0 / dt)  # time steps per half hour
 
     n_soil = n_soil_layers  # number of soil layers
@@ -819,9 +823,9 @@ def initialize_soil(
 
     return Soil(
         dt,
-        n_soil,
+        # n_soil,
         depth,
-        mtime,
+        # mtime,
         water_content_15cm,
         water_content_litter,
         bulkdensity,
@@ -852,6 +856,46 @@ def initialize_soil(
         lout,
         llout,
         resp,
+    )
+
+
+def calculate_can(
+    quantum: ParNir, nir: ParNir, ir: Ir, veg: Veg, soil: Soil, jtot: int
+) -> Can:
+    # Calculate the states/fluxes across the whole canopy
+    rnet_calc = (
+        quantum.beam_flux[:, jtot] / 4.6
+        + quantum.dn_flux[:, jtot] / 4.6
+        - quantum.up_flux[:, jtot] / 4.6
+        + nir.beam_flux[:, jtot]
+        + nir.dn_flux[:, jtot]
+        - nir.up_flux[:, jtot]
+        + ir.ir_dn[:, jtot]
+        + -ir.ir_up[:, jtot]
+    )
+    LE = veg.LE + soil.evap
+    H = veg.H + soil.heat
+    rnet = veg.Rnet + soil.rnet
+    NEE = soil.resp - veg.GPP
+    avail = rnet_calc - soil.gsoil
+    gsoil = soil.gsoil
+    # albedo_calc = (quantum.up_flux[:, jtot] / 4.6 + nir.up_flux[:, jtot]) / (
+    #     quantum.incoming / 4.6 + nir.incoming
+    # )
+    # nir_albedo_calc = nir.up_flux[:, jtot] / nir.incoming
+    nir_refl = nir.up_flux[:, jtot] - nir.up_flux[:, 0]
+
+    return Can(
+        rnet_calc,
+        rnet,
+        LE,
+        H,
+        NEE,
+        avail,
+        gsoil,
+        # albedo_calc,
+        # nir_albedo_calc,
+        nir_refl,
     )
 
 

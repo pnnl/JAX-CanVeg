@@ -43,7 +43,7 @@ class Setup(eqx.Module):
     # Timesteps
     n_hr_per_day: int
     ntime: int
-    dt_soil: int
+    dt_soil: Float_0D
     soil_mtime: int
     # time_batch_size: int
     # Number of layers
