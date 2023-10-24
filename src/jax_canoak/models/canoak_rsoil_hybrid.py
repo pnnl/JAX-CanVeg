@@ -40,7 +40,7 @@ def canoak_rsoil_hybrid_each_iteration(
     states: Tuple[Met, Prof, Ir, Qin, SunShadedCan, SunShadedCan, Soil, Veg, Can],
     para: Para,
     dij: Float_2D,
-    RsoilDL: eqx.Module,
+    # RsoilDL: eqx.Module,
     leaf_ang: LeafAng,
     quantum: ParNir,
     nir: ParNir,
@@ -49,6 +49,8 @@ def canoak_rsoil_hybrid_each_iteration(
     stomata: int,
     soil_mtime: int,
 ):
+    RsoilDL = para.RsoilDL
+
     met, prof, ir, qin, sun, shade, soil, veg, can = states
     # jax.debug.print("T soil: {a}", a=soil.T_soil[10,:])
     # jax.debug.print("T sfc: {a}", a=soil.sfc_temperature[10])
@@ -115,7 +117,7 @@ def canoak_rsoil_hybrid(
     para: Para,
     met: Met,
     dij: Float_2D,
-    RsoilDL: eqx.Module,
+    # RsoilDL: eqx.Module,
     # Location parameters
     lat_deg: Float_0D,
     long_deg: Float_0D,
@@ -172,7 +174,7 @@ def canoak_rsoil_hybrid(
     # This is where things should be jitted as a whole
     args = [
         dij,
-        RsoilDL,
+        # RsoilDL,
         leaf_ang,
         quantum,
         nir,

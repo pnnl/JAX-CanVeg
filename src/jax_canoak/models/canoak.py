@@ -326,14 +326,25 @@ def update_all(states, new_states):
     return new_states
 
 
-def get_canle_output(states):
+def get_canle(states):
     return states[-1].LE
 
 
-def update_canle_output(states, can_le):
+def update_canle(states, can_le):
     can = states[-1]
     can_new = eqx.tree_at(lambda t: t.LE, can, can_le)
     states[-1] = can_new
+    return states
+
+
+def get_soilresp(states):
+    return states[-3].resp
+
+
+def update_soilresp(states, soil_resp):
+    soil = states[-3]
+    soil_new = eqx.tree_at(lambda t: t.resp, soil, soil_resp)
+    states[-3] = soil_new
     return states
 
 

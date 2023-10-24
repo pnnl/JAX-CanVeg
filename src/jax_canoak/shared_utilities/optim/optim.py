@@ -39,7 +39,9 @@ def loss_func(
         _type_: _description_
     """
     model = eqx.combine(diff_model, static_model)
+    # jax.debug.print("args: {x}", x=args)
     pred_y = model(met, *args)
+    # jax.debug.print("pred_y: {x}", x=pred_y)
     return jnp.mean((y - pred_y) ** 2)
 
 

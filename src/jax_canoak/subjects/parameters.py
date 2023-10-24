@@ -9,7 +9,7 @@ Author: Peishi Jiang
 Date: 2023.7.24.
 """
 
-# import jax
+import jax
 import jax.numpy as jnp
 
 # from math import floor
@@ -17,6 +17,7 @@ import jax.numpy as jnp
 import equinox as eqx
 
 # from equinox.nn import MLP
+from .dnn import MLP
 
 from typing import Optional
 from ..shared_utilities.types import Float_0D, Float_1D
@@ -180,8 +181,8 @@ class Para(eqx.Module):
     Mair: Float_0D
     dLdT: Float_0D
     extinct: Float_0D
-    # # Deep learning models
-    # RsoilDL: MLP
+    # Deep learning models
+    RsoilDL: eqx.Module
     # Meterological stats
     var_mean: Optional[VarStats]
     var_std: Optional[VarStats]
@@ -241,6 +242,8 @@ class Para(eqx.Module):
         var_std: Optional[VarStats] = None,
         var_max: Optional[VarStats] = None,
         var_min: Optional[VarStats] = None,
+        # Deep learning models
+        RsoilDL: Optional[eqx.Module] = None,
     ) -> None:
         # Vertical profiles
         self.zht1 = zht1
@@ -370,6 +373,17 @@ class Para(eqx.Module):
         self.var_std = var_std
         self.var_max = var_max
         self.var_min = var_min
+
+        # # Deep learning models
+        if RsoilDL is None:
+            # self.RsoilDL = MLP(
+            #     in_size=2, out_size=1, width_size=6, depth=2,key=jax.random.PRNGKey(0)
+            # )
+            self.RsoilDL = MLP(
+                in_size=2, out_size=1, width_size=6, depth=2, key=jax.random.PRNGKey(0)
+            )
+        else:
+            self.RsoilDL = RsoilDL
 
     @property
     def dht(self):

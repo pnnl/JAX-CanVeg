@@ -41,6 +41,8 @@ from .initialization_update import (
     calculate_can,  # noqa: F401
 )
 
+from .dnn import MLP  # noqa: F401
+
 # from .parameters import initialize_parameters  # noqa: F401
 # from .meterology import initialize_met, get_met_forcings  # noqa: F401
 # from .states import initialize_profile  # noqa: F401

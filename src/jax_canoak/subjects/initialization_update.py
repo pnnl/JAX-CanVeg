@@ -57,6 +57,7 @@ def initialize_parameters(
     niter: int = 15,
     met: Optional[Met] = None,
     obs: Optional[Obs] = None,
+    RsoilDL: Optional[eqx.Module] = None,
 ) -> Tuple[Setup, Para]:
 
     dht_canopy = veg_ht / n_can_layers
@@ -117,6 +118,7 @@ def initialize_parameters(
         var_std=var_std,
         var_max=var_max,
         var_min=var_min,
+        RsoilDL=RsoilDL,
     )
 
     return setup, para

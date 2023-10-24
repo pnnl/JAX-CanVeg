@@ -773,10 +773,11 @@ def soil_respiration_dnn(
     # x = jnp.expand_dims(Tsfc_norm, axis=-1)
 
     # Perform the Rsoil calculation
-    rsoil_norm = jax.vmap(RsoilDL)(x)
+    rsoil_norm = jax.vmap(RsoilDL)(x)  # pyright: ignore
     rsoil_norm = rsoil_norm.flatten()
 
     # jax.debug.print("rsoil_norm: {x}", x=rsoil_norm)
+    # jax.debug.print("rsoil_norm: {x}", x=RsoilDL.layers[0].weight)
 
     # Transform it back
     # rsoil = rsoil_norm * prm.var_std.rsoil + prm.var_mean.rsoil

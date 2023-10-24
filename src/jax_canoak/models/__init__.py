@@ -5,12 +5,14 @@ from .canoak import (
 )
 from .canoak import (
     get_all,  # noqa: F401
-    get_canle_output,  # noqa: F401
+    get_canle,  # noqa: F401
+    get_soilresp,  # noqa: F401
     update_all,  # noqa: F401
-    update_canle_output,  # noqa: F401
+    update_canle,  # noqa: F401
+    update_soilresp,  # noqa: F401
 )
 from .canoak_rsoil_hybrid import canoak_rsoil_hybrid  # noqa: F401
 from .canoak_eqx import CanoakBase, CanoakRsoilHybrid  # noqa: F401
-from .canoak_eqx import CanoakBaseIFT  # noqa: F401
+from .canoak_eqx import CanoakBaseIFT, CanoakRsoilHybridIFT  # noqa: F401
 from .canoak_batched import run_canoak_in_batch  # noqa: F401
 from .canoak_batched import run_canoak_in_batch_any  # noqa: F401
