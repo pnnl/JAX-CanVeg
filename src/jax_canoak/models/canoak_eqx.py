@@ -29,6 +29,9 @@ from ..subjects import Qin, Ir, ParNir, Lai
 from ..shared_utilities.types import Float_2D, Float_0D
 
 
+########################################################################
+# The base class for Canoak model
+########################################################################
 class CanoakBase(eqx.Module):
     para: Para
     dij: Float_2D
@@ -62,6 +65,14 @@ class CanoakBase(eqx.Module):
         self.soil_mtime = setup.soil_mtime
         self.niter = setup.niter
 
+    def __call__(self, met: Met, *args):
+        raise NotImplementedError("This is the base model; not working!")
+
+
+########################################################################
+# The classes for performing canoak without IFT
+########################################################################
+class Canoak(CanoakBase):
     def __call__(
         self, met: Met
     ) -> Tuple[
@@ -133,7 +144,7 @@ class CanoakBase(eqx.Module):
         return soil.resp
 
 
-class CanoakRsoilHybrid(CanoakBase):
+class CanoakRsoilHybrid(Canoak):
     # RsoilDL: eqx.Module
 
     # def __init__(
@@ -210,7 +221,43 @@ class CanoakRsoilHybrid(CanoakBase):
         return results
 
 
-class CanoakBaseIFT(CanoakBase):
+########################################################################
+# The classes for performing canoak with IFT
+########################################################################
+class CanoakIFT(CanoakBase):
+
+    # def __call__(
+    #     self,
+    #     initial_states: Tuple[Met,Prof,Ir,Qin,SunShadedCan,SunShadedCan,Soil,Veg,Can],
+    #     drivers: Tuple[LeafAng, ParNir, ParNir, Lai],
+    #     update_substates_func: Callable = update_all,
+    #     get_substates_func: Callable = get_all,
+    # ):
+    #     para, dij = self.para, self.dij
+    #     # Some configurations
+    #     stomata = self.stomata
+    #     n_can_layers = self.n_can_layers
+    #     soil_mtime = self.soil_mtime
+    #     niter = self.niter
+
+    #     # Get the drivers
+    #     leaf_ang, quantum = drivers[0], drivers[1]
+    #     nir, lai = drivers[2], drivers[3]
+
+    #     # Forward runs
+    #     args = [dij, leaf_ang, quantum, nir, lai, n_can_layers, stomata, soil_mtime]
+    #     states_final = implicit_func_fixed_point(
+    #         canoak_each_iteration,
+    #         update_substates_func,
+    #         get_substates_func,
+    #         initial_states,
+    #         para,
+    #         niter,
+    #         *args
+    #     )
+
+    #     return states_final
+
     def __call__(
         self,
         met: Met,
@@ -277,7 +324,7 @@ class CanoakBaseIFT(CanoakBase):
         return results[0]
 
 
-class CanoakRsoilHybridIFT(CanoakBaseIFT):
+class CanoakRsoilHybridIFT(CanoakIFT):
     def __call__(
         self,
         met: Met,

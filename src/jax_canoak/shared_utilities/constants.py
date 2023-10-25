@@ -27,7 +27,7 @@ ustar_ref = 1.0  # Reference u* value for dispersion matrix
 
 # Universal gas constant
 rugc = 8.314  # Universal gas constant, J mole-1 K-1
-rgc1000 = 8314  # Gas constant times 1000.
+rgc1000 = 8314.0  # Gas constant times 1000.
 
 # Consts for Photosynthesis model and kinetic equations.
 # for Vcmax and Jmax.  Taken from Harley and Baldocchi (1995, PCE)

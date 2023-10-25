@@ -9,4 +9,5 @@ dependencies:
   - h5py
   - pip
   - seaborn
+  - jupyterlab
   - pybind11

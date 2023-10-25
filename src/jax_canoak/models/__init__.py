@@ -12,7 +12,7 @@ from .canoak import (
     update_soilresp,  # noqa: F401
 )
 from .canoak_rsoil_hybrid import canoak_rsoil_hybrid  # noqa: F401
-from .canoak_eqx import CanoakBase, CanoakRsoilHybrid  # noqa: F401
-from .canoak_eqx import CanoakBaseIFT, CanoakRsoilHybridIFT  # noqa: F401
+from .canoak_eqx import CanoakBase, Canoak, CanoakRsoilHybrid  # noqa: F401
+from .canoak_eqx import CanoakIFT, CanoakRsoilHybridIFT  # noqa: F401
 from .canoak_batched import run_canoak_in_batch  # noqa: F401
 from .canoak_batched import run_canoak_in_batch_any  # noqa: F401
