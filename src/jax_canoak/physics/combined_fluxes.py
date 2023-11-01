@@ -88,7 +88,9 @@ def energy_carbon_fluxes(
     )
     # sun.Ps, sun.gs, sun.Resp = ps.aphoto, ps.gs_m_s, ps.rd
     sun = eqx.tree_at(
-        lambda t: (t.Ps, t.gs, t.Resp), sun, (ps.aphoto, ps.gs_m_s, ps.rd)
+        lambda t: (t.Ps, t.gs, t.Resp, t.Leaf_RH),
+        sun,
+        (ps.aphoto, ps.gs_m_s, ps.rd, ps.Leaf_RH),
     )
 
     # Compute energy balance on the top of sunlit leaves
@@ -113,7 +115,10 @@ def energy_carbon_fluxes(
     )
     # shade.Ps, shade.gs, shade.Resp = ps.aphoto, ps.gs_m_s, ps.rd
     shade = eqx.tree_at(
-        lambda t: (t.Ps, t.gs, t.Resp), shade, (ps.aphoto, ps.gs_m_s, ps.rd)
+        lambda t: (t.Ps, t.gs, t.Resp, t.Leaf_RH),
+        shade,
+        (ps.aphoto, ps.gs_m_s, ps.rd, ps.Leaf_RH)
+        # lambda t: (t.Ps, t.gs, t.Resp), shade, (ps.aphoto, ps.gs_m_s, ps.rd)
     )
     shade = leaf_energy(
         boundary_layer_res, qin.shade_abs, met, prof, shade, prm, stomata

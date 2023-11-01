@@ -21,6 +21,7 @@ from ..shared_utilities.solver import implicit_func_fixed_point
 from .canoak import canoak_initialize_states, canoak_each_iteration
 from .canoak import get_all, update_all
 from .canoak_rsoil_hybrid import canoak_rsoil_hybrid_each_iteration
+from .canoak_leafrh_hybrid import canoak_leafrh_hybrid_each_iteration
 
 from ..subjects import Para, Met, Prof, SunAng
 from ..subjects import LeafAng, SunShadedCan, Can
@@ -370,6 +371,63 @@ class CanoakRsoilHybridIFT(CanoakIFT):
         args = [dij, leaf_ang, quantum, nir, lai, n_can_layers, stomata, soil_mtime]
         states_final = implicit_func_fixed_point(
             canoak_rsoil_hybrid_each_iteration,
+            update_substates_func,
+            get_substates_func,
+            states_guess,
+            para,
+            niter,
+            *args
+        )
+
+        return states_final, [quantum, nir, rnet, sun_ang, leaf_ang, lai]
+
+
+class CanoakLeafRHHybridIFT(CanoakIFT):
+    def __call__(
+        self,
+        met: Met,
+        update_substates_func: Callable = update_all,
+        get_substates_func: Callable = get_all,
+    ):
+        para, dij = self.para, self.dij
+        # Location parameters
+        lat_deg = self.lat_deg
+        long_deg = self.long_deg
+        time_zone = self.time_zone
+        # Static parameters
+        leafangle = self.leafangle
+        stomata = self.stomata
+        n_can_layers = self.n_can_layers
+        n_total_layers = self.n_total_layers
+        n_soil_layers = self.n_soil_layers
+        dt_soil = self.dt_soil
+        soil_mtime = self.soil_mtime
+        niter = self.niter
+
+        # Number of time steps from met
+        ntime = met.zL.size
+
+        # Initialization
+        quantum, nir, rnet, lai, sun_ang, leaf_ang, initials = canoak_initialize_states(
+            para,
+            met,
+            lat_deg,
+            long_deg,
+            time_zone,
+            leafangle,
+            n_can_layers,
+            n_total_layers,
+            n_soil_layers,
+            ntime,
+            dt_soil,
+            soil_mtime,
+        )
+        states_guess = initials
+
+        # Forward runs
+        args = [dij, leaf_ang, quantum, nir, lai, n_can_layers, stomata, soil_mtime]
+        states_final = implicit_func_fixed_point(
+            canoak_leafrh_hybrid_each_iteration,
             update_substates_func,
             get_substates_func,
             states_guess,

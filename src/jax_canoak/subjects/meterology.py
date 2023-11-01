@@ -68,6 +68,10 @@ class Met(eqx.Module):
         return self.es - self.eair_Pa  # atmospheric vapor pressure deficit, Pa
 
     @property
+    def vpd(self):
+        return self.vpd_Pa / 1000.0  # atmospheric vapor pressure deficit, kPa
+
+    @property
     def air_density(self):
         # air density, kg m-3
         return self.P_kPa * Mair / (rugc * self.T_air_K)

@@ -6,3 +6,7 @@ from .photosyn_stomata import (
     soil_respiration,  # noqa: F401
     soil_respiration_dnn,  # noqa: F401
 )
+from .photosyn_stomata_leafrh_hybrid import (
+    calculate_leaf_rh,  # noqa: F401
+    leaf_ps_rh_hybrid,  # noqa: F401
+)

@@ -17,7 +17,7 @@ import jax.numpy as jnp
 import equinox as eqx
 
 # from equinox.nn import MLP
-from .dnn import MLP
+from .dnn import MLP, MLP2
 
 from typing import Optional
 from ..shared_utilities.types import Float_0D, Float_1D
@@ -100,6 +100,7 @@ class VarStats(eqx.Module):
     rsoil: Float_0D
     LE: Float_0D
     H: Float_0D
+    vpd: Float_0D
 
 
 class Para(eqx.Module):
@@ -181,8 +182,10 @@ class Para(eqx.Module):
     Mair: Float_0D
     dLdT: Float_0D
     extinct: Float_0D
-    # Deep learning models
+    # Deep learning models -- soil respiration
     RsoilDL: eqx.Module
+    # Deep learning models -- leaf relative humidity
+    LeafRHDL: eqx.Module
     # Meterological stats
     var_mean: Optional[VarStats]
     var_std: Optional[VarStats]
@@ -244,6 +247,7 @@ class Para(eqx.Module):
         var_min: Optional[VarStats] = None,
         # Deep learning models
         RsoilDL: Optional[eqx.Module] = None,
+        LeafRHDL: Optional[eqx.Module] = None,
     ) -> None:
         # Vertical profiles
         self.zht1 = zht1
@@ -384,6 +388,20 @@ class Para(eqx.Module):
             )
         else:
             self.RsoilDL = RsoilDL
+        if LeafRHDL is None:
+            # self.RsoilDL = MLP(
+            #     in_size=2, out_size=1, width_size=6, depth=2,key=jax.random.PRNGKey(0)
+            # )
+            self.LeafRHDL = MLP2(
+                in_size=2,
+                out_size=1,
+                width_size=6,
+                depth=2,
+                key=jax.random.PRNGKey(0)
+                # in_size=4,out_size=1, width_size=6, depth=2, key=jax.random.PRNGKey(0)
+            )
+        else:
+            self.LeafRHDL = LeafRHDL
 
     @property
     def dht(self):

@@ -147,6 +147,7 @@ class SunShadedCan(eqx.Module):
     Tsfc: Float_2D
     Tsfc_new: Float_2D
     Tsfc_old: Float_2D
+    Leaf_RH: Float_2D
 
 
 class BoundLayerRes(eqx.Module):
@@ -201,6 +202,7 @@ class Ps(eqx.Module):
     r: Float_2D
     rd: Float_2D
     rstom: Float_2D
+    Leaf_RH: Float_2D
 
 
 class Can(eqx.Module):

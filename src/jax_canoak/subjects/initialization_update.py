@@ -8,6 +8,7 @@ Date: 2023.9.25.
 
 import jax
 import jax.numpy as jnp
+import jax.tree_util as jtu
 import numpy as np
 
 import equinox as eqx
@@ -24,6 +25,7 @@ from ..shared_utilities.types import Float_2D, Int_0D, Float_0D, Float_1D
 from .utils import conc
 from .utils import llambda as flambda
 
+near_zero = 0.00001
 
 ############################################################################
 # Parameters and setup
@@ -58,7 +60,10 @@ def initialize_parameters(
     met: Optional[Met] = None,
     obs: Optional[Obs] = None,
     RsoilDL: Optional[eqx.Module] = None,
-) -> Tuple[Setup, Para]:
+    LeafRHDL: Optional[eqx.Module] = None,
+    get_para_bounds: bool = False,
+    # ) -> Tuple[Setup, Para]:
+):
 
     dht_canopy = veg_ht / n_can_layers
     ht_atmos = meas_ht - veg_ht
@@ -119,9 +124,57 @@ def initialize_parameters(
         var_max=var_max,
         var_min=var_min,
         RsoilDL=RsoilDL,
+        LeafRHDL=LeafRHDL,
     )
 
-    return setup, para
+    if not get_para_bounds:
+        return setup, para
+    else:
+        para_min = jtu.tree_map(lambda _: -99999.0, para)
+        para_min = eqx.tree_at(
+            lambda t: [
+                t.leaf_clumping_factor,
+                t.par_reflect,
+                t.par_trans,
+                t.par_soil_refl,
+                t.nir_reflect,
+                t.nir_trans,
+                t.nir_soil_refl,
+                t.bprime,
+                t.theta_min,
+                t.theta_max,
+            ],
+            para_min,
+            replace=[
+                near_zero,
+                near_zero,
+                near_zero,
+                near_zero,
+                near_zero,
+                near_zero,
+                near_zero,
+                near_zero,
+                near_zero,
+                near_zero,
+            ],
+        )
+        para_max = jtu.tree_map(lambda _: 99999.0, para)
+        para_max = eqx.tree_at(
+            lambda t: [
+                t.leaf_clumping_factor,
+                t.par_reflect,
+                t.par_trans,
+                t.par_soil_refl,
+                t.nir_reflect,
+                t.nir_trans,
+                t.nir_soil_refl,
+                t.theta_min,
+                t.theta_max,
+            ],
+            para_max,
+            replace=[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+        )
+        return setup, para, para_min, para_max
 
 
 ############################################################################
@@ -657,10 +710,24 @@ def initialize_sunshade(ntime: int, jtot: int, met: Met) -> SunShadedCan:
     Tsfc_old = jnp.ones([ntime, jtot])
     Tsfc_new = jnp.ones([ntime, jtot])
 
+    Leaf_RH = jnp.zeros([ntime, jtot])
+
     Tsfc = dot(met.T_air_K, Tsfc)
 
     return SunShadedCan(
-        Ps, Resp, gs, vpd_Pa, LE, H, Rnet, Lout, closure, Tsfc, Tsfc_new, Tsfc_old
+        Ps,
+        Resp,
+        gs,
+        vpd_Pa,
+        LE,
+        H,
+        Rnet,
+        Lout,
+        closure,
+        Tsfc,
+        Tsfc_new,
+        Tsfc_old,
+        Leaf_RH,
     )
 
 
@@ -919,6 +986,7 @@ def calculate_var_stats(
     rsoil_mean = obs.Rsoil.mean()
     LE_mean = obs.LE.mean()
     H_mean = obs.H.mean()
+    vpd_mean = met.vpd.mean()
 
     # Calculate the meteorological statistics (i.e., mean and standard deviation)
     T_air_std = met.T_air.std()
@@ -935,6 +1003,7 @@ def calculate_var_stats(
     rsoil_std = obs.Rsoil.std()
     LE_std = obs.LE.std()
     H_std = obs.H.std()
+    vpd_std = met.vpd.std()
 
     # Calculate the meteorological statistics (i.e., mean and standard deviation)
     T_air_max = met.T_air.max()
@@ -951,6 +1020,7 @@ def calculate_var_stats(
     rsoil_max = obs.Rsoil.max()
     LE_max = obs.LE.max()
     H_max = obs.H.max()
+    vpd_max = met.vpd.max()
 
     # Calculate the meteorological statistics (i.e., mean and standard deviation)
     T_air_min = met.T_air.min()
@@ -967,6 +1037,7 @@ def calculate_var_stats(
     rsoil_min = obs.Rsoil.min()
     LE_min = obs.LE.min()
     H_min = obs.H.min()
+    vpd_min = met.vpd.min()
 
     var_mean = VarStats(
         T_air_mean,
@@ -983,6 +1054,7 @@ def calculate_var_stats(
         rsoil_mean,
         LE_mean,
         H_mean,
+        vpd_mean,
     )
 
     var_std = VarStats(
@@ -1000,6 +1072,7 @@ def calculate_var_stats(
         rsoil_std,
         LE_std,
         H_std,
+        vpd_std,
     )
 
     var_max = VarStats(
@@ -1017,6 +1090,7 @@ def calculate_var_stats(
         rsoil_max,
         LE_max,
         H_max,
+        vpd_max,
     )
 
     var_min = VarStats(
@@ -1034,6 +1108,7 @@ def calculate_var_stats(
         rsoil_min,
         LE_min,
         H_min,
+        vpd_min,
     )
 
     return var_mean, var_std, var_max, var_min

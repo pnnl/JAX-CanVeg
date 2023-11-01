@@ -12,11 +12,11 @@ import optax
 import equinox as eqx
 import jax.numpy as jnp
 
-from typing import Tuple, List
+from typing import Tuple, List, Optional
 from jaxtyping import Array
 
 from ...models import CanoakBase
-from ...subjects import Met, BatchedMet
+from ...subjects import Met, BatchedMet, Para
 
 
 # Define the loss function
@@ -96,6 +96,8 @@ def perform_optimization_batch(
     batched_y: Array,
     batched_met: BatchedMet,
     nsteps: int,
+    para_min: Optional[Para] = None,
+    para_max: Optional[Para] = None,
     *args,
 ) -> Tuple[CanoakBase, List]:
     """A wrapped function for performing optimization in batch using optax.
@@ -140,11 +142,21 @@ def perform_optimization_batch(
         check_arg(batched_y, "batched_y")
         check_arg(opt_state, "opt_state")
         check_arg(batched_met, "batched_met")
+        # Update the model parameters
         model, opt_state, loss, grads = make_step(
             model, filter_model_spec, batched_y, opt_state, batched_met, *args
         )
         loss_set.append(loss)
         print(f"The loss of step {i}: {loss}")
+        # Check model parameters upper and lower bounds
+        para = model.__self__.para  # pyright: ignore
+        if para_min is not None:
+            para = jtu.tree_map(lambda p, u: jnp.clip(p, a_min=u), para, para_min)
+        if para_max is not None:
+            para = jtu.tree_map(lambda p, u: jnp.clip(p, a_max=u), para, para_max)
+        model = eqx.tree_at(
+            lambda t: (t.__self__.para,), model, replace=(para,)  # pyright: ignore
+        )
 
     return model, loss_set
 

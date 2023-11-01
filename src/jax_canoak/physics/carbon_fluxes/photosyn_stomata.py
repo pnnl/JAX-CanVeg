@@ -230,9 +230,9 @@ def leaf_ps(
 
     # Compute the soil moisture impact coefficient
     # Eq.(7) in Wang and Leuning (1998)
-    fw = 10 * (theta_soil - prm.theta_min) / (3 * (prm.theta_max - prm.theta_min))
-    # fw = (theta_soil - prm.theta_min) / (prm.theta_max-prm.theta_min)
-    fw = jnp.clip(fw, a_max=1.0, a_min=0.0)
+    # fw = 10 * (theta_soil - prm.theta_min) / (3 * (prm.theta_max - prm.theta_min))
+    # # fw = (theta_soil - prm.theta_min) / (prm.theta_max-prm.theta_min)
+    # fw = jnp.clip(fw, a_max=1.0, a_min=0.0)
 
     # APHOTO = PG - rd, net photosynthesis is the difference
     # between gross photosynthesis and dark respiration. Note
@@ -243,7 +243,7 @@ def leaf_ps(
     # rh is relative humidity, which comes from a coupled
     # leaf energy balance model
     rh_leaf = eair_Pa / es(Tlk)  # need to transpose matrix
-    rh_leaf = dot(fw, rh_leaf)  # include the impact of soil moisture
+    # rh_leaf = dot(fw, rh_leaf)  # include the impact of soil moisture
     k_rh = rh_leaf * prm.kball  # combine product of rh and K ball-berry
 
     # Gs from Ball-Berry is for water vapor.  It must be divided
@@ -604,6 +604,7 @@ def leaf_ps(
         Rcube,
         rd,
         rstom,
+        rh_leaf,
     )
     return ps
 
