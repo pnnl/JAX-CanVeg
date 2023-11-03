@@ -9,6 +9,8 @@ Date: 2023.9.25.
 import jax
 import jax.numpy as jnp
 import jax.tree_util as jtu
+
+import pandas as pd
 import numpy as np
 
 import equinox as eqx
@@ -252,6 +254,33 @@ def get_met_forcings(f_forcing: str, lai: Optional[Float_0D] = None) -> Tuple[Me
     # Initialize the met instance
     met = initialize_met(forcing_data, n_time, zl0)
     return met, n_time
+
+
+def get_obs(f_obs: str) -> Obs:
+    # Load the observations forcing text file
+    obs = pd.read_csv(f_obs)
+    obs.interpolate(method="linear", limit_direction="both", inplace=True)
+    P_obs = jnp.array(obs["P_mm"])
+    LE_obs, H_obs = jnp.array(obs["LE"]), jnp.array(obs["H"])
+    Gsoil_obs, Rnet_obs = jnp.array(obs["G_5cm"]), jnp.array(obs["NETRAD"])
+    nan = jnp.nan * jnp.ones(LE_obs.size)
+
+    # TODO: need to define the key words for the following variables
+    GPP_obs, albedo_obs, Fco2_obs, Rsoil_obs = nan, nan, nan, nan
+
+    obs = Obs(
+        P_obs,
+        LE_obs,
+        H_obs,
+        GPP_obs,
+        Rnet_obs,
+        albedo_obs,
+        Fco2_obs,
+        Gsoil_obs,
+        Rsoil_obs,
+    )
+
+    return obs
 
 
 ############################################################################

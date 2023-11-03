@@ -33,6 +33,7 @@ from .initialization_update import (
     initialize_parameters,  # noqa: F401
     initialize_met,  # noqa: F401
     get_met_forcings,  # noqa: F401
+    get_obs,  # noqa: F401
     initialize_profile,  # noqa: F401
     update_profile,  # noqa: F401
     calculate_veg,  # noqa: F401
