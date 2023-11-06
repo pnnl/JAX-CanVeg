@@ -31,7 +31,9 @@ pip install --upgrade "jax[cuda11_pip]" -f https://storage.googleapis.com/jax-re
 
 4. Install other packages that are only available under pip:
 ```
-pip install equinox diffrax optax pre-commit
+pip install equinox diffrax optax pre-commit optimistix lineax
+pip install -U scikit-learn
+pip3 install torch torchvision torchaudio
 ```
 
 5. Compile [the C++ code](./src/jax_canoak/physics/energy_fluxes/DispersionMatrix.cpp) with [pybind11](https://github.com/pybind/pybind11) for generating dispersion matrix (make sure you have a suitable compiler installed):
