@@ -182,10 +182,11 @@ class Para(eqx.Module):
     Mair: Float_0D
     dLdT: Float_0D
     extinct: Float_0D
-    # Deep learning models -- soil respiration
-    RsoilDL: eqx.Module
-    # Deep learning models -- leaf relative humidity
-    LeafRHDL: eqx.Module
+    # Deep learning models
+    RsoilDL: eqx.Module  # soil respiration
+    LeafRHDL: eqx.Module  # leaf relative humidity
+    bprimeDL: eqx.Module
+    gscoefDL: eqx.Module  # the two coefficients of the Ball-Berry equation
     # Meterological stats
     var_mean: Optional[VarStats]
     var_std: Optional[VarStats]
@@ -248,6 +249,8 @@ class Para(eqx.Module):
         # Deep learning models
         RsoilDL: Optional[eqx.Module] = None,
         LeafRHDL: Optional[eqx.Module] = None,
+        bprimeDL: Optional[eqx.Module] = None,
+        gscoefDL: Optional[eqx.Module] = None,
     ) -> None:
         # Vertical profiles
         self.zht1 = zht1
@@ -384,7 +387,11 @@ class Para(eqx.Module):
             #     in_size=2, out_size=1, width_size=6, depth=2,key=jax.random.PRNGKey(0)
             # )
             self.RsoilDL = MLP(
-                in_size=2, out_size=1, width_size=6, depth=2, key=jax.random.PRNGKey(0)
+                in_size=2,
+                out_size=1,
+                width_size=6,
+                depth=2,
+                key=jax.random.PRNGKey(1024),
             )
         else:
             self.RsoilDL = RsoilDL
@@ -397,11 +404,31 @@ class Para(eqx.Module):
                 out_size=1,
                 width_size=6,
                 depth=2,
-                key=jax.random.PRNGKey(0)
+                key=jax.random.PRNGKey(1024)
                 # in_size=4,out_size=1, width_size=6, depth=2, key=jax.random.PRNGKey(0)
             )
         else:
             self.LeafRHDL = LeafRHDL
+        if bprimeDL is None:
+            self.bprimeDL = MLP2(
+                in_size=4,
+                out_size=1,
+                width_size=6,
+                depth=2,
+                key=jax.random.PRNGKey(1024),
+            )
+        else:
+            self.bprimeDL = bprimeDL
+        if gscoefDL is None:
+            self.gscoefDL = MLP2(
+                in_size=4,
+                out_size=2,
+                width_size=6,
+                depth=2,
+                key=jax.random.PRNGKey(1024),
+            )
+        else:
+            self.gscoefDL = gscoefDL
 
     @property
     def dht(self):

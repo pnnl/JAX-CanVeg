@@ -10,3 +10,7 @@ from .photosyn_stomata_leafrh_hybrid import (
     calculate_leaf_rh,  # noqa: F401
     leaf_ps_rh_hybrid,  # noqa: F401
 )
+from .photosyn_stomata_gs_hybrid import (
+    calculate_gs_coef,  # noqa: F401
+    leaf_ps_gs_hybrid,  # noqa: F401
+)

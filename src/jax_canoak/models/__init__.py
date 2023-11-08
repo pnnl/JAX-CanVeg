@@ -13,8 +13,10 @@ from .canoak import (
 )
 from .canoak_rsoil_hybrid import canoak_rsoil_hybrid  # noqa: F401
 from .canoak_leafrh_hybrid import canoak_leafrh_hybrid  # noqa: F401
+from .canoak_gs_hybrid import canoak_gs_hybrid  # noqa: F401
 from .canoak_eqx import CanoakBase, Canoak, CanoakRsoilHybrid  # noqa: F401
 from .canoak_eqx import CanoakIFT, CanoakRsoilHybridIFT  # noqa: F401
 from .canoak_eqx import CanoakLeafRHHybridIFT  # noqa: F401
+from .canoak_eqx import CanoakGSHybridIFT  # noqa: F401
 from .canoak_batched import run_canoak_in_batch  # noqa: F401
 from .canoak_batched import run_canoak_in_batch_any  # noqa: F401

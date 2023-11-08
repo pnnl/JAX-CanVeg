@@ -63,6 +63,8 @@ def initialize_parameters(
     obs: Optional[Obs] = None,
     RsoilDL: Optional[eqx.Module] = None,
     LeafRHDL: Optional[eqx.Module] = None,
+    bprimeDL: Optional[eqx.Module] = None,
+    gscoefDL: Optional[eqx.Module] = None,
     get_para_bounds: bool = False,
     # ) -> Tuple[Setup, Para]:
 ):
@@ -127,6 +129,8 @@ def initialize_parameters(
         var_min=var_min,
         RsoilDL=RsoilDL,
         LeafRHDL=LeafRHDL,
+        bprimeDL=bprimeDL,
+        gscoefDL=gscoefDL,
     )
 
     if not get_para_bounds:

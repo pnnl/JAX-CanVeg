@@ -1,14 +1,16 @@
 """
 Photosynthesis/stomatal conductance/respiratin, including:
-- calculate_leaf_rh()
-- leaf_ps_rh_hybrid()
+- calculate_bprime()
+- leaf_ps_gs_hybrid()
 
 Author: Peishi Jiang
-Date: 2023.10.01.
+Date: 2023.11.08.
 """
 
 import jax
 import jax.numpy as jnp
+
+from typing import Tuple
 
 from ...shared_utilities.types import Float_2D, Float_1D
 from ...subjects import Para, Ps
@@ -18,35 +20,34 @@ from ...shared_utilities.utils import dot
 
 from .photosyn_stomata import tboltz, temp_func, specificity
 
+# from .photosyn_stomata_leafrh_hybrid import calculate_leaf_rh
+
 PI2 = 3.1415926 * 2
 
 
-def calculate_leaf_rh(
+def calculate_gs_coef(
     prm: Para,
     Tlk: Float_2D,
     eair_Pa: Float_2D,
     theta_soil: Float_1D,
-) -> Float_2D:
-    LeafRHDL = prm.LeafRHDL
+) -> Tuple[Float_2D, Float_2D]:
+    gscoefDL = prm.gscoefDL
 
     # Calculate the vapor pressure deficit
-    # vpd = (es(Tlk) - eair_Pa) / 1000.  # kPa
-    # eair = eair_Pa / 1000.  # kPa
-    rh_raw = es(Tlk) / eair_Pa
+    vpd = (es(Tlk) - eair_Pa) / 1000.0  # kPa
+    eair = eair_Pa / 1000.0  # kPa
+    # rh_raw = es(Tlk) / eair_Pa
 
     # Normalize the inputs
-    # Tl_norm = (Tlk - 273.15 - prm.var_min.T_air) / (  # pyright: ignore
-    #     prm.var_max.T_air - prm.var_min.T_air  # pyright: ignore
-    # )  # pyright: ignore
-    # vpd_norm = (vpd - prm.var_min.vpd) / (  # pyright: ignore
-    #     prm.var_max.vpd - prm.var_min.vpd  # pyright: ignore
-    # )  # pyright: ignore
-    # eair_norm = (eair - prm.var_min.eair) / (  # pyright: ignore
-    #     prm.var_max.eair - prm.var_min.eair  # pyright: ignore
-    # )  # pyright: ignore
-    # swc_norm = (theta_soil - prm.var_min.soilmoisture) / (  # pyright: ignore
-    #     prm.var_max.soilmoisture - prm.var_min.soilmoisture  # pyright: ignore
-    # )  # pyright: ignore
+    Tl_norm = (Tlk - 273.15 - prm.var_mean.T_air) / (  # pyright: ignore
+        prm.var_std.T_air  # pyright: ignore
+    )
+    vpd_norm = (vpd - prm.var_mean.vpd) / (  # pyright: ignore
+        prm.var_std.vpd  # pyright: ignore
+    )
+    eair_norm = (eair - prm.var_mean.eair) / (  # pyright: ignore
+        prm.var_std.eair  # pyright: ignore
+    )
     swc_norm = (
         theta_soil - prm.var_mean.soilmoisture  # pyright: ignore
     ) / prm.var_std.soilmoisture  # pyright: ignore
@@ -57,14 +58,17 @@ def calculate_leaf_rh(
 
     # Get the inputs
     # x = jnp.array([Tl_norm, swc_norm, vpd_norm, eair_norm]).T
-    # x = jnp.dstack([Tl_norm, swc_norm, vpd_norm, eair_norm]) # shape: (Nt, Nlevel, 4)
+    x = jnp.dstack([Tl_norm, swc_norm, vpd_norm, eair_norm])  # shape: (Nt, Nlevel, 4)
+    x = x.reshape([Nt * Nlevel, 4])
     # x = jnp.dstack([swc_norm, vpd_norm, eair_norm]) # shape: (Nt, Nlevel, 3)
-    x = jnp.dstack([swc_norm, rh_raw])  # shape: (Nt, Nlevel, 2)
-    x = x.reshape([Nt * Nlevel, 2])
+    # x = jnp.dstack([swc_norm, rh_raw])  # shape: (Nt, Nlevel, 2)
+    # x = x.reshape([Nt * Nlevel, 2])
 
     # Perform the Rsoil calculation
-    rh_leaf = jax.vmap(LeafRHDL)(x)  # pyright: ignore
-    rh_leaf = rh_leaf.reshape([Nt, Nlevel])
+    gscoef = jax.vmap(gscoefDL)(x)  # pyright: ignore
+    kball, bprime = gscoef[..., 0], gscoef[..., 1]
+    kball = kball.reshape([Nt, Nlevel])
+    bprime = bprime.reshape([Nt, Nlevel])
     # jax.debug.print("swc: {a}", a=theta_soil)
     # jax.debug.print("swc_norm: {a}", a=swc_norm[:,0])
     # jax.debug.print("swc_norm: {a}", a=swc_norm[:,1])
@@ -73,10 +77,10 @@ def calculate_leaf_rh(
     # jax.debug.print("vpd_norm: {a}", a=vpd_norm)
     # jax.debug.print("eair_norm: {a}", a=eair_norm)
 
-    return rh_leaf
+    return kball, bprime
 
 
-def leaf_ps_rh_hybrid(
+def leaf_ps_gs_hybrid(
     Iphoton: Float_2D,
     cca: Float_2D,
     Tlk: Float_2D,
@@ -280,16 +284,13 @@ def leaf_ps_rh_hybrid(
     dd = gammac
     b8_dd = 8 * dd
 
-    # # Compute the soil moisture impact coefficient
-    # # Eq.(7) in Wang and Leuning (1998)
-    # fw = 10 * (theta_soil - prm.theta_min) / (3 * (prm.theta_max - prm.theta_min))
-    # # fw = (theta_soil - prm.theta_min) / (prm.theta_max-prm.theta_min)
-    # fw = jnp.clip(fw, a_max=1.0, a_min=0.0)
-    # rh_leaf = eair_Pa / es(Tlk)  # need to transpose matrix
-    # rh_leaf = dot(fw, rh_leaf)  # include the impact of soil moisture
+    # Calculate the relative humidity
+    # rh_leaf = calculate_leaf_rh(prm, Tlk, eair_Pa, theta_soil)
+    rh_leaf = eair_Pa / es(Tlk)  # need to transpose matrix
 
-    # Calculate the relative humidity from a deep learning model
-    rh_leaf = calculate_leaf_rh(prm, Tlk, eair_Pa, theta_soil)
+    # Calculate the bprime from a deep learning model
+    kball, bprime = calculate_gs_coef(prm, Tlk, eair_Pa, theta_soil)
+    bprime16 = bprime / 1.6
 
     # APHOTO = PG - rd, net photosynthesis is the difference
     # between gross photosynthesis and dark respiration. Note
@@ -299,7 +300,8 @@ def leaf_ps_rh_hybrid(
     # Gs = k A rh/cs + b'
     # rh is relative humidity, which comes from a coupled
     # leaf energy balance model
-    k_rh = rh_leaf * prm.kball  # combine product of rh and K ball-berry
+    # k_rh = rh_leaf * prm.kball  # combine product of rh and K ball-berry
+    k_rh = rh_leaf * kball  # combine product of rh and K ball-berry
 
     # Gs from Ball-Berry is for water vapor.  It must be divided
     # by the ratio of the molecular diffusivities to be valid for A
@@ -309,17 +311,17 @@ def leaf_ps_rh_hybrid(
 
     # cubic coefficients that are only dependent on CO2 levels
     def cubic_coef_hypo():
-        alpha_ps = 1.0 + (prm.bprime16 / gb_mole) - k_rh
-        bbeta = cca * (gb_k_rh - 2.0 * prm.bprime16 - gb_mole)
-        gamma = cca * cca * gb_mole * prm.bprime16
-        theta_ps = gb_k_rh - prm.bprime16
+        alpha_ps = 1.0 + (bprime16 / gb_mole) - k_rh
+        bbeta = cca * (gb_k_rh - 2.0 * bprime16 - gb_mole)
+        gamma = cca * cca * gb_mole * bprime16
+        theta_ps = gb_k_rh - bprime16
         return alpha_ps, bbeta, gamma, theta_ps
 
     def cubic_coef_amphi():
-        alpha_ps = 1.0 + (prm.bprime16 / (gb_mole)) - k_rh
-        bbeta = cca * (2 * gb_k_rh - 3.0 * prm.bprime16 - 2 * gb_mole)
-        gamma = cca * cca * gb_mole * prm.bprime16 * 4
-        theta_ps = 2 * gb_k_rh - 2 * prm.bprime16
+        alpha_ps = 1.0 + (bprime16 / gb_mole) - k_rh
+        bbeta = cca * (2 * gb_k_rh - 3.0 * bprime16 - 2 * gb_mole)
+        gamma = cca * cca * gb_mole * bprime16 * 4
+        theta_ps = 2 * gb_k_rh - 2 * bprime16
         return alpha_ps, bbeta, gamma, theta_ps
 
     alpha_ps, bbeta, gamma, theta_ps = jax.lax.switch(
@@ -468,7 +470,7 @@ def leaf_ps_rh_hybrid(
     # Stomatal conductance is mol m-2 s-1
     # convert back to resistance (s/m) for energy balance routine
     # gs_m_s = gs_leaf_mole * Tlk * 101.3* 0.022624 /(273.15 * P_kPa)
-    gs_leaf_mole = (prm.kball * rh_leaf * aphoto / cs) + prm.bprime
+    gs_leaf_mole = (kball * rh_leaf * aphoto / cs) + bprime
     gs_m_s = gs_leaf_mole * Tlk * pstat273
     rstom = 1.0 / gs_m_s
     gs_co2 = gs_leaf_mole / 1.6
@@ -497,6 +499,8 @@ def leaf_ps_rh_hybrid(
         Aps_e,
         rd_e,
         rh_leaf_e,
+        kball_e,
+        bprime_e,
         cs_e,
         tlk_e,
         PkPa_e,
@@ -508,9 +512,9 @@ def leaf_ps_rh_hybrid(
         tst = (Aps_e < aphoto_e) & (Aps_e > 0)
         aphoto_e_new = Aps_e - rd_e
         gs_leaf_mole_e_new = (
-            prm.kball * rh_leaf_e * aphoto_e_new / cs_e
-        ) / 1.0 + prm.bprime
-        # ) / 1.6 + prm.bprime16
+            kball_e * rh_leaf_e * aphoto_e_new / cs_e
+        ) / 1.0 + bprime_e
+        # ) / 1.6 + bprime16_e
         gs_co2_e = gs_leaf_mole_e_new / 1.6
         gs_m_s_e_new = (
             gs_leaf_mole_e_new
@@ -535,7 +539,19 @@ def leaf_ps_rh_hybrid(
 
     PkPa = dot(P_kPa, jnp.ones(Tlk.shape))  # (ntime, jtot)
     aphoto, gs_leaf_mole, gs_co2, gs_m_s, rstom = update_aphoto_gs(
-        aphoto, Aps, rd, rh_leaf, cs, Tlk, PkPa, gs_leaf_mole, gs_co2, gs_m_s, rstom
+        aphoto,
+        Aps,
+        rd,
+        rh_leaf,
+        kball,
+        bprime,
+        cs,
+        Tlk,
+        PkPa,
+        gs_leaf_mole,
+        gs_co2,
+        gs_m_s,
+        rstom,
     )
     # jax.debug.print('gs_m_s-before quad-2: {a}', a=gs_m_s.mean(axis=0))
     # jax.debug.print('aphoto: {a}', a=aphoto[18950, :36])
@@ -547,18 +563,19 @@ def leaf_ps_rh_hybrid(
 
     # Eliminate few conditions with negative conductance
     @jnp.vectorize
-    def clean_negative_gs_leaf(gs_leaf_mole_e):
+    def clean_negative_gs_leaf(bprime16_e, gs_leaf_mole_e):
         return jax.lax.cond(
-            gs_leaf_mole_e < 0, lambda: prm.bprime16, lambda: gs_leaf_mole_e
+            gs_leaf_mole_e < 0, lambda: bprime16_e, lambda: gs_leaf_mole_e
         )
 
-    gs_leaf_mole = clean_negative_gs_leaf(gs_leaf_mole)
+    gs_leaf_mole = clean_negative_gs_leaf(bprime16, gs_leaf_mole)
 
     # Correct the solution using quadratic method if necessary
     @jnp.vectorize
     def update_quad(
         aphoto_e,
         aps_e,
+        bprime_e,
         rstompt_e,
         ci_e,
         cs_e,
@@ -577,7 +594,7 @@ def leaf_ps_rh_hybrid(
         dd_e,
     ):
         def quad():
-            gs_leaf_mole = prm.bprime
+            gs_leaf_mole = bprime_e
             gs_co2_e = gs_leaf_mole / 1.6
             # stomatal conductance is mol m-2 s-1
             # convert back to resistance (s/m) for energy balance routine
@@ -622,6 +639,7 @@ def leaf_ps_rh_hybrid(
     aphoto, Aps, ci, cs, gs_co2, gs_m_s, rstom = update_quad(
         aphoto,
         Aps,
+        bprime,
         rstom,
         ci,
         cs,
