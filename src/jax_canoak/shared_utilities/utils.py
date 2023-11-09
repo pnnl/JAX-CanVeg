@@ -1,6 +1,13 @@
 import jax
 import jax.numpy as jnp
 
+from jaxtyping import Array
+
+import numpy as np
+
+import hydroeval as he
+from sklearn.metrics import r2_score  # pyright: ignore
+
 from ..shared_utilities.types import Float_0D, Float_1D, Float_2D
 
 # Subroutine to compute scalar concentrations from source estimates
@@ -82,6 +89,38 @@ def filter_array(
 
     _, array_new = jax.lax.scan(update_array, init=None, xs=array)
     return array_new
+
+
+def compute_metrics(
+    pred: Array,
+    true: Array,
+):
+    """
+    Computing a bunch of evaluation metrics
+    """
+    pred, true = np.array(pred), np.array(true)  # pyright: ignore
+    assert pred.shape == true.shape
+
+    rmse = he.evaluator(he.rmse, pred, true)[0]
+    kge = he.evaluator(he.kge, pred, true)[0][0]
+    mkge_all = he.evaluator(he.kgeprime, pred, true).flatten()
+    mkge = mkge_all[0]
+    cc = mkge_all[1]
+    beta = mkge_all[2]
+    alpha = mkge_all[3]
+    nse = he.evaluator(he.nse, pred, true)[0]
+    r2 = r2_score(pred, true)
+    return {
+        "rmse": rmse,
+        "mse": rmse**2,
+        "r2": r2,
+        "kge": kge,
+        "nse": nse,
+        "mkge": mkge,
+        "cc": cc,
+        "alpha": alpha,
+        "beta": beta,
+    }
 
 
 # dot product: (n) x (n,m) -> (n,m)

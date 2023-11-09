@@ -1,4 +1,4 @@
-from .utils import conc, filter_array  # noqa: F401
+from .utils import conc, filter_array, compute_metrics  # noqa: F401
 
 # from .plot import (
 #     plot_rad,  # noqa: F401

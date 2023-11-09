@@ -48,7 +48,7 @@ class MLP(eqx.Module):
         return x
 
 
-# Another MLP function to output values within [0,1] using logistic sigmoid funtion
+# Another MLP function to output values within [0,1] using sigmoid funtion
 class MLP2(eqx.Module):
     layers: tuple[Linear, ...]
 
@@ -80,5 +80,41 @@ class MLP2(eqx.Module):
         x = self.layers[-1](x)
         # x = jax.nn.log_sigmoid(x)
         x = jax.nn.sigmoid(x)
+        # x = jax.nn.tanh(x)
+        return x
+
+
+# Another MLP function to output values within [0,1] using relu funtion
+class MLP3(eqx.Module):
+    layers: tuple[Linear, ...]
+
+    def __init__(
+        self,
+        in_size: Union[int, Literal["scalar"]],
+        out_size: Union[int, Literal["scalar"]],
+        width_size: int,
+        depth: int,
+        key: PRNGKeyArray,
+        **kwargs
+    ):
+        super().__init__(**kwargs)
+        keys = jrandom.split(key, depth + 1)
+        layers = []
+        if depth == 0:
+            layers.append(Linear(in_size, out_size, True, key=keys[0]))
+        else:
+            layers.append(Linear(in_size, width_size, True, key=keys[0]))
+            for i in range(depth - 1):
+                layers.append(Linear(width_size, width_size, True, key=keys[i + 1]))
+            layers.append(Linear(width_size, out_size, True, key=keys[-1]))
+        self.layers = tuple(layers)
+
+    def __call__(self, x: Array) -> Array:
+        for layer in self.layers[:-1]:
+            x = layer(x)
+            x = jax.nn.tanh(x)
+        x = self.layers[-1](x)
+        # x = jax.nn.log_sigmoid(x)
+        x = jax.nn.relu(x)
         # x = jax.nn.tanh(x)
         return x

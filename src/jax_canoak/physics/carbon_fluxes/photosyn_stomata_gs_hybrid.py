@@ -34,20 +34,20 @@ def calculate_gs_coef(
     gscoefDL = prm.gscoefDL
 
     # Calculate the vapor pressure deficit
-    vpd = (es(Tlk) - eair_Pa) / 1000.0  # kPa
-    eair = eair_Pa / 1000.0  # kPa
-    # rh_raw = es(Tlk) / eair_Pa
+    # vpd = (es(Tlk) - eair_Pa) / 1000.0  # kPa
+    # eair = eair_Pa / 1000.0  # kPa
+    rh_raw = es(Tlk) / eair_Pa
 
     # Normalize the inputs
     Tl_norm = (Tlk - 273.15 - prm.var_mean.T_air) / (  # pyright: ignore
         prm.var_std.T_air  # pyright: ignore
     )
-    vpd_norm = (vpd - prm.var_mean.vpd) / (  # pyright: ignore
-        prm.var_std.vpd  # pyright: ignore
-    )
-    eair_norm = (eair - prm.var_mean.eair) / (  # pyright: ignore
-        prm.var_std.eair  # pyright: ignore
-    )
+    # vpd_norm = (vpd - prm.var_mean.vpd) / (  # pyright: ignore
+    #     prm.var_std.vpd  # pyright: ignore
+    # )
+    # eair_norm = (eair - prm.var_mean.eair) / (  # pyright: ignore
+    #     prm.var_std.eair  # pyright: ignore
+    # )
     swc_norm = (
         theta_soil - prm.var_mean.soilmoisture  # pyright: ignore
     ) / prm.var_std.soilmoisture  # pyright: ignore
@@ -58,16 +58,18 @@ def calculate_gs_coef(
 
     # Get the inputs
     # x = jnp.array([Tl_norm, swc_norm, vpd_norm, eair_norm]).T
-    x = jnp.dstack([Tl_norm, swc_norm, vpd_norm, eair_norm])  # shape: (Nt, Nlevel, 4)
-    x = x.reshape([Nt * Nlevel, 4])
+    # x = jnp.dstack([Tl_norm, swc_norm, vpd_norm, eair_norm])  # shape: (Nt, Nlevel, 4)
+    # x = x.reshape([Nt * Nlevel, 4])
     # x = jnp.dstack([swc_norm, vpd_norm, eair_norm]) # shape: (Nt, Nlevel, 3)
     # x = jnp.dstack([swc_norm, rh_raw])  # shape: (Nt, Nlevel, 2)
     # x = x.reshape([Nt * Nlevel, 2])
+    x = jnp.dstack([Tl_norm, swc_norm, rh_raw])  # shape: (Nt, Nlevel, 2)
+    x = x.reshape([Nt * Nlevel, 3])
 
     # Perform the Rsoil calculation
     gscoef = jax.vmap(gscoefDL)(x)  # pyright: ignore
-    kball, bprime = gscoef[..., 0], gscoef[..., 1]
-    kball = kball.reshape([Nt, Nlevel])
+    leafrh, bprime = gscoef[..., 0], gscoef[..., 1]
+    leafrh = leafrh.reshape([Nt, Nlevel])
     bprime = bprime.reshape([Nt, Nlevel])
     # jax.debug.print("swc: {a}", a=theta_soil)
     # jax.debug.print("swc_norm: {a}", a=swc_norm[:,0])
@@ -77,7 +79,7 @@ def calculate_gs_coef(
     # jax.debug.print("vpd_norm: {a}", a=vpd_norm)
     # jax.debug.print("eair_norm: {a}", a=eair_norm)
 
-    return kball, bprime
+    return leafrh, bprime
 
 
 def leaf_ps_gs_hybrid(
@@ -284,12 +286,11 @@ def leaf_ps_gs_hybrid(
     dd = gammac
     b8_dd = 8 * dd
 
-    # Calculate the relative humidity
+    # # Calculate the relative humidity from a deep learning model
     # rh_leaf = calculate_leaf_rh(prm, Tlk, eair_Pa, theta_soil)
-    rh_leaf = eair_Pa / es(Tlk)  # need to transpose matrix
 
-    # Calculate the bprime from a deep learning model
-    kball, bprime = calculate_gs_coef(prm, Tlk, eair_Pa, theta_soil)
+    # Calculate the bprime and leaf RH from a deep learning model
+    rh_leaf, bprime = calculate_gs_coef(prm, Tlk, eair_Pa, theta_soil)
     bprime16 = bprime / 1.6
 
     # APHOTO = PG - rd, net photosynthesis is the difference
@@ -300,8 +301,7 @@ def leaf_ps_gs_hybrid(
     # Gs = k A rh/cs + b'
     # rh is relative humidity, which comes from a coupled
     # leaf energy balance model
-    # k_rh = rh_leaf * prm.kball  # combine product of rh and K ball-berry
-    k_rh = rh_leaf * kball  # combine product of rh and K ball-berry
+    k_rh = rh_leaf * prm.kball  # combine product of rh and K ball-berry
 
     # Gs from Ball-Berry is for water vapor.  It must be divided
     # by the ratio of the molecular diffusivities to be valid for A
@@ -470,7 +470,7 @@ def leaf_ps_gs_hybrid(
     # Stomatal conductance is mol m-2 s-1
     # convert back to resistance (s/m) for energy balance routine
     # gs_m_s = gs_leaf_mole * Tlk * 101.3* 0.022624 /(273.15 * P_kPa)
-    gs_leaf_mole = (kball * rh_leaf * aphoto / cs) + bprime
+    gs_leaf_mole = (prm.kball * rh_leaf * aphoto / cs) + bprime
     gs_m_s = gs_leaf_mole * Tlk * pstat273
     rstom = 1.0 / gs_m_s
     gs_co2 = gs_leaf_mole / 1.6
@@ -499,7 +499,6 @@ def leaf_ps_gs_hybrid(
         Aps_e,
         rd_e,
         rh_leaf_e,
-        kball_e,
         bprime_e,
         cs_e,
         tlk_e,
@@ -512,7 +511,7 @@ def leaf_ps_gs_hybrid(
         tst = (Aps_e < aphoto_e) & (Aps_e > 0)
         aphoto_e_new = Aps_e - rd_e
         gs_leaf_mole_e_new = (
-            kball_e * rh_leaf_e * aphoto_e_new / cs_e
+            prm.kball * rh_leaf_e * aphoto_e_new / cs_e
         ) / 1.0 + bprime_e
         # ) / 1.6 + bprime16_e
         gs_co2_e = gs_leaf_mole_e_new / 1.6
@@ -543,7 +542,6 @@ def leaf_ps_gs_hybrid(
         Aps,
         rd,
         rh_leaf,
-        kball,
         bprime,
         cs,
         Tlk,

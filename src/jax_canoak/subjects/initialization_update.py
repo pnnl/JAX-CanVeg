@@ -27,7 +27,7 @@ from ..shared_utilities.types import Float_2D, Int_0D, Float_0D, Float_1D
 from .utils import conc
 from .utils import llambda as flambda
 
-near_zero = 0.00001
+near_zero = 1e-20
 
 ############################################################################
 # Parameters and setup

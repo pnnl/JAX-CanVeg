@@ -391,7 +391,8 @@ class Para(eqx.Module):
                 out_size=1,
                 width_size=6,
                 depth=2,
-                key=jax.random.PRNGKey(1024),
+                key=jax.random.PRNGKey(0),
+                # key=jax.random.PRNGKey(1024),
             )
         else:
             self.RsoilDL = RsoilDL
@@ -404,7 +405,8 @@ class Para(eqx.Module):
                 out_size=1,
                 width_size=6,
                 depth=2,
-                key=jax.random.PRNGKey(1024)
+                key=jax.random.PRNGKey(0),
+                # key=jax.random.PRNGKey(1024)
                 # in_size=4,out_size=1, width_size=6, depth=2, key=jax.random.PRNGKey(0)
             )
         else:
@@ -415,17 +417,21 @@ class Para(eqx.Module):
                 out_size=1,
                 width_size=6,
                 depth=2,
-                key=jax.random.PRNGKey(1024),
+                key=jax.random.PRNGKey(0),
+                # key=jax.random.PRNGKey(1024),
             )
         else:
             self.bprimeDL = bprimeDL
         if gscoefDL is None:
+            # self.gscoefDL = MLP3(
             self.gscoefDL = MLP2(
-                in_size=4,
+                # in_size=4,
+                in_size=3,
                 out_size=2,
                 width_size=6,
                 depth=2,
-                key=jax.random.PRNGKey(1024),
+                key=jax.random.PRNGKey(0),
+                # key=jax.random.PRNGKey(1024),
             )
         else:
             self.gscoefDL = gscoefDL

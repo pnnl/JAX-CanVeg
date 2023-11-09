@@ -45,6 +45,7 @@ from .initialization_update import (
 from .dnn import (
     MLP,  # noqa: F401
     MLP2,  # noqa: F401
+    MLP3,  # noqa: F401
 )
 
 # from .parameters import initialize_parameters  # noqa: F401

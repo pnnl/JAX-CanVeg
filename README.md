@@ -31,7 +31,7 @@ pip install --upgrade "jax[cuda11_pip]" -f https://storage.googleapis.com/jax-re
 
 4. Install other packages that are only available under pip:
 ```
-pip install equinox diffrax optax pre-commit optimistix lineax
+pip install equinox diffrax optax pre-commit optimistix lineax hydroeval
 pip install -U scikit-learn
 pip3 install torch torchvision torchaudio
 ```
