@@ -245,6 +245,11 @@ def leaf_ps(
     rh_leaf = eair_Pa / es(Tlk)  # need to transpose matrix
     # rh_leaf = dot(fw, rh_leaf)  # include the impact of soil moisture
     k_rh = rh_leaf * prm.kball  # combine product of rh and K ball-berry
+    # jax.debug.print('eair_Pa: {a}', a=eair_Pa[11254:11257,:3])
+    # jax.debug.print('rh_leaf: {a}', a=rh_leaf[11254:11257,:3])
+    # jax.debug.print('es: {a}', a=es(Tlk)[11254:11257,:3])
+    # jax.debug.print("rh_leaf: {a}", a=rh_leaf[0,:3])
+    # jax.debug.print("eair_Pa: {a}", a=eair_Pa[0,:3])
 
     # Gs from Ball-Berry is for water vapor.  It must be divided
     # by the ratio of the molecular diffusivities to be valid for A
@@ -333,6 +338,9 @@ def leaf_ps(
     rr = R * R
     qqq = Q * Q * Q
     tstroots = qqq - rr
+    # jax.debug.print('tstroots: {a}', a=tstroots[18950, 28:36])
+    # jax.debug.print('denom: {a}', a=denom[18950, 28:36])
+    # jax.debug.print('R: {a}', a=R[18950, 28:36])
 
     # Peishi made some value checks to make sure numerical stability
     qqq = jnp.clip(qqq, a_min=0.01)  # Added by Peishi..
@@ -548,6 +556,10 @@ def leaf_ps(
                 - rd_e * B_ps_e * denom
             )
             product = Bquad1 * Bquad1 - 4.0 * Aquad1 * Cquad1
+
+            # (Peishi) To ensure numerical stability, we force product to be nonnegative
+            product = jnp.clip(product, a_min=0)
+
             sqrprod = jnp.sqrt(product)
             aphoto_e = (-Bquad1 - sqrprod) / (2.0 * Aquad1)
             aps_e = aphoto_e * 0.044

@@ -138,6 +138,9 @@ def leaf_energy(
     # jax.debug.print("qin: {a}", a=qin[:2,:])
     # jax.debug.print("Tair_K: {a}", a=prof.Tair_K[:2,:])
     # jax.debug.print("d2est: {a}", a=d2est[:2,:])
+    # jax.debug.print("radcan.gs: {a}", a=radcan.gs[0,:3])
+    # jax.debug.print("lecoef: {a}", a=lecoef[0,:3])
+    # jax.debug.print("repeat: {a}", a=repeat[0,:3])
 
     # coefficients analytical solution
     def calculate_coef_hypo():
@@ -182,13 +185,18 @@ def leaf_energy(
     # solve for both roots, but LE tends to be second root, le2
     product = Bcoef * Bcoef - 4.0 * Acoef * Ccoef
     # jax.debug.print("product min: {a}", a=product.min())
+    # print(product.min(), product.max())
+
+    # (Peishi) To ensure numerical stability, we force product to be nonnegative
+    product = jnp.clip(product, a_min=0)
+
     # le1 = (-Bcoef + jnp.sqrt(Bcoef*Bcoef - 4.*Acoef*Ccoef)) / (2.*Acoef)
     le2 = (-Bcoef - jnp.sqrt(product)) / (2.0 * Acoef)
     # jax.debug.print("{a}", a=product.mean(axis=1))
     # le1 = (-Bcoef + jnp.sqrt(Bcoef*Bcoef - 4.*Acoef*Ccoef)) / (2.*Acoef)
     LE = jnp.real(le2)
     # jax.debug.print("# of negative le2: {a}", a=jnp.sum(jnp.isnan(le2)))
-    # jax.debug.print("# of negative LE: {a}", a=jnp.sum(jnp.isnan(le2)))
+    # jax.debug.print("# of nan LE: {a}", a=jnp.sum(jnp.isnan(le2)))
 
     # Solve for leaf temperature
     # C++ --

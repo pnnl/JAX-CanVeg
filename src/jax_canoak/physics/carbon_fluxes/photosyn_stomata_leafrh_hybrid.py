@@ -603,6 +603,10 @@ def leaf_ps_rh_hybrid(
                 - rd_e * B_ps_e * denom
             )
             product = Bquad1 * Bquad1 - 4.0 * Aquad1 * Cquad1
+
+            # (Peishi) To ensure numerical stability, we force product to be nonnegative
+            product = jnp.clip(product, a_min=0)
+
             sqrprod = jnp.sqrt(product)
             aphoto_e = (-Bquad1 - sqrprod) / (2.0 * Aquad1)
             aps_e = aphoto_e * 0.044

@@ -1,0 +1,7 @@
+# Citation information for the selected data product for each site selected.
+# Newly published BASE and FLUXNET data products may not yet have a DOI for citation. Check the site's AmeriFlux Site Info webpage in a few days.
+# Read more information about citing AmeriFlux data at the Data Policy webpage: https://ameriflux.lbl.gov/data/data-policy
+# Citation information can also be acquired by making a Site Set (https://ameriflux.lbl.gov/sites/site-sets/) for your downloaded sites and use the "Download for Set: DOIs as ASCII" feature to acquire a list of DOI citations.
+# Citation information can also be found on each site's AmeriFlux Site Info webpage. Access Site Info pages via Site Search: https://ameriflux.lbl.gov/sites/site-search/
+site_id,author,title,publication_year,publisher,doi,doi_url,citation
+"US-Wkg","Scott, Russell","AmeriFlux FLUXNET-1F US-Wkg Walnut Gulch Kendall Grasslands, Ver. 3-5","2023","AmeriFlux AMP","10.17190/AMF/1984575","http://doi.org/10.17190/AMF/1984575","Russell Scott (2023), AmeriFlux FLUXNET-1F US-Wkg Walnut Gulch Kendall Grasslands, Ver. 3-5, AmeriFlux AMP, (Dataset). https://doi.org/10.17190/AMF/1984575"

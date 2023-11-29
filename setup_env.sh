@@ -15,5 +15,6 @@ pip install optax
 pip install pre-commit
 pip install pyproj
 pip install -U scikit-learn
+pip install hydroeval
 pip3 install torch torchvision torchaudio
 # pip install equinox

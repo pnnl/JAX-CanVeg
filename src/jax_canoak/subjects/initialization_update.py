@@ -27,7 +27,8 @@ from ..shared_utilities.types import Float_2D, Int_0D, Float_0D, Float_1D
 from .utils import conc
 from .utils import llambda as flambda
 
-near_zero = 1e-20
+# near_zero = 1e-20
+near_zero = 5e-5
 
 ############################################################################
 # Parameters and setup
@@ -147,11 +148,13 @@ def initialize_parameters(
                 t.nir_trans,
                 t.nir_soil_refl,
                 t.bprime,
+                t.lleaf,
                 t.theta_min,
                 t.theta_max,
             ],
             para_min,
             replace=[
+                near_zero,
                 near_zero,
                 near_zero,
                 near_zero,
@@ -264,13 +267,86 @@ def get_obs(f_obs: str) -> Obs:
     # Load the observations forcing text file
     obs = pd.read_csv(f_obs)
     obs.interpolate(method="linear", limit_direction="both", inplace=True)
-    P_obs = jnp.array(obs["P_mm"])
-    LE_obs, H_obs = jnp.array(obs["LE"]), jnp.array(obs["H"])
-    Gsoil_obs, Rnet_obs = jnp.array(obs["G_5cm"]), jnp.array(obs["NETRAD"])
-    nan = jnp.nan * jnp.ones(LE_obs.size)
+    ntime = obs.shape[0]
+    nan = jnp.nan * jnp.ones(ntime)
 
-    # TODO: need to define the key words for the following variables
-    GPP_obs, albedo_obs, Fco2_obs, Rsoil_obs = nan, nan, nan, nan
+    # Precipitation
+    if "P_mm" in obs:
+        P_obs = jnp.array(obs["P_mm"])
+    else:
+        P_obs = nan
+
+    # Latent heat flux
+    if "LE" in obs:
+        LE_obs = jnp.array(obs["LE"])
+    elif "LE_F_MDS" in obs:
+        LE_obs = jnp.array(obs["LE_F_MDS"])
+    else:
+        LE_obs = nan
+
+    # Sensible heat flux
+    if "H" in obs:
+        H_obs = jnp.array(obs["H"])
+    elif "H_F_MDS" in obs:
+        H_obs = jnp.array(obs["H_F_MDS"])
+    else:
+        H_obs = nan
+
+    # Ground heat flux
+    if "G" in obs:
+        Gsoil_obs = jnp.array(obs["G"])
+    elif "G_F_MDS" in obs:
+        Gsoil_obs = jnp.array(obs["G_F_MDS"])
+    elif "G_5cm" in obs:
+        Gsoil_obs = jnp.array(obs["G_5cm"])
+    else:
+        Gsoil_obs = nan
+
+    # Net radiation
+    if "NETRAD" in obs:
+        Rnet_obs = jnp.array(obs["NETRAD"])
+    else:
+        Rnet_obs = nan
+
+    # Gross primary productivity
+    if "GPP" in obs:
+        GPP_obs = jnp.array(obs["GPP"])
+    else:
+        GPP_obs = nan
+
+    # Albedo
+    if "ALBEDO" in obs:
+        albedo_obs = jnp.array(obs["ALBEDO"])
+    else:
+        albedo_obs = nan
+
+    # FCO2
+    if "FCO2" in obs:
+        Fco2_obs = jnp.array(obs["FCO2"])
+    else:
+        Fco2_obs = nan
+
+    # Soil respiration
+    if "Rsoil" in obs:
+        Rsoil_obs = jnp.array(obs["Rsoil"])
+    else:
+        Rsoil_obs = nan
+
+    # P_obs = jnp.array(obs["P_mm"]) if "P_mm" in obs else nan
+    # LE_obs = jnp.array(obs["LE"]) if "LE" in obs else nan
+    # H_obs = jnp.array(obs["H"]) if "H" in obs else nan
+    # Gsoil_obs = jnp.array(obs["G_5cm"]) if "G_5cm" in obs else nan
+    # Rnet_obs = jnp.array(obs["NETRAD"]) if "NETRAD" in obs else nan
+    # GPP_obs = jnp.array(obs["GPP"]) if "GPP" in obs else nan
+    # albedo_obs = jnp.array(obs["ALBEDO"]) if "ALBEDO" in obs else nan
+    # Fco2_obs = jnp.array(obs["FCO2"]) if "FCO2" in obs else nan
+    # Rsoil_obs = jnp.array(obs["Rsoil"]) if "Rsoil" in obs else nan
+    # LE_obs, H_obs = jnp.array(obs["LE"]), jnp.array(obs["H"])
+    # Gsoil_obs, Rnet_obs = jnp.array(obs["G_5cm"]), jnp.array(obs["NETRAD"])
+    # nan = jnp.nan * jnp.ones(LE_obs.size)
+
+    # # TODO: need to define the key words for the following variables
+    # GPP_obs, albedo_obs, Fco2_obs, Rsoil_obs = nan, nan, nan, nan
 
     obs = Obs(
         P_obs,
@@ -388,6 +464,9 @@ def update_profile(
         fact_heatcoef,
     )
     Told_K = prof.Told_K
+    # jax.debug.print('Tair_K: {a}', a=Tair_K[18950, 28:36])
+    # jax.debug.print('Told_K: {a}', a=Told_K[18950, 28:36])
+    # jax.debug.print('soil.heat: {a}', a=soil.heat)
 
     # with larger Dij value I need to filter new T profiles
     Tair_K = 0.25 * Tair_K + 0.75 * Told_K
@@ -414,9 +493,23 @@ def update_profile(
         nlayers_atmos,
         fact_lecoef,
     )
+    # jax.debug.print('fact_lecoef: {a}', a=fact_lecoef[11254:11257])
+    # jax.debug.print('LE: {a}', a=LE[11254:11257,:10])
+    # jax.debug.print('soil.evap: {a}', a=soil.evap[11254:11257])
+    # jax.debug.print('met.zL: {a}', a=met.zL[11254:11257])
+    # jax.debug.print('eair_Pa: {a}', a=eair_Pa[11254:11257,:10])
+    # jax.debug.print('fact_lecoef: {a}', a=fact_lecoef[:1])
+    # jax.debug.print('LE: {a}', a=LE[:1,:1])
+    # jax.debug.print('soil.evap: {a}', a=soil.evap[:1])
+    # jax.debug.print('met.zL: {a}', a=met.zL[:1])
+    # jax.debug.print('eair_Pa: {a}', a=eair_Pa[:1,:1])
     eair_old_Pa = prof.eair_old_Pa
     eair_Pa = 0.25 * eair_Pa + 0.75 * eair_old_Pa
     eair_old_Pa = eair_Pa
+
+    # jax.debug.print('eair_Pa: {a}', a=eair_Pa[18950, 28:36])
+    # jax.debug.print('met.zl: {a}', a=met.zL)
+    # jax.debug.print('co2: {a}', a=eair_Pa[18950, 28:36])
 
     # # TODO: Compute CO2 profiles
     # fact_co2=(28.97/44)*met.air_density_mole

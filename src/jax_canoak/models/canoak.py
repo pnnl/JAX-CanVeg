@@ -148,7 +148,7 @@ def canoak_initialize_states(
     return (quantum, nir, rnet, lai, sun_ang, leaf_ang, states_initial)
 
 
-@eqx.filter_jit
+# @eqx.filter_jit
 def canoak_each_iteration(
     states: Tuple[Met, Prof, Ir, Qin, SunShadedCan, SunShadedCan, Soil, Veg, Can],
     para: Para,
@@ -174,6 +174,7 @@ def canoak_each_iteration(
 
     # Compute IR fluxes with Bonan's algorithms of Norman model
     ir = ir_rad_tran_canopy(leaf_ang, ir, quantum, soil, sun, shade, para)
+    # jax.debug.print("ir_dn: {x}", x=ir.ir_dn)
 
     # Incoming short and longwave radiation
     qin = compute_qin(quantum, nir, ir, para, qin)
@@ -223,7 +224,7 @@ def canoak_each_iteration(
     return states_new
 
 
-@eqx.filter_jit
+# @eqx.filter_jit
 def canoak(
     # def canoak_batch(
     para: Para,

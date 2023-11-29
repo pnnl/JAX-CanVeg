@@ -14,3 +14,6 @@ from .photosyn_stomata_gs_hybrid import (
     calculate_gs_coef,  # noqa: F401
     leaf_ps_gs_hybrid,  # noqa: F401
 )
+from .photosyn_stomata_gsswc_hybrid import (
+    leaf_ps_gsswc_hybrid,  # noqa: F401
+)
