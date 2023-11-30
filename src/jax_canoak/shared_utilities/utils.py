@@ -134,3 +134,10 @@ minus = jax.vmap(lambda x, y: x - y, in_axes=(None, 1), out_axes=1)
 
 # divide: (n) + (n,m) -> (n,m)
 divide = jax.vmap(lambda x, y: x / y, in_axes=(None, 1), out_axes=1)
+
+
+# Function for configuring the on or off of debugging nans and infs
+def tune_jax_naninfs_for_debug(value=True):
+    jax.config.update("jax_debug_nans", value)
+    jax.config.update("jax_debug_infs", value)
+    jax.config.update("jax_disable_jit", value)

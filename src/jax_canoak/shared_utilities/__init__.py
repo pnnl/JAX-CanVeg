@@ -1,4 +1,9 @@
-from .utils import conc, filter_array, compute_metrics  # noqa: F401
+from .utils import (
+    conc,  # noqa: F401
+    filter_array,  # noqa: F401
+    compute_metrics,  # noqa: F401
+    tune_jax_naninfs_for_debug,  # noqa: F401
+)
 
 # from .plot import (
 #     plot_rad,  # noqa: F401

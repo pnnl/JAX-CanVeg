@@ -180,5 +180,14 @@ def conc(
         factor,
         cref,
     )  # (ntime, nlayers_atmos)
+    # jax.debug.print('cncc_e: {a}', a=calculate_ccnc(
+    #     ustfact[11255], zL[11255], source[11255],
+    #     soilflux[11255], factor[11255], cref[11255]
+    # ))
+    # jax.debug.print(
+    #     'ustfact: {a}; zL: {b}, source: {c}, soilflux: {d}, factor: {e}, cref: {f}:',
+    #     a= ustfact[11255], b=zL[11255], c=source[11255],
+    #     d=soilflux[11255], e=factor[11255], f=cref[11255]
+    # )
 
     return cncc

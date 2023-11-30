@@ -179,9 +179,10 @@ def initialize_parameters(
                 t.nir_soil_refl,
                 t.theta_min,
                 t.theta_max,
+                t.lleaf,
             ],
             para_max,
-            replace=[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+            replace=[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.1],
         )
         return setup, para, para_min, para_max
 

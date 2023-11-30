@@ -164,6 +164,8 @@ def plot_imshow2(
         met_array, met_title = met.eair, "Air pressure [Pa]"
     elif key == "co2":
         met_array, met_title = met.CO2, "Air CO2 [ppm]"
+    elif key == "swc":
+        met_array, met_title = met.soilmoisture, "Soil water content [-]"
     else:
         raise Exception(f"Unknown key: {key}")
     plot_timeseries(

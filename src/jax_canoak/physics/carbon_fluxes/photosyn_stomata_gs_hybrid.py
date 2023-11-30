@@ -68,9 +68,10 @@ def calculate_gs_coef(
 
     # Perform the Rsoil calculation
     gscoef = jax.vmap(gscoefDL)(x)  # pyright: ignore
-    leafrh, bprime = gscoef[..., 0], gscoef[..., 1]
-    leafrh = leafrh.reshape([Nt, Nlevel])
+    kball, bprime = gscoef[..., 0], gscoef[..., 1]
+    kball = kball.reshape([Nt, Nlevel])
     bprime = bprime.reshape([Nt, Nlevel])
+    # jax.debug.print("gscoef: {a}", a=gscoef)
     # jax.debug.print("swc: {a}", a=theta_soil)
     # jax.debug.print("swc_norm: {a}", a=swc_norm[:,0])
     # jax.debug.print("swc_norm: {a}", a=swc_norm[:,1])
@@ -79,7 +80,7 @@ def calculate_gs_coef(
     # jax.debug.print("vpd_norm: {a}", a=vpd_norm)
     # jax.debug.print("eair_norm: {a}", a=eair_norm)
 
-    return leafrh, bprime
+    return kball, bprime
 
 
 def leaf_ps_gs_hybrid(
@@ -290,8 +291,10 @@ def leaf_ps_gs_hybrid(
     # rh_leaf = calculate_leaf_rh(prm, Tlk, eair_Pa, theta_soil)
 
     # Calculate the bprime and leaf RH from a deep learning model
-    rh_leaf, bprime = calculate_gs_coef(prm, Tlk, eair_Pa, theta_soil)
+    kball, bprime = calculate_gs_coef(prm, Tlk, eair_Pa, theta_soil)
+    # bprime = jnp.clip(bprime, a_min=1e-5)
     bprime16 = bprime / 1.6
+    kball = kball * prm.kball
 
     # APHOTO = PG - rd, net photosynthesis is the difference
     # between gross photosynthesis and dark respiration. Note
@@ -301,7 +304,14 @@ def leaf_ps_gs_hybrid(
     # Gs = k A rh/cs + b'
     # rh is relative humidity, which comes from a coupled
     # leaf energy balance model
-    k_rh = rh_leaf * prm.kball  # combine product of rh and K ball-berry
+    # k_rh = rh_leaf * prm.kball  # combine product of rh and K ball-berry
+    rh_leaf = eair_Pa / es(Tlk)  # need to transpose matrix
+    k_rh = rh_leaf * kball  # combine product of rh and K ball-berry
+    # jax.debug.print("kball: {a}", a=kball.mean())
+    # jax.debug.print("kball: {a}", a=kball)
+    # jax.debug.print("bprime: {a}", a=bprime)
+    # jax.debug.print("bprime min: {a}", a=bprime.min())
+    # jax.debug.print("bprime max: {a}", a=bprime.max())
 
     # Gs from Ball-Berry is for water vapor.  It must be divided
     # by the ratio of the molecular diffusivities to be valid for A
@@ -470,7 +480,8 @@ def leaf_ps_gs_hybrid(
     # Stomatal conductance is mol m-2 s-1
     # convert back to resistance (s/m) for energy balance routine
     # gs_m_s = gs_leaf_mole * Tlk * 101.3* 0.022624 /(273.15 * P_kPa)
-    gs_leaf_mole = (prm.kball * rh_leaf * aphoto / cs) + bprime
+    # gs_leaf_mole = (prm.kball * rh_leaf * aphoto / cs) + bprime
+    gs_leaf_mole = (kball * rh_leaf * aphoto / cs) + bprime
     gs_m_s = gs_leaf_mole * Tlk * pstat273
     rstom = 1.0 / gs_m_s
     gs_co2 = gs_leaf_mole / 1.6
@@ -498,6 +509,7 @@ def leaf_ps_gs_hybrid(
         aphoto_e,
         Aps_e,
         rd_e,
+        kball_e,
         rh_leaf_e,
         bprime_e,
         cs_e,
@@ -511,7 +523,11 @@ def leaf_ps_gs_hybrid(
         tst = (Aps_e < aphoto_e) & (Aps_e > 0)
         aphoto_e_new = Aps_e - rd_e
         gs_leaf_mole_e_new = (
-            prm.kball * rh_leaf_e * aphoto_e_new / cs_e
+            # prm.kball * rh_leaf_e * aphoto_e_new / cs_e
+            kball_e
+            * rh_leaf_e
+            * aphoto_e_new
+            / cs_e
         ) / 1.0 + bprime_e
         # ) / 1.6 + bprime16_e
         gs_co2_e = gs_leaf_mole_e_new / 1.6
@@ -541,6 +557,7 @@ def leaf_ps_gs_hybrid(
         aphoto,
         Aps,
         rd,
+        kball,
         rh_leaf,
         bprime,
         cs,

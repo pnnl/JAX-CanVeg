@@ -112,9 +112,10 @@ class MLP3(eqx.Module):
     def __call__(self, x: Array) -> Array:
         for layer in self.layers[:-1]:
             x = layer(x)
-            x = jax.nn.tanh(x)
+            # x = jax.nn.tanh(x)
+            x = jax.nn.softplus(x)
         x = self.layers[-1](x)
         # x = jax.nn.log_sigmoid(x)
-        x = jax.nn.relu(x)
+        x = jax.nn.softplus(x)
         # x = jax.nn.tanh(x)
         return x

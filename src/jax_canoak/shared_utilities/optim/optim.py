@@ -42,7 +42,11 @@ def loss_func(
     # jax.debug.print("args: {x}", x=args)
     pred_y = model(met, *args)
     # jax.debug.print("pred_y: {x}", x=pred_y)
+    # L2-loss
     return jnp.mean((y - pred_y) ** 2)
+
+    # # Relative L2-loss
+    # return jnp.mean((y - pred_y) ** 2 / (y ** 2))
 
 
 def perform_optimization(

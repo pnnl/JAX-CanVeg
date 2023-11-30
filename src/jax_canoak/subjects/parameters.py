@@ -17,7 +17,7 @@ import jax.numpy as jnp
 import equinox as eqx
 
 # from equinox.nn import MLP
-from .dnn import MLP, MLP2
+from .dnn import MLP, MLP2, MLP3
 
 from typing import Optional
 from ..shared_utilities.types import Float_0D, Float_1D
@@ -423,8 +423,8 @@ class Para(eqx.Module):
         else:
             self.bprimeDL = bprimeDL
         if gscoefDL is None:
-            # self.gscoefDL = MLP3(
-            self.gscoefDL = MLP2(
+            self.gscoefDL = MLP3(
+                # self.gscoefDL = MLP2(
                 # in_size=4,
                 in_size=3,
                 out_size=2,
