@@ -88,6 +88,14 @@ def soil_energy_balance(
         * (soil.sfc_temperature - soil_T_air)
         / (soil_T_air * u_soil * u_soil)
     )
+    # print(stabdel.mean(), stabdel.min())
+    # print(u_soil.mean(), u_soil.min())
+    # print(soil_T_air.mean(), soil_T_air.min())
+    # print(soil.sfc_temperature.mean(), soil.sfc_temperature.min())
+    
+    # To ensure numerical stability, stabdel can't be lower than -10000
+    stabdel = jnp.clip(stabdel, a_min=-1e5)
+    # jax.debug.print("stabdel min: {a}", a=stabdel.min())
 
     @jnp.vectorize
     def calculate_facstab(stabdel_e):

@@ -75,6 +75,8 @@ def plot_imshow(
     title=None,
     tunit="[day of year]",
     is_canopy=True,
+    vmin=None,
+    vmax=None,
 ):
     # times = get_time_doy(met)
     times = get_time(met)
@@ -109,6 +111,8 @@ def plot_imshow(
         extent=extent,  # pyright: ignore  # noqa: E501
         origin=origin,
         cmap=cmap,
+        vmin=vmin,
+        vmax=vmax,
         aspect="auto",
     )
     ax1.set(ylabel=ylabel, title=title)
@@ -133,6 +137,8 @@ def plot_imshow2(
     title=None,
     tunit="[day of year]",
     is_canopy=True,
+    vmin=None,
+    vmax=None
 ):
     # times = get_time_doy(met)
     times = get_time(met)
@@ -181,6 +187,8 @@ def plot_imshow2(
         title=title,
         tunit=tunit,
         is_canopy=is_canopy,
+        vmin=vmin,
+        vmax=vmax
     )
 
 
@@ -189,13 +197,13 @@ def plot_obs_1to1(obs, can, lim, varn="varn", ax=None):
     if ax is None:
         fig, ax = plt.subplots(1, 1, figsize=figsize_1)
     l2 = jnp.mean((obs - can) ** 2)
-    ax.scatter(obs, can)
+    ax.scatter(obs, can, color='black', s=0.5, alpha=0.1)
     ax.plot(lim, lim, "k--")
     ax.set(
         xlim=lim,
         ylim=lim,
-        xlabel="Measured",
-        ylabel="Simulated",
+        xlabel="Observation",
+        ylabel="Simulation",
         title=f"{varn} (L2: {l2:.3f})",
     )
     return ax
@@ -214,8 +222,8 @@ def plot_timeseries_obs_1to1(
             right=0.9,
             bottom=0.1,
             top=0.9,
-            wspace=0.2,
-            hspace=0.5,
+            wspace=0.1,
+            hspace=0.3,
         )
         ax1 = fig.add_subplot(gs[0, 0])
         ax2 = fig.add_subplot(gs[0, 1], sharey=ax1)
@@ -229,6 +237,7 @@ def plot_timeseries_obs_1to1(
         ax=ax1,
         title=None,
         label="observation",
+        alpha=1.0,
         tunit="",
         linestyle=linestyle,
     )
