@@ -42,13 +42,14 @@ def plot_timeseries(
     alpha=1.0,
     xticks=None,
     linestyle="-",
+    color='black',
 ):
     if ax is None:
         fig, ax = plt.subplots(1, 1, figsize=figsize_1b)
     if timesteps is None:
-        ax.plot(array, linestyle, label=label, alpha=alpha, markersize=3)
+        ax.plot(array, linestyle, color=color, label=label, alpha=alpha, markersize=3)
     else:
-        ax.plot(timesteps, array, linestyle, label=label, alpha=alpha, markersize=3)
+        ax.plot(timesteps, array, linestyle, color=color, label=label, alpha=alpha, markersize=3)
     if xticks is None:
         ax.set(
             xlabel=f"Time {tunit}",
@@ -192,6 +193,124 @@ def plot_imshow2(
     )
 
 
+def plot_imshowb(
+    array,
+    met,
+    verticals,
+    cmap="bwr",
+    axes=None,
+    title=None,
+    tunit="[day of year]",
+    is_canopy=True,
+    vmin=None,
+    vmax=None,
+):
+    # times = get_time_doy(met)
+    times = get_time(met)
+    if is_canopy:
+        extent = [times[0], times[-1], verticals[0], verticals[-1]]
+        origin = "lower"
+    else:
+        extent = [times[0], times[-1], verticals[-1], verticals[0]]
+        origin = "upper"
+    ylabel = "Aboveground height [m]" if is_canopy else "Soil depth [m]"
+    if axes is None:
+        fig = plt.figure(figsize=(12, 5))
+        gs = fig.add_gridspec(
+            2,
+            1,
+            height_ratios=(6, 1),
+            left=0.1,
+            right=0.9,
+            bottom=0.1,
+            top=0.9,
+            wspace=0.05,
+            hspace=0.05,
+        )
+        ax = fig.add_subplot(gs[0, 0])
+        axbar = fig.add_subplot(gs[1, 0])
+    else:
+        ax, axbar = axes[0], axes[1]
+    im = ax.imshow(
+        array,
+        extent=extent,  # pyright: ignore  # noqa: E501
+        origin=origin,
+        cmap=cmap,
+        vmin=vmin,
+        vmax=vmax,
+        aspect="auto",
+    )
+    ax.set(ylabel=ylabel, title=title)
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=30, ha="right")
+    cbar = plt.colorbar(im, cax=axbar, orientation="horizontal")
+    cbarticks = cbar.ax.get_xticks()
+    cbar.ax.set_xticks([cbarticks[0], cbarticks[-1]])
+    return axes, im
+
+
+def plot_imshow2b(
+    array,
+    met,
+    verticals,
+    key="T",
+    cmap="bwr",
+    axes=None,
+    title=None,
+    tunit="[day of year]",
+    is_canopy=True,
+    vmin=None,
+    vmax=None
+):
+    # times = get_time_doy(met)
+    times = get_time(met)
+    if axes is None:
+        fig = plt.figure(figsize=(8, 6))
+        gs = fig.add_gridspec(
+            4,
+            1,
+            height_ratios=(2, 7, 0.5, 0.2),
+            left=0.1,
+            right=0.9,
+            bottom=0.1,
+            top=0.9,
+            wspace=0.1,
+            hspace=0.4,
+        )
+        ax0 = fig.add_subplot(gs[0, 0])
+        ax1 = fig.add_subplot(gs[1, 0])
+        axbar = fig.add_subplot(gs[-1, 0])
+        axes_imshow = [ax1, axbar]
+    else:
+        ax0 = axes[0]
+        axes_imshow = axes[1:]
+    if key == "T":
+        met_array, met_title = met.T_air_K, "Air temperature [degK]"
+    elif key == "e":
+        met_array, met_title = met.eair, "Air pressure [Pa]"
+    elif key == "co2":
+        met_array, met_title = met.CO2, "Air CO2 [ppm]"
+    elif key == "swc":
+        met_array, met_title = met.soilmoisture, "Soil water content [-]"
+    else:
+        raise Exception(f"Unknown key: {key}")
+    plot_timeseries(
+        met_array, times, ax=ax0, title=met_title, tunit="[day of year]", xticks=[]
+    )
+    ax0.set(xlabel=None)
+    plot_imshowb(
+        array,
+        met,
+        verticals,
+        cmap=cmap,
+        axes=axes_imshow,
+        title=title,
+        tunit=tunit,
+        is_canopy=is_canopy,
+        vmin=vmin,
+        vmax=vmax
+    )
+
+
 def plot_obs_1to1(obs, can, lim, varn="varn", ax=None):
     # ------ observation versus simulation ------
     if ax is None:
@@ -203,7 +322,7 @@ def plot_obs_1to1(obs, can, lim, varn="varn", ax=None):
         xlim=lim,
         ylim=lim,
         xlabel="Observation",
-        ylabel="Simulation",
+        ylabel="JAX-CANOAK",
         title=f"{varn} (L2: {l2:.3f})",
     )
     return ax
@@ -213,7 +332,7 @@ def plot_timeseries_obs_1to1(
     obs, sim, lim, met=None, timesteps=None, varn="varn", axes=None, linestyle="-"
 ):
     if axes is None:
-        fig = plt.figure(figsize=(15, 4))
+        fig = plt.figure(figsize=(12, 4))
         gs = fig.add_gridspec(
             1,
             2,
@@ -240,16 +359,18 @@ def plot_timeseries_obs_1to1(
         alpha=1.0,
         tunit="",
         linestyle=linestyle,
+        color='black'
     )
     plot_timeseries(
         sim,
         timesteps=timesteps,
         ax=ax1,
         title=None,
-        label="simulation",
+        label="JAX-CANOAK",
         alpha=0.7,
         tunit="",
         linestyle=linestyle,
+        color='lightblue'
     )
     ax1.legend()
     ax1.set(title=varn)
