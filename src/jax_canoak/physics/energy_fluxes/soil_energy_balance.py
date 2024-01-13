@@ -18,6 +18,7 @@ from ...subjects.utils import desdt as fdesdt
 from ...subjects.utils import des2dt as fdes2dt
 from ...subjects.utils import es as fes
 from ...subjects.utils import llambda as fllambda
+from ...shared_utilities.solver import implicit_func_fixed_point
 
 
 # @eqx.filter_jit
@@ -92,7 +93,7 @@ def soil_energy_balance(
     # print(u_soil.mean(), u_soil.min())
     # print(soil_T_air.mean(), soil_T_air.min())
     # print(soil.sfc_temperature.mean(), soil.sfc_temperature.min())
-    
+
     # To ensure numerical stability, stabdel can't be lower than -10000
     stabdel = jnp.clip(stabdel, a_min=-1e5)
     # jax.debug.print("stabdel min: {a}", a=stabdel.min())
@@ -265,7 +266,7 @@ def finite_difference_matrix(soil: Soil, prm: Para, soil_mtime: int) -> Soil:
     """
     # soil_mtime = prm.soil_mtime
     # soil_nsoil = soil.n_soil
-    soil_nsoil = soil.dz.size
+    # soil_nsoil = soil.dz.size
     # soil_mtime = soil.mtime
     # soil_mtime = 180
     # tolerance = 1.e-2
@@ -279,8 +280,111 @@ def finite_difference_matrix(soil: Soil, prm: Para, soil_mtime: int) -> Soil:
 
     # Looping to solve the Fourier heat transfer equation
     # def update_tsoil(i, c):
-    def update_tsoil(c, i):
+    # def update_tsoil(c, i):
+    #     T_soil = c
+    #     # Calculate the coef for each soil layers
+    #     # Top boundary conditions: The first soil layer
+    #     a_soil_0, b_soil_0 = jnp.zeros([ntime, 1]), jnp.ones([ntime, 1])
+    #     c_soil_0, d_soil_0 = jnp.zeros([ntime, 1]), soil.T_soil_up_boundary
+    #     d_soil_0 = jnp.expand_dims(d_soil_0, axis=-1)
+
+    #     @jnp.vectorize
+    #     def calculate_abcd(
+    #         k_cond_up, k_cond_cu, cp_cu, T_soil_up, T_soil_cu, T_soil_dn
+    #     ):
+    #         a_soil_e = -k_cond_up * Fst
+    #         b_soil_e = Fst * (k_cond_cu + k_cond_up) + cp_cu
+    #         c_soil_e = -k_cond_cu * Fst
+    #         d_soil_e = (
+    #             T_soil_up * k_cond_up * Gst
+    #             + T_soil_cu * cp_cu
+    #             - T_soil_cu * k_cond_cu * Gst
+    #             - T_soil_cu * k_cond_up * Gst
+    #             + T_soil_dn * k_cond_cu * Gst
+    #         )
+    #         return a_soil_e, b_soil_e, c_soil_e, d_soil_e
+
+    #     a_soil, b_soil, c_soil, d_soil = calculate_abcd(
+    #         soil.k_conductivity_soil[:, :-2],
+    #         soil.k_conductivity_soil[:, 1:-1],
+    #         soil.cp_soil[:, 1:],
+    #         T_soil[:, :-3],
+    #         T_soil[:, 1:-2],
+    #         T_soil[:, 2:-1],
+    #     )  # (ntime, nsoil-1) for each
+    #     # Bottom boundary conditions
+    #     c_soil_n = jnp.zeros([ntime, 1])
+    #     d_soil_n = (
+    #         d_soil[:, -1]
+    #         + Fst * soil.k_conductivity_soil[:,soil_nsoil - 1] * soil.T_soil_low_bound
+    #     )  # noqa: E501
+    #     d_soil_n = jnp.expand_dims(d_soil_n, axis=-1)
+    #     a_soil = jnp.concatenate([a_soil_0, a_soil], axis=1)
+    #     b_soil = jnp.concatenate([b_soil_0, b_soil], axis=1)
+    #     c_soil = jnp.concatenate([c_soil_0, c_soil[:, :-1], c_soil_n], axis=1)
+    #     d_soil = jnp.concatenate([d_soil_0, d_soil[:, :-1], d_soil_n], axis=1)
+    #     # jax.debug.print('T_soil: {a}', a=T_soil[3,:])
+    #     # jax.debug.print('b_soil: {a}', a=b_soil[3,:])
+    #     # jax.debug.print('d_soil: {a}', a=d_soil[3,:])
+
+    #     # Use Thomas algorithm to solve for simultaneous equ
+    #     def update_bd(c2, j):
+    #         b_soil_e, d_soil_e = c2[0], c2[1]
+    #         mm = a_soil[:, j] / b_soil_e
+    #         b_soil_e_new = b_soil[:, j] - mm * c_soil[:, j - 1]
+    #         d_soil_e_new = d_soil[:, j] - mm * d_soil_e
+    #         c2new = [b_soil_e_new, d_soil_e_new]
+    #         return c2new, c2new
+
+    #     _, out = jax.lax.scan(
+    #         update_bd, [b_soil[:, 0], d_soil[:, 0]], jnp.arange(1, soil_nsoil)
+    #     )
+    #     b_soil_update, d_soil_update = out[0].T, out[1].T
+    #     b_soil = jnp.concatenate([b_soil[:, [0]], b_soil_update], axis=1)
+    #     d_soil = jnp.concatenate([d_soil[:, [0]], d_soil_update], axis=1)
+
+    #     # Calculate the soil temperature by back substitution
+    #     def calculate_Tsoilnew(c, i):
+    #         Tsoil_dn = c
+    #         Tsoil_cu = (d_soil[:, i] - c_soil[:, i] * Tsoil_dn) / b_soil[:, i]
+    #         cnew = Tsoil_cu
+    #         return cnew, cnew
+
+    #     _, out = jax.lax.scan(
+    #         calculate_Tsoilnew,
+    #         T_soil[:, soil_nsoil],
+    #         xs=jnp.arange(soil_nsoil - 1, -1, -1),
+    #     )
+    #     T_soil_new = out.T[:, ::-1]  # (ntime, n_soil)
+    #     T_soil_new = jnp.concatenate(
+    #         [T_soil_new, T_soil[:, -2:]], axis=(-1)
+    #     )  # (ntime, n_soil+2)
+    #     # jax.debug.print('a_soil: {a}', a=a_soil[3,:])
+    #     # jax.debug.print('c_soil: {a}', a=c_soil[3,:])
+    #     # jax.debug.print('b_soil: {a}', a=b_soil[3,:])
+    #     # jax.debug.print('d_soil: {a}', a=d_soil[3,:])
+    #     # jax.debug.print('T_soil: {a}', a=T_soil[3,:])
+    #     # jax.debug.print('T_soil_new: {a}', a=T_soil_new[3,:])
+    #     # jax.debug.print('k_cond: {a}', a=soil.k_conductivity_soil[3,:])
+    #     # jax.debug.print('cp: {a}', a=soil.cp_soil[3,:])
+    #     cnew = T_soil_new
+    #     return cnew, None
+
+    # carry = jax.lax.fori_loop(
+    #     0,
+    #     soil_mtime,
+    #     # 3,
+    #     update_tsoil,
+    #     soil.T_soil,
+    # )
+    # carry, _ = jax.lax.scan(update_tsoil, soil.T_soil, xs=None, length=soil_mtime)
+
+    def func(c, para, *args):
         T_soil = c
+
+        soil, Fst, Gst = args[0], args[1], args[2]
+        soil_nsoil = soil.dz.size
+
         # Calculate the coef for each soil layers
         # Top boundary conditions: The first soil layer
         a_soil_0, b_soil_0 = jnp.zeros([ntime, 1]), jnp.ones([ntime, 1])
@@ -358,25 +462,15 @@ def finite_difference_matrix(soil: Soil, prm: Para, soil_mtime: int) -> Soil:
         T_soil_new = jnp.concatenate(
             [T_soil_new, T_soil[:, -2:]], axis=(-1)
         )  # (ntime, n_soil+2)
-        # jax.debug.print('a_soil: {a}', a=a_soil[3,:])
-        # jax.debug.print('c_soil: {a}', a=c_soil[3,:])
-        # jax.debug.print('b_soil: {a}', a=b_soil[3,:])
-        # jax.debug.print('d_soil: {a}', a=d_soil[3,:])
-        # jax.debug.print('T_soil: {a}', a=T_soil[3,:])
-        # jax.debug.print('T_soil_new: {a}', a=T_soil_new[3,:])
-        # jax.debug.print('k_cond: {a}', a=soil.k_conductivity_soil[3,:])
-        # jax.debug.print('cp: {a}', a=soil.cp_soil[3,:])
         cnew = T_soil_new
-        return cnew, None
+        return cnew
 
-    # carry = jax.lax.fori_loop(
-    #     0,
-    #     soil_mtime,
-    #     # 3,
-    #     update_tsoil,
-    #     soil.T_soil,
-    # )
-    carry, _ = jax.lax.scan(update_tsoil, soil.T_soil, xs=None, length=soil_mtime)
+    states_initial = soil.T_soil
+    args = [soil, Fst, Gst]
+    # carry = fixed_point(func, states_initial, prm, soil_mtime, *args)
+    carry = implicit_func_fixed_point(
+        func, update_all, get_all, states_initial, prm, soil_mtime, *args
+    )
 
     # Update T_soil
     T_soil = carry
@@ -392,3 +486,11 @@ def finite_difference_matrix(soil: Soil, prm: Para, soil_mtime: int) -> Soil:
     )
 
     return soil
+
+
+def get_all(states):
+    return states
+
+
+def update_all(states, new_states):
+    return new_states

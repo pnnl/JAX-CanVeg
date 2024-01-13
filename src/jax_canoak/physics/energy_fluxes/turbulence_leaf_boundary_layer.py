@@ -23,7 +23,8 @@ from ...shared_utilities.utils import dot
 
 
 # @eqx.filter_jit
-def uz(met: Met, prm: Para, jtot: int) -> Float_2D:
+# def uz(met: Met, prm: Para, jtot: int) -> Float_2D:
+def uz(met: Met, prm: Para) -> Float_2D:
     """U(Z) inside the canopy during the day is about 1.09 u*
        This simple parameterization is derived from turbulence
        data measured in the WBW forest by Baldocchi and Meyers, 1988.
@@ -32,6 +33,7 @@ def uz(met: Met, prm: Para, jtot: int) -> Float_2D:
         met (Met): _description_
         prm (Para): _description_
     """
+    jtot = prm.zht1.size
     # (ntime,)
     UH = (
         met.wind

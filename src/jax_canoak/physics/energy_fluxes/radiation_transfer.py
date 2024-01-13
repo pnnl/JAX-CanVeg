@@ -21,6 +21,15 @@ from ...subjects import SunAng, LeafAng, ParNir, Para, Ir, SunShadedCan, Soil, M
 from ...subjects import Lai
 from ...shared_utilities.types import Float_0D, Float_1D
 from ...shared_utilities.utils import dot, add
+from ...shared_utilities.solver import fixed_point, implicit_func_fixed_point
+
+
+def get_all(states):
+    return states
+
+
+def update_all(states, new_states):
+    return new_states
 
 
 def diffuse_direct_radiation(
@@ -568,9 +577,54 @@ def rad_tran_canopy(
     )
     up_init = jnp.zeros([ntime, jktot])
 
-    def calculate_dnup(c2, j):
+    # def calculate_dnup(c2, j):
+    #     up, dn = c2[0], c2[1]
+    #     dn_top, up_bot = dn[:, -1], up[:, 0]
+
+    #     def calculate_dnup_layer(c, i):
+    #         dn_layer_t, up_layer_b = c, up[:, i]
+    #         dn_layer_b = (
+    #             dn_layer_t * transmission_layer[:, i]
+    #             + up_layer_b * reflectance_layer[:, i]
+    #             + sdn[:, i]
+    #         )
+    #         up_layer_t = (
+    #             up_layer_b * transmission_layer[:, i]
+    #             + dn_layer_t * reflectance_layer[:, i]
+    #             + sup[:, i]
+    #         )
+    #         cnew = dn_layer_b
+    #         out_layer = (dn_layer_b, up_layer_t)
+    #         return cnew, out_layer
+
+    #     _, out = jax.lax.scan(
+    #         calculate_dnup_layer, dn_top, jnp.arange(jtot - 1, -1, -1)
+    #     )
+    #     outdn, outup = out[0], out[1]
+    #     outdn = outdn.T
+    #     dn = jnp.concatenate([outdn[:,::-1], jnp.expand_dims(dn_top,axis=-1)], axis=1)
+
+    #     # up_bot = (dn[:,0] + rad.incoming * fraction_beam * Tbeam[:,0])*rad.soil_refl
+    #     up_bot = (dn[:,0] + rad.incoming * fraction_beam * Tbeam[:,0]) * soil_refl
+    #     outup = outup.T
+    #     up = jnp.concatenate([jnp.expand_dims(up_bot,axis=-1), outup[:,::-1]], axis=1)
+
+    #     c2new = [up, dn]
+    #     return c2new, None
+
+    # carry, _ = jax.lax.scan(calculate_dnup, [up_init, dn_init], xs=None, length=niter)
+    # up, dn = carry[0], carry[1]
+
+    def func(c2, para, *args):
         up, dn = c2[0], c2[1]
         dn_top, up_bot = dn[:, -1], up[:, 0]
+        transmission_layer, reflectance_layer = args[0], args[1]
+        rad_incoming, fraction_beam = args[2], args[3]
+        Tbeam, soil_refl = args[4], args[5]
+        sdn, sup = args[6], args[7]
+        # jtot = args[8]
+
+        jtot = transmission_layer.shape[1]
 
         def calculate_dnup_layer(c, i):
             dn_layer_t, up_layer_b = c, up[:, i]
@@ -596,18 +650,29 @@ def rad_tran_canopy(
         dn = jnp.concatenate([outdn[:, ::-1], jnp.expand_dims(dn_top, axis=-1)], axis=1)
 
         # up_bot = (dn[:, 0] + rad.incoming * fraction_beam * Tbeam[:, 0])*rad.soil_refl
-        up_bot = (dn[:, 0] + rad.incoming * fraction_beam * Tbeam[:, 0]) * soil_refl
+        up_bot = (dn[:, 0] + rad_incoming * fraction_beam * Tbeam[:, 0]) * soil_refl
         outup = outup.T
         up = jnp.concatenate([jnp.expand_dims(up_bot, axis=-1), outup[:, ::-1]], axis=1)
 
         c2new = [up, dn]
-        return c2new, None
+        return c2new
 
-    carry, _ = jax.lax.scan(calculate_dnup, [up_init, dn_init], xs=None, length=niter)
-    up, dn = carry[0], carry[1]
-
-    # jax.debug.print("up: {a}", a=up.mean(axis=0))
-    # jax.debug.print("dn: {a}", a=dn.mean(axis=0))
+    states_initial = [up_init, dn_init]
+    args = [
+        transmission_layer,
+        reflectance_layer,
+        rad.incoming,
+        fraction_beam,
+        Tbeam,
+        soil_refl,
+        sdn,
+        sup,
+    ]
+    # states_final = fixed_point(func, states_initial, prm, niter, *args)
+    states_final = implicit_func_fixed_point(
+        func, update_all, get_all, states_initial, prm, niter, *args
+    )
+    up, dn = states_final[0], states_final[1]
 
     # upward diffuse radiation flux density, on the horizontal
     up_flux = up
@@ -746,8 +811,62 @@ def ir_rad_tran_canopy(
     # carry, _ = jax.lax.scan(calculate_dnup, [ir_dn, ir_up], xs=None, length=50)
     # ir_dn, ir_up = carry[0], carry[1]
 
-    def calculate_dnup(c2, j):
+    # def calculate_dnup(c2, j):
+    #     ir_dn, ir_up = c2[0], c2[1]
+
+    #     def calculate_dn_layer(c, i):
+    #         dn_layer_t, up_layer_b = c, ir_up[:, i]
+    #         dn_layer_b = (
+    #             dn_layer_t * forward_scat[:, i]
+    #             + up_layer_b * backward_scat[:, i]
+    #             + sdn[:, i]
+    #         )
+    #         cnew = dn_layer_b
+    #         return cnew, cnew
+
+    #     _, out = jax.lax.scan(
+    #         # calculate_dn_layer, ir_dn[:, -1], jnp.arange(prm.jtot - 1, -1, -1)
+    #         calculate_dn_layer,
+    #         ir_dn[:, -1],
+    #         jnp.arange(jtot - 1, -1, -1),
+    #     )
+    #     out = out.T
+    #     ir_dn = jnp.concatenate([out[:, ::-1], ir_dn[:, -1:]], axis=1)
+
+    #     # Compute upward IR from the bottom up with the lower boundary condition
+    #     # based on soil temperature
+    #     up_bot = (1 - prm.epsoil) * ir_dn[:, 0] + prm.epsoil * prm.sigma * jnp.power(
+    #         soil.sfc_temperature, 4
+    #     )
+
+    #     def calculate_up_layer(c, i):
+    #         un_layer_b, dn_layer_t = c, ir_dn[:, i + 1]
+    #         up_layer_t = (
+    #             un_layer_b * forward_scat[:, i]
+    #             + dn_layer_t * backward_scat[:, i]
+    #             # un_layer_b * leafang.integ_exp_diff[:,i]
+    #             + sup[:, i]
+    #         )
+    #         cnew = up_layer_t
+    #         return cnew, cnew
+
+    #     _, out = jax.lax.scan(calculate_up_layer, up_bot, jnp.arange(jtot))
+    #     out = out.T
+    #     ir_up = jnp.concatenate([jnp.expand_dims(up_bot, axis=-1), out], axis=1)
+
+    #     cnew = [ir_dn, ir_up]
+
+    #     return cnew, cnew
+
+    # carry, _ = jax.lax.scan(calculate_dnup, [ir_dn, ir_up], xs=None, length=1)
+    # ir_dn, ir_up = carry[0], carry[1]
+
+    def func(c2, prm, *args):
         ir_dn, ir_up = c2[0], c2[1]
+        forward_scat, backward_scat, sdn, sup = args[0], args[1], args[2], args[3]
+        sfc_temperature = args[4]
+
+        jtot = forward_scat.shape[1]
 
         def calculate_dn_layer(c, i):
             dn_layer_t, up_layer_b = c, ir_up[:, i]
@@ -771,7 +890,9 @@ def ir_rad_tran_canopy(
         # Compute upward IR from the bottom up with the lower boundary condition
         # based on soil temperature
         up_bot = (1 - prm.epsoil) * ir_dn[:, 0] + prm.epsoil * prm.sigma * jnp.power(
-            soil.sfc_temperature, 4
+            # soil.sfc_temperature, 4
+            sfc_temperature,
+            4,
         )
 
         def calculate_up_layer(c, i):
@@ -791,10 +912,14 @@ def ir_rad_tran_canopy(
 
         cnew = [ir_dn, ir_up]
 
-        return cnew, cnew
+        return cnew
 
-    carry, _ = jax.lax.scan(calculate_dnup, [ir_dn, ir_up], xs=None, length=1)
-    ir_dn, ir_up = carry[0], carry[1]
+    states_initial = [ir_dn, ir_up]
+    args = [forward_scat, backward_scat, sdn, sup, soil.sfc_temperature]
+    states_final = fixed_point(func, states_initial, prm, 50, *args)
+    # states_final = implicit_func_fixed_point(
+    #     func, update_all, get_all, states_initial, prm, 50, *args)
+    ir_dn, ir_up = states_final[0], states_final[1]
 
     # IR shade on top + bottom of leaves
     ir_shade = ir_up[:, :jtot] + ir_dn[:, :jtot]

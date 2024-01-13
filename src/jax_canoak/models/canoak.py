@@ -169,7 +169,8 @@ def canoak_each_iteration(
 
     # Update canopy wind profile with iteration of z/l and use in boundary layer
     # resistance computations
-    wind = uz(met, para, jtot)
+    # wind = uz(met, para, jtot)
+    wind = uz(met, para)
     prof = eqx.tree_at(lambda t: t.wind, prof, wind)
 
     # Compute IR fluxes with Bonan's algorithms of Norman model

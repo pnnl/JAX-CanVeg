@@ -18,6 +18,8 @@ from .canoak import canoak
 from .canoak_rsoil_hybrid import canoak_rsoil_hybrid
 
 from ..shared_utilities.solver import implicit_func_fixed_point
+
+# from ..shared_utilities.solver import implicit_func_fixed_point_canoak_main
 from .canoak import canoak_initialize_states, canoak_each_iteration
 from .canoak import get_all, update_all
 from .canoak_rsoil_hybrid import canoak_rsoil_hybrid_each_iteration
@@ -261,6 +263,7 @@ class CanoakIFT(CanoakBase):
 
     #     return states_final
 
+    # @eqx.filter_jit
     def __call__(
         self,
         met: Met,
@@ -305,13 +308,14 @@ class CanoakIFT(CanoakBase):
         # Forward runs
         args = [dij, leaf_ang, quantum, nir, lai, n_can_layers, stomata, soil_mtime]
         states_final = implicit_func_fixed_point(
+            # states_final = implicit_func_fixed_point_canoak_main(
             canoak_each_iteration,
             update_substates_func,
             get_substates_func,
             states_guess,
             para,
-            niter,
             # 2,
+            niter,
             *args
         )
 
