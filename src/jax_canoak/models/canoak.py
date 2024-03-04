@@ -53,7 +53,8 @@ def canoak_initialize_states(
     dt_soil: Float_0D,
     soil_mtime: int,
 ):
-    jtot, jtot_total = n_can_layers, n_total_layers
+    # jtot, jtot_total = n_can_layers, n_total_layers
+    jtot = n_can_layers
     ntime = time_batch_size
 
     # ntime, jtot, jtot_total = met.zL.size, setup.n_can_layers, setup.n_total_layers
@@ -64,7 +65,8 @@ def canoak_initialize_states(
     # ---------------------------------------------------------------------------- #
     #                     Initialize profiles of scalars/sources/sinks             #
     # ---------------------------------------------------------------------------- #
-    prof = initialize_profile(met, para, ntime, jtot, jtot_total)
+    # prof = initialize_profile(met, para, ntime, jtot, jtot_total)
+    prof = initialize_profile(met, para)
 
     # ---------------------------------------------------------------------------- #
     #                     Initialize model states                        #

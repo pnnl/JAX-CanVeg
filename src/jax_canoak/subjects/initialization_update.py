@@ -367,13 +367,17 @@ def get_obs(f_obs: str) -> Obs:
 ############################################################################
 # States
 ############################################################################
-def initialize_profile(met: Met, para: Para, ntime: int, jtot: int, nlayers: int):
+# def initialize_profile(met: Met, para: Para, ntime: int, jtot: int, nlayers: int):
+def initialize_profile(met: Met, para: Para):
     # ntime, jtot = setup.ntime, setup.n_can_layers
     # nlayers = setup.n_total_layers
     # ntime, jtot = met.zL.size, para.zht1.size
     # nlayers = para.zht.size
     # zht = para.zht
     # delz = para.delz
+    ntime = met.zL.size
+    nlayers = para.zht.size
+    jtot = para.zht1.size
     co2 = jnp.ones([ntime, nlayers])
     Tair_K = jnp.ones([ntime, nlayers])
     Told_K = jnp.ones([ntime, nlayers])

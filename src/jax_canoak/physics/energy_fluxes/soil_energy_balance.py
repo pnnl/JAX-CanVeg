@@ -207,6 +207,7 @@ def soil_energy_balance(
     # soil.del_Tk =soil.sfc_temperature-soil.T_air
     # soil.lout_sfc = prm.epsoil * prm.sigma * jnp.power(soil.sfc_temperature,4)
 
+    # First order expansion of Ts - Ta gives:
     # dT = (Q -LE - Gsoil -  ep sigma Ta^4)/( rho Cp gh + 4 ep sigma Ta^3)
     # del_Tk = (soil_Qin - soil.evap - soil.gsoil - soil.llout) / repeat
     del_Tk = (soil_Qin - evap - gsoil - soil.llout) / repeat
@@ -222,8 +223,8 @@ def soil_energy_balance(
     lout_sfc = prm.epsoil * prm.sigma * jnp.power(sfc_temperature, 4)
 
     # Sensible heat flux density over soil, W m-2
-    # soil.heat = del_Tk * kcsoil
-    heat = soil_Qin - lout_sfc - evap - gsoil
+    heat = del_Tk * kcsoil
+    # heat = soil_Qin - lout_sfc - evap - gsoil
     rnet = soil_Qin - lout_sfc
 
     soil = eqx.tree_at(
@@ -234,9 +235,10 @@ def soil_energy_balance(
             t.rnet,
             t.sfc_temperature,
             t.T_soil_up_boundary,
+            t.lout_sfc,
         ),
         soil,
-        (gsoil, evap, heat, rnet, sfc_temperature, T_soil_up_boundary),
+        (gsoil, evap, heat, rnet, sfc_temperature, T_soil_up_boundary, lout_sfc),
     )
 
     return soil
