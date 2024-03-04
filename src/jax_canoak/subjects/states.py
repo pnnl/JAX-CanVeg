@@ -262,7 +262,8 @@ class Soil(eqx.Module):
     heat: Float_1D
     rnet: Float_1D
     gsoil: Float_1D
-    lout: Float_1D
+    lout_sfc: Float_1D
+    # lout: Float_1D
     llout: Float_1D
     resp: Float_1D
 

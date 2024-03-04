@@ -993,8 +993,8 @@ def initialize_soil(
     rnet = jnp.zeros(ntime)
     gsoil = jnp.zeros(ntime)
     resp = jnp.zeros(ntime)
-    lout = para.epsigma * jnp.power(met.T_air_K, 4)  # initialization
-    llout = lout
+    lout_sfc = para.epsigma * jnp.power(met.T_air_K, 4)  # initialization
+    llout = lout_sfc
 
     # lower boundary
     T_soil_low_bound = met.Tsoil + 273.15
@@ -1053,7 +1053,7 @@ def initialize_soil(
         heat,
         rnet,
         gsoil,
-        lout,
+        lout_sfc,
         llout,
         resp,
     )
