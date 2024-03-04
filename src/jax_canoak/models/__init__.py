@@ -22,3 +22,4 @@ from .canoak_eqx import CanoakGSHybridIFT  # noqa: F401
 from .canoak_eqx import CanoakGSSWCHybridIFT  # noqa: F401
 from .canoak_batched import run_canoak_in_batch  # noqa: F401
 from .canoak_batched import run_canoak_in_batch_any  # noqa: F401
+from .utils import load_model, save_model  # noqa: F401

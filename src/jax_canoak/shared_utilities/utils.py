@@ -10,6 +10,7 @@ from sklearn.metrics import r2_score  # pyright: ignore
 
 from ..shared_utilities.types import Float_0D, Float_1D, Float_2D
 
+
 # Subroutine to compute scalar concentrations from source estimates
 # and the Lagrangian dispersion matrix
 def conc(
