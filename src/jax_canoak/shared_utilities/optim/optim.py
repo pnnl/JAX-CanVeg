@@ -12,17 +12,57 @@ import optax
 import equinox as eqx
 import jax.numpy as jnp
 
-from typing import Tuple, List, Optional
+from typing import Tuple, List, Optional, Callable
 from jaxtyping import Array
 
 from ...models import CanoakBase
 from ...subjects import Met, BatchedMet, Para
 
 
+# Define a mean square error function
+def mse(y: Array, pred_y: Array):
+    """Function for calculating mean square error function
+
+    Args:
+        y (Array): _description_
+        pred_y (Array): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    return jnp.mean((y - pred_y) ** 2)
+
+
+def loss_func(model: CanoakBase, y: Array, met: Met, loss: Callable, *args):
+    """Calculate the loss value for a given Canoak model.
+
+    Args:
+        model (CanoakBase): _description_
+        y (Array): _description_
+        met (Met): _description_
+        loss (callable): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    pred_y = model(met, *args)
+    # L2-loss
+    # return jnp.mean((y - pred_y) ** 2)
+    # jax.debug.print("{a}", a=pred_y)
+    return loss(y, pred_y)
+    # # Relative L2-loss
+    # return jnp.mean((y - pred_y) ** 2 / (y ** 2))
+
+
 # Define the loss function
 @eqx.filter_value_and_grad
-def loss_func(
-    diff_model: CanoakBase, static_model: CanoakBase, y: Array, met: Met, *args
+def loss_func_optim(
+    diff_model: CanoakBase,
+    static_model: CanoakBase,
+    y: Array,
+    met: Met,
+    loss: Callable,
+    *args,
 ):
     """Calculating the gradient with respect to diff_model.
        Note that diff_model and static_model has the same type and
@@ -39,11 +79,15 @@ def loss_func(
         _type_: _description_
     """
     model = eqx.combine(diff_model, static_model)
+    return loss_func(model, y, met, loss, *args)
     # jax.debug.print("args: {x}", x=args)
-    pred_y = model(met, *args)
+    # pred_y = model(met, *args)
     # jax.debug.print("pred_y: {x}", x=pred_y)
     # L2-loss
-    return jnp.mean((y - pred_y) ** 2)
+    # return jnp.mean((y - pred_y) ** 2)
+    # return jnp.mean((pred_y - pred_y) ** 2)
+    # return jnp.array(0.)
+    # return loss(y, pred_y)
 
     # # Relative L2-loss
     # return jnp.mean((y - pred_y) ** 2 / (y ** 2))
@@ -56,6 +100,7 @@ def perform_optimization(
     y: Array,
     met: Met,
     nsteps: int,
+    loss: Callable = mse,
     *args,
 ) -> Tuple[CanoakBase, List]:
     """A wrapped function for performing optimization using optax.
@@ -73,22 +118,24 @@ def perform_optimization(
     """
 
     @eqx.filter_jit
-    def make_step(model, filter_model_spec, y, opt_state, met, *args):
+    def make_step(model, filter_model_spec, y, opt_state, met, loss, *args):
         diff_model, static_model = eqx.partition(model, filter_model_spec)
-        loss, grads = loss_func(diff_model, static_model, y, met, *args)
+        loss_value, grads = loss_func_optim(
+            diff_model, static_model, y, met, loss, *args
+        )
         updates, opt_state = optim.update(grads, opt_state)
         model = eqx.apply_updates(model, updates)
-        return model, opt_state, loss, grads
+        return model, opt_state, loss_value, grads
 
     loss_set = []
     # opt_state = optim.init(model)
     opt_state = optim.init(eqx.filter(model, eqx.is_array))
     for i in range(nsteps):
-        model, opt_state, loss, grads = make_step(
-            model, filter_model_spec, y, opt_state, met, *args
+        model, opt_state, loss_value, grads = make_step(
+            model, filter_model_spec, y, opt_state, met, loss, *args
         )
-        loss_set.append(loss)
-        print(f"The loss of step {i}: {loss}")
+        loss_set.append(loss_value)
+        print(f"The loss of step {i}: {loss_value}")
 
     return model, loss_set
 
@@ -97,13 +144,17 @@ def perform_optimization_batch(
     model: CanoakBase,
     filter_model_spec: CanoakBase,
     optim: optax._src.base.GradientTransformation,
+    nsteps: int,
+    loss: Callable,
     batched_y: Array,
     batched_met: BatchedMet,
-    nsteps: int,
+    batched_y_test: Optional[Array] = None,
+    batched_met_test: Optional[BatchedMet] = None,
     para_min: Optional[Para] = None,
     para_max: Optional[Para] = None,
     *args,
-) -> Tuple[CanoakBase, List]:
+    # ) -> Tuple[CanoakBase, List]:
+):
     """A wrapped function for performing optimization in batch using optax.
 
     Args:
@@ -118,24 +169,50 @@ def perform_optimization_batch(
         Tuple[CanoakBase, List]: _description_
     """
 
+    # Function for making the step
     @eqx.filter_jit
-    def make_step(model, filter_model_spec, batched_y, opt_state, batched_met, *args):
+    def make_step(
+        model, filter_model_spec, batched_y, opt_state, batched_met, loss, *args
+    ):
         print("Compiling make_step ...")
         diff_model, static_model = eqx.partition(model, filter_model_spec)
         # loss, grads = loss_func(diff_model, static_model, y, met)
         def loss_func_batch(c, batch):
             met, y = batch
-            loss, grads = loss_func(diff_model, static_model, y, met, *args)
-            return c, [loss, grads]
+            loss_value, grads = loss_func_optim(
+                diff_model, static_model, y, met, loss, *args
+            )
+            return c, [loss_value, grads]
 
         _, results = jax.lax.scan(loss_func_batch, None, xs=[batched_met, batched_y])
-        loss = results[0].mean()
+        loss_value = results[0].mean()
         # grads = results[1].mean()
         grads = jtu.tree_map(lambda x: x.mean(), results[1])
 
         updates, opt_state = optim.update(grads, opt_state)
         model = eqx.apply_updates(model, updates)
-        return model, opt_state, loss, grads
+        return model, opt_state, loss_value, grads
+
+    # Function for calculating the loss of the test dataset
+    # @eqx.filter_jit
+    def calculate_test_loss(model, batched_y_test, batched_met_test, loss, *args):
+        print("Compiling calculate_test_loss ...")
+        # def loss_func_batch(c, batch):
+        #     met, y = batch
+        #     loss_value = loss_func(model, y, met, loss, *args)
+        #     return c, loss_value
+        # _, results = jax.lax.scan(
+        #    loss_func_batch, None, xs=[batched_met_test, batched_y_test])
+        def loss_func_batch(met, y):
+            pred_y = model(met, *args)
+            loss_value = mse(y, pred_y)
+            return loss_value
+
+        loss_value_test = jax.vmap(loss_func_batch, in_axes=[0, 0])(
+            batched_met_test, batched_y_test
+        )
+        loss_value_test = loss_value_test.mean()
+        return loss_value_test
 
     loss_set = []
     # opt_state = optim.init(model)
@@ -147,11 +224,10 @@ def perform_optimization_batch(
         check_arg(opt_state, "opt_state")
         check_arg(batched_met, "batched_met")
         # Update the model parameters
-        model, opt_state, loss, grads = make_step(
-            model, filter_model_spec, batched_y, opt_state, batched_met, *args
+        model, opt_state, loss_value, grads = make_step(
+            model, filter_model_spec, batched_y, opt_state, batched_met, loss, *args
         )
-        loss_set.append(loss)
-        print(f"The loss of step {i}: {loss}")
+
         # Check model parameters upper and lower bounds
         para = model.__self__.para  # pyright: ignore
         if para_min is not None:
@@ -162,7 +238,25 @@ def perform_optimization_batch(
             lambda t: (t.__self__.para,), model, replace=(para,)  # pyright: ignore
         )
 
-    return model, loss_set
+        # Calculate the loss for the test dataset
+        if batched_met_test is not None and batched_y_test is not None:
+            loss_value_test = calculate_test_loss(
+                model, batched_y_test, batched_met_test, loss, *args
+            )
+            loss_set.append([loss_value, loss_value_test])
+            print(
+                f"The training loss of step {i}: {loss_value}; the test loss of step {i}: {loss_value_test}."  # noqa: E501
+            )
+        else:
+            loss_set.append(loss_value)
+            print(f"The loss of step {i}: {loss_value}")
+
+    if batched_met_test is not None and batched_y_test is not None:
+        loss_set_train = [l_value[0] for l_value in loss_set]
+        loss_set_test = [l_value[1] for l_value in loss_set]
+        return model, loss_set_train, loss_set_test
+    else:
+        return model, loss_set
 
 
 @eqx.filter_jit
