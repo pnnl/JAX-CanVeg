@@ -42,7 +42,7 @@ def plot_timeseries(
     alpha=1.0,
     xticks=None,
     linestyle="-",
-    color='black',
+    color='blue',
 ):
     if ax is None:
         fig, ax = plt.subplots(1, 1, figsize=figsize_1b)
@@ -94,17 +94,17 @@ def plot_imshow(
             2,
             2,
             width_ratios=(3, 1),
-            height_ratios=(6, 1),
+            height_ratios=(6, 0.2),
             left=0.1,
             right=0.9,
             bottom=0.1,
             top=0.9,
-            wspace=0.05,
-            hspace=0.05,
+            wspace=0.1,
+            hspace=0.4,
         )
         ax1 = fig.add_subplot(gs[0, 0])
         ax2 = fig.add_subplot(gs[0, 1], sharey=ax1)
-        axbar = fig.add_subplot(gs[1, 0], sharey=ax1)
+        axbar = fig.add_subplot(gs[1, 0])
     else:
         ax1, ax2, axbar = axes[0], axes[1], axes[2]
     im = ax1.imshow(
@@ -125,6 +125,7 @@ def plot_imshow(
     else:
         ax2.plot(array.mean(axis=1)[::-1], verticals[::-1])
     ax2.set(xlabel=title, title="Averaged")
+    axes = [ax1, ax2, axbar]
     return axes, im
 
 
@@ -179,7 +180,7 @@ def plot_imshow2(
         met_array, times, ax=ax0, title=met_title, tunit="[day of year]", xticks=[]
     )
     ax0.set(xlabel=None)
-    plot_imshow(
+    axes, im = plot_imshow(
         array,
         met,
         verticals,
@@ -191,6 +192,7 @@ def plot_imshow2(
         vmin=vmin,
         vmax=vmax
     )
+    return [ax0]+axes, im
 
 
 def plot_imshowb(

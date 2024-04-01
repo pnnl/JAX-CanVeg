@@ -324,6 +324,14 @@ def get_obs(f_obs: str) -> Obs:
     # FCO2
     if "FCO2" in obs:
         Fco2_obs = jnp.array(obs["FCO2"])
+    elif "Fco2" in obs:
+        Fco2_obs = jnp.array(obs["Fco2"])
+    elif "FC" in obs:
+        Fco2_obs = jnp.array(obs["FC"])
+    elif "NEE_CUT_REF" in obs:
+        Fco2_obs = jnp.array(obs["NEE_CUT_REF"])
+    elif "NEE_VUT_REF" in obs:
+        Fco2_obs = jnp.array(obs["NEE_VUT_REF"])
     else:
         Fco2_obs = nan
 
