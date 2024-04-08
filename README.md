@@ -65,7 +65,7 @@ g++ -O3 -Wall -shared -std=c++11 -ftemplate-depth=2048 -fPIC $(python3 -m pybind
 c++ -O3 -Wall -shared -std=c++11 -ftemplate-depth=2048 -undefined dynamic_lookup $(python3 -m pybind11 --includes) DispersionMatrix.cpp -o dispersion$(python3-config --extension-suffix)
 ```
 
-6. Add the code folder `[jax-watershed]` into your environment variable `PYTHONPATH`.
+6. Add the path of the source code [src](./src) into the environment variable `PYTHONPATH`.
 
 
 ## Examples
