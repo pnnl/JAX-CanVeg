@@ -5,6 +5,7 @@ import jax.tree_util as jtu
 import pandas as pd
 
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 
 
 # from ..subjects import ParNir, Ir, Para
@@ -22,6 +23,7 @@ plt.rc("ytick", labelsize=small_size)  # fontsize of the tick labels
 plt.rc("legend", fontsize=small_size)  # legend fontsize
 plt.rc("figure", titlesize=small_size)  # fontsize of the figure title
 plt.rc("text", usetex=False)
+# mpl.rcParams.update(mpl.rcParamsDefault)
 
 figsize_1 = (5, 5)
 figsize_1b = (8, 5)
@@ -313,19 +315,19 @@ def plot_imshow2b(
     )
 
 
-def plot_obs_1to1(obs, can, lim, varn="varn", ax=None):
+def plot_obs_1to1(obs, can, lim, varn="varn", ax=None, s=0.5, alpha=0.1):
     # ------ observation versus simulation ------
     if ax is None:
         fig, ax = plt.subplots(1, 1, figsize=figsize_1)
     l2 = jnp.mean((obs - can) ** 2)
-    ax.scatter(obs, can, color='black', s=0.5, alpha=0.1)
+    ax.scatter(obs, can, color='black', s=s, alpha=alpha)
     ax.plot(lim, lim, "k--")
     ax.set(
         xlim=lim,
         ylim=lim,
         xlabel="Observation",
         ylabel="JAX-CANOAK",
-        title=f"{varn} (L2: {l2:.3f})",
+        title=f"{varn} (MSE: {l2:.3f})",
     )
     return ax
 
@@ -846,6 +848,36 @@ def visualize_tree_diff(tree1, tree2, parent_key="", indent=0):
             print()
 
 
+def plot_flux_modis_obs(obs, met, site):
+    # Plot flux tower/MODIS data
+    # varnames = 
+    dataframe = pd.DataFrame(
+        np.array([met.T_air, met.rglobal, met.eair, met.wind, met.CO2, met.P_kPa, 
+         met.ustar, met.Tsoil, met.soilmoisture, met.lai, obs.LE, obs.H,
+         obs.rnet, obs.gsoil, obs.Fco2]).T
+    )
+    dataframe.index = get_time(met)
+    var_names = ['$T_a$', '$Q$', '$e_a$', '$WS$', '$CO_2$', '$P_a$', 
+                 '$u_*$', '$T_s$', '$θ_s$', '$LAI$', '$LE$', '$H$', 
+                 '$R_n$', '$G$', '$NEE$']
+
+    fig, axes = plt.subplots(dataframe.shape[1], sharex=False, figsize=(8,20))
+
+    for i,ax in enumerate(axes):
+        if i != len(axes)-1:
+            _make_nice_axes(ax, where=["left"])
+        else:
+            _make_nice_axes(ax, where=["left", "bottom"])
+        ax.set_ylabel(r"%s" % (var_names[i]))
+        # ax.set_ylabel(var_names[i])
+    fig.align_ylabels(axes)
+    axes[0].set_title(site)
+
+    # Responses
+    _add_timeseries(dataframe, (fig, axes))
+    axes[-1].set_xticklabels(axes[-1].get_xticklabels(), rotation=15, ha="right");
+
+
 # Some utility functions
 def compute_daily_average(values, hhours):
     d = pd.DataFrame([hhours, values]).T.astype(float)
@@ -872,3 +904,99 @@ def get_time(met):
         df["hr"], unit="h"
     )
     return parsed_date.values
+
+def _make_nice_axes(ax, where=None, skip=1, color=None):
+    """Makes nice axes."""
+
+    if where is None:
+        where = ["left", "bottom"]
+    if color is None:
+        color = {"left": "black", "right": "black", "bottom": "black", "top": "black"}
+
+    if type(skip) == int:
+        skip_x = skip_y = skip
+    else:
+        skip_x = skip[0]
+        skip_y = skip[1]
+
+    for loc, spine in ax.spines.items():
+        if loc in where:
+            spine.set_position(("outward", 5))  # outward by 10 points
+            spine.set_color(color[loc])
+            if loc == "left" or loc == "right":
+                plt.setp(ax.get_yticklines(), color=color[loc])
+                plt.setp(ax.get_yticklabels(), color=color[loc])
+            if loc == "top" or loc == "bottom":
+                plt.setp(ax.get_xticklines(), color=color[loc])
+        elif loc in [
+            item for item in ["left", "bottom", "right", "top"] if item not in where
+        ]:
+            spine.set_color("none")  # don't draw spine
+        else:
+            raise ValueError("unknown spine location: %s" % loc)
+
+    # ax.xaxis.get_major_formatter().set_useOffset(False)
+
+    # turn off ticks where there is no spine
+    if "top" in where and "bottom" not in where:
+        ax.xaxis.set_ticks_position("top")
+        if skip_x > 1:
+            ax.set_xticks(ax.get_xticks()[::skip_x])
+    elif "bottom" in where:
+        ax.xaxis.set_ticks_position("bottom")
+        if skip_x > 1:
+            ax.set_xticks(ax.get_xticks()[::skip_x])
+    else:
+        ax.xaxis.set_ticks_position("none")
+        ax.xaxis.set_ticklabels([])
+    if "right" in where and "left" not in where:
+        ax.yaxis.set_ticks_position("right")
+        if skip_y > 1:
+            ax.set_yticks(ax.get_yticks()[::skip_y])
+    elif "left" in where:
+        ax.yaxis.set_ticks_position("left")
+        if skip_y > 1:
+            ax.set_yticks(ax.get_yticks()[::skip_y])
+    else:
+        ax.yaxis.set_ticks_position("none")
+        ax.yaxis.set_ticklabels([])
+
+    ax.patch.set_alpha(0.0)
+
+    
+def _add_timeseries(
+        dataframe,
+        fig_axes,
+        grey_masked_samples=False,
+        data_linewidth=1.0,
+        color="black",
+        alpha=1.,
+):
+    """Adds a time series plot to an axis.
+    Plot of dataseries is added to axis. Allows for proper visualization of
+    masked data.
+    source: https://github.com/jakobrunge/tigramite/blob/8e7c7f1a81b29f0ab7adec2885654b7592f0d394/tigramite/plotting.py#L135
+    """
+    fig, axes = fig_axes
+
+    # Read in all attributes from dataframe
+    data = dataframe.values
+    time = dataframe.index
+    T = len(time)
+
+    nb_components = data.shape[1]
+
+    for j in range(nb_components):
+
+        ax = axes[j]
+        dataseries = data[:, j]
+
+        ax.plot(
+            time,
+            dataseries,
+            color=color,
+            linewidth=data_linewidth,
+            clip_on=False,
+            alpha=alpha,
+        )
+    
