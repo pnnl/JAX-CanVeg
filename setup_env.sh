@@ -4,7 +4,7 @@
 conda env create -f environment.yml
 
 # Activate the environment
-conda activate jax-watershed
+conda activate jax-canoak
 
 # Install JAX using pip
 pip install --upgrade "jax[cpu]"

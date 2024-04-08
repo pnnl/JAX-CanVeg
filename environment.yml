@@ -1,4 +1,4 @@
-name: jax-watershed
+name: jax-canoak
 channels:
   - conda-forge
 dependencies:
