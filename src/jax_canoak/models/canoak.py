@@ -341,6 +341,17 @@ def update_canle(states, can_le):
     return states
 
 
+def get_cannee(states):
+    return states[-1].NEE
+
+
+def update_cannee(states, can_nee):
+    can = states[-1]
+    can_new = eqx.tree_at(lambda t: t.NEE, can, can_nee)
+    states[-1] = can_new
+    return states
+
+
 def get_soilresp(states):
     return states[-3].resp
 

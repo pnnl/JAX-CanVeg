@@ -825,6 +825,7 @@ def plot_para_sensitivity_ranking(para_gradients, category=None, ax=None):
     ax.barh(keys[sort_indices], values[sort_indices])
     ax.set(ylabel="Parameters", xlabel="E[|Gradient|] / Nt", xscale="linear")
     # ax.set(ylabel="Parameters", xlabel="E[Gradient] / Nt", xscale="symlog")
+    return fig, ax
 
 
 def visualize_tree_diff(tree1, tree2, parent_key="", indent=0):
