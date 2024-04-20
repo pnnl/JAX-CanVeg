@@ -78,7 +78,13 @@ We provides the codes/notebooks for reproducing the two examples shown in the Ji
 - Step 5: Train the pure DNN model (using [dnn_US-Hn1.ipynb](./examples/US-Hn1/dnn_US-Hn1.ipynb))
 - Step 6: Postprocess the modeling results (using [postprocess.ipynb](./examples/US-Hn1/postprocess.ipynb))
 
-## License
+We performed computation time benchmark by running both JAX-CanVeg and [CanVeg-matlabl] --(https://github.com/baldocchi/CanVeg)
+- Run [examples/US-Hn1/calculate_execution_time.ipynb](./examples/US-Hn1/calculate_execution_time.ipynb) to calculate the computation time of the US-Hn1 example.
+- Run [examples/US-Bi1/calculate_execution_time.ipynb](./examples/US-Bi1/calculate_execution_time.ipynb) to calculate the computation time of the US-Bi1 example.
+- (TODO) Run [CanVeg-matlabl](https://github.com/baldocchi/CanVeg).
+- Plot the executation time using [examples/plot_time_difference.ipynb](./examples/plot_time_difference.ipynb).
+
+## (TODO) License
 TBD
 
 ## Contact
