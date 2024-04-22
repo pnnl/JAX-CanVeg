@@ -416,6 +416,7 @@ def convert_batchedstates_to_states(
     Can,
     Veg,
     SunShadedCan,
+    SunShadedCan,
     Qin,
     Rnet,
     SunAng,
