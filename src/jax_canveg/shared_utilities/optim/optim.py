@@ -15,7 +15,7 @@ import jax.numpy as jnp
 from typing import Tuple, List, Optional, Callable
 from jaxtyping import Array
 
-from ...models import CanoakBase
+from ...models import CanvegBase
 from ...subjects import Met, BatchedMet, Para
 
 
@@ -33,11 +33,11 @@ def mse(y: Array, pred_y: Array):
     return jnp.mean((y - pred_y) ** 2)
 
 
-def loss_func(model: CanoakBase, y: Array, met: Met, loss: Callable, *args):
-    """Calculate the loss value for a given Canoak model.
+def loss_func(model: CanvegBase, y: Array, met: Met, loss: Callable, *args):
+    """Calculate the loss value for a given Canveg model.
 
     Args:
-        model (CanoakBase): _description_
+        model (CanvegBase): _description_
         y (Array): _description_
         met (Met): _description_
         loss (callable): _description_
@@ -57,8 +57,8 @@ def loss_func(model: CanoakBase, y: Array, met: Met, loss: Callable, *args):
 # Define the loss function
 @eqx.filter_value_and_grad
 def loss_func_optim(
-    diff_model: CanoakBase,
-    static_model: CanoakBase,
+    diff_model: CanvegBase,
+    static_model: CanvegBase,
     y: Array,
     met: Met,
     loss: Callable,
@@ -70,8 +70,8 @@ def loss_func_optim(
        https://docs.kidger.site/equinox/examples/frozen_layer/.
 
     Args:
-        diff_model (CanoakBase): _description_
-        static_model (CanoakBase): _description_
+        diff_model (CanvegBase): _description_
+        static_model (CanvegBase): _description_
         y (Array): _description_
         met (Met): _description_
 
@@ -94,27 +94,27 @@ def loss_func_optim(
 
 
 def perform_optimization(
-    model: CanoakBase,
-    filter_model_spec: CanoakBase,
+    model: CanvegBase,
+    filter_model_spec: CanvegBase,
     optim: optax._src.base.GradientTransformation,
     y: Array,
     met: Met,
     nsteps: int,
     loss: Callable = mse,
     *args,
-) -> Tuple[CanoakBase, List]:
+) -> Tuple[CanvegBase, List]:
     """A wrapped function for performing optimization using optax.
 
     Args:
-        model (CanoakBase): _description_
-        filter_model_spec (CanoakBase): _description_
+        model (CanvegBase): _description_
+        filter_model_spec (CanvegBase): _description_
         optim (optax._src.base.GradientTransformation): _description_
         y (Array): _description_
         met (Met): _description_
         nsteps (int): _description_
 
     Returns:
-        Tuple[CanoakBase, List]: _description_
+        Tuple[CanvegBase, List]: _description_
     """
 
     @eqx.filter_jit
@@ -141,8 +141,8 @@ def perform_optimization(
 
 
 def perform_optimization_batch(
-    model: CanoakBase,
-    filter_model_spec: CanoakBase,
+    model: CanvegBase,
+    filter_model_spec: CanvegBase,
     optim: optax._src.base.GradientTransformation,
     nsteps: int,
     loss: Callable,
@@ -153,20 +153,20 @@ def perform_optimization_batch(
     para_min: Optional[Para] = None,
     para_max: Optional[Para] = None,
     *args,
-    # ) -> Tuple[CanoakBase, List]:
+    # ) -> Tuple[CanvegBase, List]:
 ):
     """A wrapped function for performing optimization in batch using optax.
 
     Args:
-        model (CanoakBase): _description_
-        filter_model_spec (CanoakBase): _description_
+        model (CanvegBase): _description_
+        filter_model_spec (CanvegBase): _description_
         optim (optax._src.base.GradientTransformation): _description_
         y (Array): _description_
         met (Met): _description_
         nsteps (int): _description_
 
     Returns:
-        Tuple[CanoakBase, List]: _description_
+        Tuple[CanvegBase, List]: _description_
     """
 
     # Function for making the step

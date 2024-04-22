@@ -1,5 +1,5 @@
 """
-An equinox module class for canoak.
+An equinox module class for canveg.
 
 Author: Peishi Jiang
 Date: 2023.08.22.
@@ -14,18 +14,18 @@ from typing import Tuple, Callable
 
 # from math import ceil
 
-from .canoak import canoak
-from .canoak_rsoil_hybrid import canoak_rsoil_hybrid
+from .canveg import canveg
+from .canveg_rsoil_hybrid import canveg_rsoil_hybrid
 
 from ..shared_utilities.solver import implicit_func_fixed_point
 
-# from ..shared_utilities.solver import implicit_func_fixed_point_canoak_main
-from .canoak import canoak_initialize_states, canoak_each_iteration
-from .canoak import get_all, update_all
-from .canoak_rsoil_hybrid import canoak_rsoil_hybrid_each_iteration
-from .canoak_leafrh_hybrid import canoak_leafrh_hybrid_each_iteration
-from .canoak_gs_hybrid import canoak_gs_hybrid_each_iteration
-from .canoak_gsswc_hybrid import canoak_gsswc_hybrid_each_iteration
+# from ..shared_utilities.solver import implicit_func_fixed_point_canveg_main
+from .canveg import canveg_initialize_states, canveg_each_iteration
+from .canveg import get_all, update_all
+from .canveg_rsoil_hybrid import canveg_rsoil_hybrid_each_iteration
+from .canveg_leafrh_hybrid import canveg_leafrh_hybrid_each_iteration
+from .canveg_gs_hybrid import canveg_gs_hybrid_each_iteration
+from .canveg_gsswc_hybrid import canveg_gsswc_hybrid_each_iteration
 
 from ..subjects import Para, Met, Prof, SunAng
 from ..subjects import LeafAng, SunShadedCan, Can
@@ -35,9 +35,9 @@ from ..shared_utilities.types import Float_2D, Float_0D
 
 
 ########################################################################
-# The base class for Canoak model
+# The base class for CanVeg model
 ########################################################################
-class CanoakBase(eqx.Module):
+class CanvegBase(eqx.Module):
     para: Para
     dij: Float_2D
     # Setup
@@ -75,9 +75,9 @@ class CanoakBase(eqx.Module):
 
 
 ########################################################################
-# The classes for performing canoak without IFT
+# The classes for performing Canveg without IFT
 ########################################################################
-class Canoak(CanoakBase):
+class Canveg(CanvegBase):
     def __call__(
         self, met: Met
     ) -> Tuple[
@@ -116,7 +116,7 @@ class Canoak(CanoakBase):
         # Number of time steps from met
         ntime = met.zL.size
 
-        results = canoak(
+        results = canveg(
             para,
             met,
             dij,
@@ -149,7 +149,7 @@ class Canoak(CanoakBase):
         return soil.resp
 
 
-class CanoakRsoilHybrid(Canoak):
+class CanvegRsoilHybrid(Canveg):
     # RsoilDL: eqx.Module
 
     # def __init__(
@@ -159,7 +159,7 @@ class CanoakRsoilHybrid(Canoak):
     #     dij: Float_2D,
     #     RsoilDL: Optional[eqx.Module] = None,
     # ):
-    #     super(CanoakRsoilHybrid, self).__init__(para, setup, dij)
+    #     super(CanvegRsoilHybrid, self).__init__(para, setup, dij)
     #     if RsoilDL is None:
     #         RsoilDL = MLP(
     #             in_size=2, out_size=1, width_size=6, depth=2,key=jax.random.PRNGKey(0)
@@ -206,7 +206,7 @@ class CanoakRsoilHybrid(Canoak):
         # n_batch = self.n_batch
         ntime = met.zL.size
 
-        results = canoak_rsoil_hybrid(
+        results = canveg_rsoil_hybrid(
             para,
             met,
             dij,
@@ -227,9 +227,9 @@ class CanoakRsoilHybrid(Canoak):
 
 
 ########################################################################
-# The classes for performing canoak with IFT
+# The classes for performing canveg with IFT
 ########################################################################
-class CanoakIFT(CanoakBase):
+class CanvegIFT(CanvegBase):
 
     # def __call__(
     #     self,
@@ -252,7 +252,7 @@ class CanoakIFT(CanoakBase):
     #     # Forward runs
     #     args = [dij, leaf_ang, quantum, nir, lai, n_can_layers, stomata, soil_mtime]
     #     states_final = implicit_func_fixed_point(
-    #         canoak_each_iteration,
+    #         canveg_each_iteration,
     #         update_substates_func,
     #         get_substates_func,
     #         initial_states,
@@ -289,7 +289,7 @@ class CanoakIFT(CanoakBase):
         ntime = met.zL.size
 
         # Initialization
-        quantum, nir, rnet, lai, sun_ang, leaf_ang, initials = canoak_initialize_states(
+        quantum, nir, rnet, lai, sun_ang, leaf_ang, initials = canveg_initialize_states(
             para,
             met,
             lat_deg,
@@ -308,8 +308,8 @@ class CanoakIFT(CanoakBase):
         # Forward runs
         args = [dij, leaf_ang, quantum, nir, lai, n_can_layers, stomata, soil_mtime]
         states_final = implicit_func_fixed_point(
-            # states_final = implicit_func_fixed_point_canoak_main(
-            canoak_each_iteration,
+            # states_final = implicit_func_fixed_point_canveg_main(
+            canveg_each_iteration,
             update_substates_func,
             get_substates_func,
             states_guess,
@@ -332,7 +332,7 @@ class CanoakIFT(CanoakBase):
         return results[0]
 
 
-class CanoakRsoilHybridIFT(CanoakIFT):
+class CanvegRsoilHybridIFT(CanvegIFT):
     def __call__(
         self,
         met: Met,
@@ -358,7 +358,7 @@ class CanoakRsoilHybridIFT(CanoakIFT):
         ntime = met.zL.size
 
         # Initialization
-        quantum, nir, rnet, lai, sun_ang, leaf_ang, initials = canoak_initialize_states(
+        quantum, nir, rnet, lai, sun_ang, leaf_ang, initials = canveg_initialize_states(
             para,
             met,
             lat_deg,
@@ -377,7 +377,7 @@ class CanoakRsoilHybridIFT(CanoakIFT):
         # Forward runs
         args = [dij, leaf_ang, quantum, nir, lai, n_can_layers, stomata, soil_mtime]
         states_final = implicit_func_fixed_point(
-            canoak_rsoil_hybrid_each_iteration,
+            canveg_rsoil_hybrid_each_iteration,
             update_substates_func,
             get_substates_func,
             states_guess,
@@ -389,7 +389,7 @@ class CanoakRsoilHybridIFT(CanoakIFT):
         return states_final, [quantum, nir, rnet, sun_ang, leaf_ang, lai]
 
 
-class CanoakLeafRHHybridIFT(CanoakIFT):
+class CanvegLeafRHHybridIFT(CanvegIFT):
     def __call__(
         self,
         met: Met,
@@ -415,7 +415,7 @@ class CanoakLeafRHHybridIFT(CanoakIFT):
         ntime = met.zL.size
 
         # Initialization
-        quantum, nir, rnet, lai, sun_ang, leaf_ang, initials = canoak_initialize_states(
+        quantum, nir, rnet, lai, sun_ang, leaf_ang, initials = canveg_initialize_states(
             para,
             met,
             lat_deg,
@@ -434,7 +434,7 @@ class CanoakLeafRHHybridIFT(CanoakIFT):
         # Forward runs
         args = [dij, leaf_ang, quantum, nir, lai, n_can_layers, stomata, soil_mtime]
         states_final = implicit_func_fixed_point(
-            canoak_leafrh_hybrid_each_iteration,
+            canveg_leafrh_hybrid_each_iteration,
             update_substates_func,
             get_substates_func,
             states_guess,
@@ -446,7 +446,7 @@ class CanoakLeafRHHybridIFT(CanoakIFT):
         return states_final, [quantum, nir, rnet, sun_ang, leaf_ang, lai]
 
 
-class CanoakGSHybridIFT(CanoakIFT):
+class CanvegGSHybridIFT(CanvegIFT):
     def __call__(
         self,
         met: Met,
@@ -472,7 +472,7 @@ class CanoakGSHybridIFT(CanoakIFT):
         ntime = met.zL.size
 
         # Initialization
-        quantum, nir, rnet, lai, sun_ang, leaf_ang, initials = canoak_initialize_states(
+        quantum, nir, rnet, lai, sun_ang, leaf_ang, initials = canveg_initialize_states(
             para,
             met,
             lat_deg,
@@ -491,7 +491,7 @@ class CanoakGSHybridIFT(CanoakIFT):
         # Forward runs
         args = [dij, leaf_ang, quantum, nir, lai, n_can_layers, stomata, soil_mtime]
         states_final = implicit_func_fixed_point(
-            canoak_gs_hybrid_each_iteration,
+            canveg_gs_hybrid_each_iteration,
             update_substates_func,
             get_substates_func,
             states_guess,
@@ -503,7 +503,7 @@ class CanoakGSHybridIFT(CanoakIFT):
         return states_final, [quantum, nir, rnet, sun_ang, leaf_ang, lai]
 
 
-class CanoakGSSWCHybridIFT(CanoakIFT):
+class CanvegGSSWCHybridIFT(CanvegIFT):
     def __call__(
         self,
         met: Met,
@@ -529,7 +529,7 @@ class CanoakGSSWCHybridIFT(CanoakIFT):
         ntime = met.zL.size
 
         # Initialization
-        quantum, nir, rnet, lai, sun_ang, leaf_ang, initials = canoak_initialize_states(
+        quantum, nir, rnet, lai, sun_ang, leaf_ang, initials = canveg_initialize_states(
             para,
             met,
             lat_deg,
@@ -548,7 +548,7 @@ class CanoakGSSWCHybridIFT(CanoakIFT):
         # Forward runs
         args = [dij, leaf_ang, quantum, nir, lai, n_can_layers, stomata, soil_mtime]
         states_final = implicit_func_fixed_point(
-            canoak_gsswc_hybrid_each_iteration,
+            canveg_gsswc_hybrid_each_iteration,
             update_substates_func,
             get_substates_func,
             states_guess,

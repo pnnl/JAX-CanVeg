@@ -3,14 +3,14 @@ import equinox as eqx
 import jax.numpy as jnp
 
 from typing import Dict
-from .canoak_eqx import CanoakBase
+from .canveg_eqx import CanvegBase
 
 from ..subjects.meterology import Met
 from ..subjects.states import Obs
 from ..subjects.initialization_update import initialize_parameters
 
 # Function for saving a model
-def save_model(filename: str, hyperparams: Dict, model: CanoakBase) -> None:
+def save_model(filename: str, hyperparams: Dict, model: CanvegBase) -> None:
     with open(filename, "wb") as f:
         hyperparam_str = json.dumps(hyperparams)
         f.write((hyperparam_str + "\n").encode())
@@ -18,9 +18,9 @@ def save_model(filename: str, hyperparams: Dict, model: CanoakBase) -> None:
 
 
 # Function for loading a model
-# def load_model(filename: str, modelclass: CanoakBase) -> CanoakBase:
-# def load_model(filename: str, modelclass: CanoakBase.__class__) -> CanoakBase:
-def load_model(filename: str, modelclass) -> CanoakBase:
+# def load_model(filename: str, modelclass: CanvegBase) -> CanvegBase:
+# def load_model(filename: str, modelclass: CanvegBase.__class__) -> CanvegBase:
+def load_model(filename: str, modelclass) -> CanvegBase:
     def initialize_empty_met_obs():
         met_zeros = [jnp.zeros(5)] * 15
         obs_zeros = [jnp.zeros(5)] * 9

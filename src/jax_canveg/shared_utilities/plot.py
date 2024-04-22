@@ -5,7 +5,8 @@ import jax.tree_util as jtu
 import pandas as pd
 
 import matplotlib.pyplot as plt
-import matplotlib as mpl
+
+# import matplotlib as mpl
 
 
 # from ..subjects import ParNir, Ir, Para
@@ -44,14 +45,22 @@ def plot_timeseries(
     alpha=1.0,
     xticks=None,
     linestyle="-",
-    color='blue',
+    color="blue",
 ):
     if ax is None:
         fig, ax = plt.subplots(1, 1, figsize=figsize_1b)
     if timesteps is None:
         ax.plot(array, linestyle, color=color, label=label, alpha=alpha, markersize=3)
     else:
-        ax.plot(timesteps, array, linestyle, color=color, label=label, alpha=alpha, markersize=3)
+        ax.plot(
+            timesteps,
+            array,
+            linestyle,
+            color=color,
+            label=label,
+            alpha=alpha,
+            markersize=3,
+        )
     if xticks is None:
         ax.set(
             xlabel=f"Time {tunit}",
@@ -142,7 +151,7 @@ def plot_imshow2(
     tunit="[day of year]",
     is_canopy=True,
     vmin=None,
-    vmax=None
+    vmax=None,
 ):
     # times = get_time_doy(met)
     times = get_time(met)
@@ -192,9 +201,9 @@ def plot_imshow2(
         tunit=tunit,
         is_canopy=is_canopy,
         vmin=vmin,
-        vmax=vmax
+        vmax=vmax,
     )
-    return [ax0]+axes, im
+    return [ax0] + axes, im
 
 
 def plot_imshowb(
@@ -263,7 +272,7 @@ def plot_imshow2b(
     tunit="[day of year]",
     is_canopy=True,
     vmin=None,
-    vmax=None
+    vmax=None,
 ):
     # times = get_time_doy(met)
     times = get_time(met)
@@ -311,7 +320,7 @@ def plot_imshow2b(
         tunit=tunit,
         is_canopy=is_canopy,
         vmin=vmin,
-        vmax=vmax
+        vmax=vmax,
     )
 
 
@@ -320,7 +329,7 @@ def plot_obs_1to1(obs, can, lim, varn="varn", ax=None, s=0.5, alpha=0.1):
     if ax is None:
         fig, ax = plt.subplots(1, 1, figsize=figsize_1)
     l2 = jnp.mean((obs - can) ** 2)
-    ax.scatter(obs, can, color='black', s=s, alpha=alpha)
+    ax.scatter(obs, can, color="black", s=s, alpha=alpha)
     ax.plot(lim, lim, "k--")
     ax.set(
         xlim=lim,
@@ -363,7 +372,7 @@ def plot_timeseries_obs_1to1(
         alpha=1.0,
         tunit="",
         linestyle=linestyle,
-        color='black'
+        color="black",
     )
     plot_timeseries(
         sim,
@@ -374,7 +383,7 @@ def plot_timeseries_obs_1to1(
         alpha=0.7,
         tunit="",
         linestyle=linestyle,
-        color='lightblue'
+        color="lightblue",
     )
     ax1.legend()
     ax1.set(title=varn)
@@ -825,7 +834,10 @@ def plot_para_sensitivity_ranking(para_gradients, category=None, ax=None):
     ax.barh(keys[sort_indices], values[sort_indices])
     ax.set(ylabel="Parameters", xlabel="E[|Gradient|] / Nt", xscale="linear")
     # ax.set(ylabel="Parameters", xlabel="E[Gradient] / Nt", xscale="symlog")
-    return fig, ax
+    if ax is None:
+        return fig, ax  # pyright: ignore
+    else:
+        return ax
 
 
 def visualize_tree_diff(tree1, tree2, parent_key="", indent=0):
@@ -851,21 +863,51 @@ def visualize_tree_diff(tree1, tree2, parent_key="", indent=0):
 
 def plot_flux_modis_obs(obs, met, site):
     # Plot flux tower/MODIS data
-    # varnames = 
+    # varnames =
     dataframe = pd.DataFrame(
-        np.array([met.T_air, met.rglobal, met.eair, met.wind, met.CO2, met.P_kPa, 
-         met.ustar, met.Tsoil, met.soilmoisture, met.lai, obs.LE, obs.H,
-         obs.rnet, obs.gsoil, obs.Fco2]).T
+        np.array(
+            [
+                met.T_air,
+                met.rglobal,
+                met.eair,
+                met.wind,
+                met.CO2,
+                met.P_kPa,
+                met.ustar,
+                met.Tsoil,
+                met.soilmoisture,
+                met.lai,
+                obs.LE,
+                obs.H,
+                obs.rnet,
+                obs.gsoil,
+                obs.Fco2,
+            ]
+        ).T
     )
     dataframe.index = get_time(met)
-    var_names = ['$T_a$', '$Q$', '$e_a$', '$WS$', '$CO_2$', '$P_a$', 
-                 '$u_*$', '$T_s$', '$θ_s$', '$LAI$', '$LE$', '$H$', 
-                 '$R_n$', '$G$', '$NEE$']
+    var_names = [
+        "$T_a$",
+        "$Q$",
+        "$e_a$",
+        "$WS$",
+        "$CO_2$",
+        "$P_a$",
+        "$u_*$",
+        "$T_s$",
+        "$θ_s$",
+        "$LAI$",
+        "$LE$",
+        "$H$",
+        "$R_n$",
+        "$G$",
+        "$NEE$",
+    ]
 
-    fig, axes = plt.subplots(dataframe.shape[1], sharex=False, figsize=(8,20))
+    fig, axes = plt.subplots(dataframe.shape[1], sharex=False, figsize=(8, 20))
 
-    for i,ax in enumerate(axes):
-        if i != len(axes)-1:
+    for i, ax in enumerate(axes):
+        if i != len(axes) - 1:
             _make_nice_axes(ax, where=["left"])
         else:
             _make_nice_axes(ax, where=["left", "bottom"])
@@ -876,7 +918,7 @@ def plot_flux_modis_obs(obs, met, site):
 
     # Responses
     _add_timeseries(dataframe, (fig, axes))
-    axes[-1].set_xticklabels(axes[-1].get_xticklabels(), rotation=15, ha="right");
+    axes[-1].set_xticklabels(axes[-1].get_xticklabels(), rotation=15, ha="right")
 
 
 # Some utility functions
@@ -906,6 +948,7 @@ def get_time(met):
     )
     return parsed_date.values
 
+
 def _make_nice_axes(ax, where=None, skip=1, color=None):
     """Makes nice axes."""
 
@@ -914,7 +957,8 @@ def _make_nice_axes(ax, where=None, skip=1, color=None):
     if color is None:
         color = {"left": "black", "right": "black", "bottom": "black", "top": "black"}
 
-    if type(skip) == int:
+    # if type(skip) == int:
+    if isinstance(skip, int):
         skip_x = skip_y = skip
     else:
         skip_x = skip[0]
@@ -964,26 +1008,27 @@ def _make_nice_axes(ax, where=None, skip=1, color=None):
 
     ax.patch.set_alpha(0.0)
 
-    
+
 def _add_timeseries(
-        dataframe,
-        fig_axes,
-        grey_masked_samples=False,
-        data_linewidth=1.0,
-        color="black",
-        alpha=1.,
+    dataframe,
+    fig_axes,
+    grey_masked_samples=False,
+    data_linewidth=1.0,
+    color="black",
+    alpha=1.0,
 ):
     """Adds a time series plot to an axis.
     Plot of dataseries is added to axis. Allows for proper visualization of
     masked data.
-    source: https://github.com/jakobrunge/tigramite/blob/8e7c7f1a81b29f0ab7adec2885654b7592f0d394/tigramite/plotting.py#L135
+    source:
+    https://github.com/jakobrunge/tigramite/blob/8e7c7f1a81b29f0ab7adec2885654b7592f0d394/tigramite/plotting.py#L135
     """
     fig, axes = fig_axes
 
     # Read in all attributes from dataframe
     data = dataframe.values
     time = dataframe.index
-    T = len(time)
+    # T = len(time)
 
     nb_components = data.shape[1]
 
@@ -1000,4 +1045,3 @@ def _add_timeseries(
             clip_on=False,
             alpha=alpha,
         )
-    

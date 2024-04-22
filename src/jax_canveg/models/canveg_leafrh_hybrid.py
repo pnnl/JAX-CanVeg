@@ -1,5 +1,5 @@
 """
-This is a big jax function for running canoak, given the inputs.
+This is a big jax function for running canveg, given the inputs.
 
 Author: Peishi Jiang
 Date: 2023.8.13.
@@ -15,7 +15,7 @@ import equinox as eqx
 
 from typing import Tuple
 
-from .canoak import canoak_initialize_states
+from .canveg import canveg_initialize_states
 from ..shared_utilities.solver import fixed_point
 
 from ..shared_utilities.types import Float_0D, Float_2D
@@ -26,14 +26,14 @@ from ..subjects import update_profile, calculate_veg, calculate_can
 
 # from ..physics import energy_carbon_fluxes
 
-# from jax_canoak.physics.energy_fluxes import rad_tran_canopy, sky_ir_v2
+# from jax_canveg.physics.energy_fluxes import rad_tran_canopy, sky_ir_v2
 from ..physics.energy_fluxes import compute_qin, ir_rad_tran_canopy
 from ..physics.energy_fluxes import uz, soil_energy_balance
-from ..physics.carbon_fluxes import leaf_ps_gs_hybrid, soil_respiration_alfalfa
+from ..physics.carbon_fluxes import leaf_ps_rh_hybrid, soil_respiration_alfalfa
 from ..physics.energy_fluxes import boundary_resistance, leaf_energy
 
 
-def energy_carbon_fluxes_gs_hybrid(
+def energy_carbon_fluxes_leafrh_hybrid(
     sun: SunShadedCan,
     shade: SunShadedCan,
     qin: Qin,
@@ -82,7 +82,7 @@ def energy_carbon_fluxes_gs_hybrid(
     boundary_layer_res = boundary_resistance(prof, met, sun.Tsfc, prm)
 
     # Compute leaf photosynthesis
-    ps = leaf_ps_gs_hybrid(
+    ps = leaf_ps_rh_hybrid(
         quantum.sun_abs,
         prof.co2[:, :jtot],
         sun.Tsfc,
@@ -109,7 +109,7 @@ def energy_carbon_fluxes_gs_hybrid(
 
     # Redo for shade fraction
     boundary_layer_res = boundary_resistance(prof, met, shade.Tsfc, prm)
-    ps = leaf_ps_gs_hybrid(
+    ps = leaf_ps_rh_hybrid(
         quantum.sh_abs,
         prof.co2[:, :jtot],
         shade.Tsfc,
@@ -135,7 +135,7 @@ def energy_carbon_fluxes_gs_hybrid(
 
 
 @eqx.filter_jit
-def canoak_gs_hybrid_each_iteration(
+def canveg_leafrh_hybrid_each_iteration(
     states: Tuple[Met, Prof, Ir, Qin, SunShadedCan, SunShadedCan, Soil, Veg, Can],
     para: Para,
     dij: Float_2D,
@@ -152,7 +152,8 @@ def canoak_gs_hybrid_each_iteration(
 
     # Update canopy wind profile with iteration of z/l and use in boundary layer
     # resistance computations
-    wind = uz(met, para, jtot)
+    # wind = uz(met, para, jtot)
+    wind = uz(met, para)
     prof = eqx.tree_at(lambda t: t.wind, prof, wind)
 
     # Compute IR fluxes with Bonan's algorithms of Norman model
@@ -166,7 +167,7 @@ def canoak_gs_hybrid_each_iteration(
     # and delta T, in case convection occurs
     # Different coefficients will be assigned if amphistomatous or hypostomatous
     # sun, shade = energy_carbon_fluxes(
-    sun, shade = energy_carbon_fluxes_gs_hybrid(
+    sun, shade = energy_carbon_fluxes_leafrh_hybrid(
         sun, shade, qin, quantum, met, prof, para, stomata
     )
 
@@ -207,8 +208,8 @@ def canoak_gs_hybrid_each_iteration(
 
 
 @eqx.filter_jit
-def canoak_gs_hybrid(
-    # def canoak_batch(
+def canveg_leafrh_hybrid(
+    # def canveg_batch(
     para: Para,
     met: Met,
     dij: Float_2D,
@@ -246,7 +247,7 @@ def canoak_gs_hybrid(
     Can,
 ]:
     # Initialization
-    quantum, nir, rnet, lai, sun_ang, leaf_ang, initials = canoak_initialize_states(
+    quantum, nir, rnet, lai, sun_ang, leaf_ang, initials = canveg_initialize_states(
         para,
         met,
         lat_deg,
@@ -278,7 +279,9 @@ def canoak_gs_hybrid(
         stomata,
         soil_mtime,
     ]
-    finals = fixed_point(canoak_gs_hybrid_each_iteration, initials, para, niter, *args)
+    finals = fixed_point(
+        canveg_leafrh_hybrid_each_iteration, initials, para, niter, *args
+    )
 
     met, prof, ir, qin, sun, shade, soil, veg, can = finals
 

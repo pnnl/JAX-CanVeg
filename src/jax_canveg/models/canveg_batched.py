@@ -1,5 +1,5 @@
 """
-Run the batched mode of canoak.
+Run the batched mode of canveg.
 
 Author: Peishi Jiang
 Date: 2023.09.11.
@@ -9,7 +9,7 @@ import jax
 
 from typing import Tuple
 
-from .canoak_eqx import CanoakBase
+from .canveg_eqx import CanvegBase
 from ..subjects import BatchedMet
 from ..subjects import Met, Prof, SunAng
 from ..subjects import LeafAng, SunShadedCan, Can
@@ -19,31 +19,31 @@ from ..subjects import convert_batchedstates_to_states
 from ..subjects import convert_batchedmet_to_met
 
 
-def run_canoak_in_batch_any(batched_met: BatchedMet, canoak_eqx: CanoakBase):
+def run_canveg_in_batch_any(batched_met: BatchedMet, canveg_eqx: CanvegBase):
     # Run batch simulation
-    result = jax.vmap(canoak_eqx)(batched_met)
+    result = jax.vmap(canveg_eqx)(batched_met)  # pyright: ignore
 
     return result
 
 
-def run_canoak_in_batch(
-    batched_met: BatchedMet, canoak_eqx: CanoakBase
+def run_canveg_in_batch(
+    batched_met: BatchedMet, canveg_eqx: CanvegBase
 ) -> Tuple[
     Met,
     Prof,
-    ParNir,
-    ParNir,
-    Ir,
-    Rnet,
-    Qin,
-    SunAng,
-    LeafAng,
-    Lai,
-    SunShadedCan,
-    SunShadedCan,
-    Soil,
-    Veg,
     Can,
+    Veg,
+    SunShadedCan,
+    SunShadedCan,
+    Qin,
+    Rnet,
+    SunAng,
+    Ir,
+    ParNir,
+    ParNir,
+    Lai,
+    LeafAng,
+    Soil,
 ]:
     # Run batch simulation
     (
@@ -62,7 +62,9 @@ def run_canoak_in_batch(
         batched_soil,
         batched_veg,
         batched_can,
-    ) = jax.vmap(canoak_eqx)(batched_met)
+    ) = jax.vmap(canveg_eqx)(
+        batched_met  # pyright: ignore
+    )
 
     # Reshape the results
     (  # pyright: ignore
@@ -100,7 +102,7 @@ def run_canoak_in_batch(
     # Reshape batched_met to met
     met = convert_batchedmet_to_met(batched_met)
 
-    return (
+    return (  # pyright: ignore
         met,
         prof,
         can,

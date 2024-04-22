@@ -103,7 +103,7 @@ def implicit_func_fixed_point_jvp(
 
 
 @partial(jax.custom_jvp, nondiff_argnums=(0, 1, 2, 5, 6, 7, 8, 9, 10, 11, 12, 13))
-def implicit_func_fixed_point_canoak_main(
+def implicit_func_fixed_point_canveg_main(
     iter_func: Callable,
     update_substates_func: Callable,
     get_substate_func: Callable,
@@ -121,7 +121,7 @@ def implicit_func_fixed_point_canoak_main(
     soil_mtime: int,
     # *args,
 ):
-    """This is implicit function theorem implementation to canoak main iteration
+    """This is implicit function theorem implementation to canveg main iteration
        to account for the variables/inputs needed to run the iteration.
 
     Args:
@@ -150,8 +150,8 @@ def implicit_func_fixed_point_canoak_main(
     return substates_solution
 
 
-@implicit_func_fixed_point_canoak_main.defjvp
-def implicit_func_fixed_point_canoak_main_jvp(
+@implicit_func_fixed_point_canveg_main.defjvp
+def implicit_func_fixed_point_canveg_main_jvp(
     # iter_func, update_substates_func, get_substate_func, primals, tangents
     iter_func,
     update_substates_func,

@@ -15,7 +15,7 @@ start, end = "2018-01-01 00:00:00", "2020-10-01 12:00:00"
 ########################################################################
 # dir_data = Path('.')
 dir_data = Path(
-    # "/Users/jian449/Library/CloudStorage/OneDrive-PNNL/Codes/jax-watershed/src/jax_canoak/shared_utilities/forcings"
+    # "/Users/jian449/Library/CloudStorage/OneDrive-PNNL/Codes/jax-watershed/src/jax_canveg/shared_utilities/forcings"
     "../../../../data"
 )
 f_obs = dir_data / "fluxtower" / "Alf" / "AlfMetInput.csv"

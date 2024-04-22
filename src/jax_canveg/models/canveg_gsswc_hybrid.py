@@ -1,5 +1,5 @@
 """
-This is a big jax function for running canoak, given the inputs.
+This is a big jax function for running canveg, given the inputs.
 
 Author: Peishi Jiang
 Date: 2023.8.13.
@@ -15,7 +15,7 @@ import equinox as eqx
 
 from typing import Tuple
 
-from .canoak import canoak_initialize_states
+from .canveg import canveg_initialize_states
 from ..shared_utilities.solver import fixed_point
 
 from ..shared_utilities.types import Float_0D, Float_2D
@@ -26,7 +26,7 @@ from ..subjects import update_profile, calculate_veg, calculate_can
 
 # from ..physics import energy_carbon_fluxes
 
-# from jax_canoak.physics.energy_fluxes import rad_tran_canopy, sky_ir_v2
+# from jax_canveg.physics.energy_fluxes import rad_tran_canopy, sky_ir_v2
 from ..physics.energy_fluxes import compute_qin, ir_rad_tran_canopy
 from ..physics.energy_fluxes import uz, soil_energy_balance
 from ..physics.carbon_fluxes import leaf_ps_gsswc_hybrid, soil_respiration_alfalfa
@@ -135,7 +135,7 @@ def energy_carbon_fluxes_gsswc_hybrid(
 
 
 @eqx.filter_jit
-def canoak_gsswc_hybrid_each_iteration(
+def canveg_gsswc_hybrid_each_iteration(
     states: Tuple[Met, Prof, Ir, Qin, SunShadedCan, SunShadedCan, Soil, Veg, Can],
     para: Para,
     dij: Float_2D,
@@ -152,7 +152,7 @@ def canoak_gsswc_hybrid_each_iteration(
 
     # Update canopy wind profile with iteration of z/l and use in boundary layer
     # resistance computations
-    wind = uz(met, para, jtot)
+    wind = uz(met, para)
     prof = eqx.tree_at(lambda t: t.wind, prof, wind)
 
     # Compute IR fluxes with Bonan's algorithms of Norman model
@@ -207,8 +207,8 @@ def canoak_gsswc_hybrid_each_iteration(
 
 
 @eqx.filter_jit
-def canoak_gsswc_hybrid(
-    # def canoak_batch(
+def canveg_gsswc_hybrid(
+    # def canveg_batch(
     para: Para,
     met: Met,
     dij: Float_2D,
@@ -246,7 +246,7 @@ def canoak_gsswc_hybrid(
     Can,
 ]:
     # Initialization
-    quantum, nir, rnet, lai, sun_ang, leaf_ang, initials = canoak_initialize_states(
+    quantum, nir, rnet, lai, sun_ang, leaf_ang, initials = canveg_initialize_states(
         para,
         met,
         lat_deg,
@@ -279,7 +279,7 @@ def canoak_gsswc_hybrid(
         soil_mtime,
     ]
     finals = fixed_point(
-        canoak_gsswc_hybrid_each_iteration, initials, para, niter, *args
+        canveg_gsswc_hybrid_each_iteration, initials, para, niter, *args
     )
 
     met, prof, ir, qin, sun, shade, soil, veg, can = finals
