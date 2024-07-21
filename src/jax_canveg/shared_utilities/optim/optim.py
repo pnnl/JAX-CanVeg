@@ -185,6 +185,7 @@ def perform_optimization_batch(
             return c, [loss_value, grads]
 
         _, results = jax.lax.scan(loss_func_batch, None, xs=[batched_met, batched_y])
+        # jax.debug.print("{x}", x=results[0])
         loss_value = results[0].mean()
         # grads = results[1].mean()
         grads = jtu.tree_map(lambda x: x.mean(), results[1])

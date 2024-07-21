@@ -128,14 +128,15 @@ def plot_imshow(
         aspect="auto",
     )
     ax1.set(ylabel=ylabel, title=title)
-    ax1.set_xticklabels(ax1.get_xticklabels(), rotation=15, ha="right")
+    ax1.set_xticklabels(ax1.get_xticklabels(), rotation=20, ha="right")
     plt.colorbar(im, cax=axbar, orientation="horizontal")
     # mean = compute_daily_average(array.mean(axis=0), met.hhour)
     if is_canopy:
         ax2.plot(array.mean(axis=1), verticals)
     else:
         ax2.plot(array.mean(axis=1)[::-1], verticals[::-1])
-    ax2.set(xlabel=title, title="Averaged")
+    ax2.set(xlabel=title, title="Averaged", ylim=ax1.get_ylim())
+    ax2.set_yticks([])
     axes = [ax1, ax2, axbar]
     return axes, im
 
@@ -156,7 +157,7 @@ def plot_imshow2(
     # times = get_time_doy(met)
     times = get_time(met)
     if axes is None:
-        fig = plt.figure(figsize=(12, 8))
+        fig = plt.figure(figsize=(10, 10))
         gs = fig.add_gridspec(
             3,
             2,
@@ -171,7 +172,8 @@ def plot_imshow2(
         )
         ax0 = fig.add_subplot(gs[0, 0])
         ax1 = fig.add_subplot(gs[1, 0])
-        ax2 = fig.add_subplot(gs[1, 1], sharey=ax1)
+        # ax2 = fig.add_subplot(gs[1, 1], sharey=ax1)
+        ax2 = fig.add_subplot(gs[1, 1])
         axbar = fig.add_subplot(gs[2, 0])
         axes_imshow = [ax1, ax2, axbar]
     else:
@@ -188,7 +190,7 @@ def plot_imshow2(
     else:
         raise Exception(f"Unknown key: {key}")
     plot_timeseries(
-        met_array, times, ax=ax0, title=met_title, tunit="[day of year]", xticks=[]
+        met_array, times, ax=ax0, title=met_title, color='black', tunit="[day of year]", xticks=[]
     )
     ax0.set(xlabel=None)
     axes, im = plot_imshow(
@@ -324,19 +326,20 @@ def plot_imshow2b(
     )
 
 
-def plot_obs_1to1(obs, can, lim, varn="varn", ax=None, s=0.5, alpha=0.1):
+def plot_obs_1to1(obs, can, limx, limy=None, varn="varn", color='black', ax=None, s=0.5, alpha=0.5):
     # ------ observation versus simulation ------
     if ax is None:
         fig, ax = plt.subplots(1, 1, figsize=figsize_1)
     l2 = jnp.mean((obs - can) ** 2)
-    ax.scatter(obs, can, color="black", s=s, alpha=alpha)
-    ax.plot(lim, lim, "k--")
+    ax.scatter(obs, can, color=color, s=s, alpha=alpha)
+    if limy is None:
+        ax.plot(limx, limx, "k--")
     ax.set(
-        xlim=lim,
-        ylim=lim,
+        xlim=limx,
+        ylim=limx if limy is None else limy,
         xlabel="Observation",
         ylabel="JAX-CANOAK",
-        title=f"{varn} (MSE: {l2:.3f})",
+        title=f"{varn} (MSE: {l2:.3f})" if limy is None else f"{varn}",
     )
     return ax
 
@@ -926,6 +929,13 @@ def compute_daily_average(values, hhours):
     d = pd.DataFrame([hhours, values]).T.astype(float)
     d = d.groupby(0).mean()
     return d
+
+def compute_daily_average_selected_window(val, met, start=None, end=None):
+    timesteps = get_time(met)
+    df = pd.DataFrame(val, index=timesteps)
+    df = df[start:end]
+
+    return compute_daily_average(df.values, df.index.hour + df.index.minute / 60.)
 
 
 def get_time_doy(met):
