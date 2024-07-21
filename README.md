@@ -1,10 +1,10 @@
-README.md# JAX-CanVeg: A Differentiable Land Surface Model
+# JAX-CanVeg: A Differentiable Land Surface Model
 
 ## Introduction
 Land surface process describes the water, energy, and carbon cycles exchanged among the atmosphere, canopy, and soil. Its complex interacting nature makes it challenging to model due to the associated unknown biophysical and ecophysiological parameters and less-mechanistically represented subprocesses. Differentiable modeling provides a new opportunity to explore the parameter space and capture these complex interactions by seamlessly coupling process-based and deep learning models. Here, we developed a differentiable land surface model by reimplementing an existing simulator, CanVeg, in JAX -- a Google-developed Python package for high-performance machine learning research using automatic differentiation. We applied JAX-CanVeg to simulate the ecohydrological fluxes at two flux tower sites with varying aridity. We implemented a hybrid version of the Ball-Berry equation in JAX-CanVeg to improve the limited capability of the equation in accounting for the influence of water stress on stomatal closure. The hybrid model emulates the impact of water stress on stomatal conductance calculation through a deep neural network parameterized on the observed soil water content. Trained against the latent heat flux observations, the hybrid model improves the water flux simulation over the pure process-based model at both sites, owing to a better delineation of stomatal conductance response to soil moisture. The updated calculation of stomatal conductance further alters the model prediction on canopy carbon fluxes, such as photosynthesis. Our study showcases a new avenue for modeling land-atmospheric interactions by leveraging the benefits of both data-driven learning and process-based modeling.
 
 ## References
-Jiang, P. et al., (2024). JAX-CanVeg: A Differentiable Land Surface Model. Geoscientific Model Development, *in prep*.
+Jiang, P. et al., (2024). JAX-CanVeg: A Differentiable Land Surface Model. Water Resources Research, *in review*.
 
 ## Key data/folder Structure
 ```

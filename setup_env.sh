@@ -6,6 +6,8 @@ conda env create -f environment.yml
 # Activate the environment
 conda activate jax-canoak
 
+wait
+
 # Install JAX using pip
 pip install --upgrade "jax[cpu]"
 pip install optimistix
