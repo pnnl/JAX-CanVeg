@@ -90,8 +90,8 @@ We performed computation time benchmark by running both JAX-CanVeg and [CanVeg-m
     - Rerun [Canveg_pj.m](./examples/Canveg_pj.m) on another site by changing the variable `Site` to `US-Hn1` or `US-Bi1` in the file (Line 95)
 - Plot the executation time using [examples/plot_time_difference.ipynb](./examples/plot_time_difference.ipynb)
 
-## (TODO) License
-TBD
+## License
+See LICENSE for more information.
 
 ## Contact
 Peishi Jiang (peishi.jiang@pnnl.gov)
