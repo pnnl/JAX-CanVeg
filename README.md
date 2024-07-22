@@ -71,6 +71,16 @@ c++ -O3 -Wall -shared -std=c++11 -ftemplate-depth=2048 -undefined dynamic_lookup
 ## Examples
 We provides the codes/notebooks for reproducing the two examples shown in the Jiang et al. (2024) under the folder `examples`. We applied the differentiable JAX-CanVeg at US-Hn1 and US-Bi1 flux tower sites to evaluate the performance of a hybrid version of the Ball-Berry equation. The model were trained against the observed latent heat fluxes. Below we illustrate the application example on [US-Hn1](./examples/US-Hn1) (which is applicable to [US-Bi1](./examples/US-Bi1)).
 
+- Step 0: Unzip the flux tower data to CSV files
+```
+# Unzip the data at the US-Bi1 site
+cd [jax-canveg-folder]/data/fluxtower/US-Bi1/AMF_US-Bi1_FLUXNET_FULLSET_2016-2021_3-5/
+unzip AMF_US-Bi1_FLUXNET_FULLSET_HH_2016-2021_3-5.csv.zip
+
+# Unzip the data at the US-Hn1 site
+cd [jax-canveg-folder]/data/fluxtower/US-Hn1/
+unzip US-Hn1.csv.zip
+```
 - Step 1: Preprocess the flux tower and MODIS observations to CSV files (using [US-Hn1.ipynb](./examples/US-Hn1/US-Hn1.ipynb))
 - Step 2: Run the default JAX-CanVeg (without training; using [canveg-Hn1_default.ipynb](./examples/US-Hn1/canveg-Hn1_default.ipynb))
 - Step 3: Train the process-based JAX-CanVeg (using [canveg-Hn1-purephysics.ipynb](./examples/US-Hn1/canveg-Hn1-purephysics.ipynb))
