@@ -8,8 +8,6 @@ import lineax as lx
 from typing import Callable, List
 from ...shared_utilities.types import Float_2D
 
-from functools import partial
-
 from ...subjects import Para, Lai, ParNir, LeafAng
 
 # from ...subjects import Met, Prof, SunAng, SunShadedCan
@@ -45,7 +43,8 @@ def fixed_point(
     return states_final
 
 
-@partial(jax.custom_jvp, nondiff_argnums=(0, 1, 2, 5))
+# @partial(jax.custom_jvp, nondiff_argnums=(0, 1, 2, 5))
+@eqx.filter_custom_jvp
 def implicit_func_fixed_point(
     iter_func: Callable,
     update_substates_func: Callable,
@@ -62,7 +61,7 @@ def implicit_func_fixed_point(
     return substates_solution
 
 
-@implicit_func_fixed_point.defjvp
+@implicit_func_fixed_point.def_jvp
 def implicit_func_fixed_point_jvp(
     # iter_func, update_substates_func, get_substate_func, primals, tangents
     iter_func,
@@ -102,7 +101,8 @@ def implicit_func_fixed_point_jvp(
     return substates_final, tangent_out
 
 
-@partial(jax.custom_jvp, nondiff_argnums=(0, 1, 2, 5, 6, 7, 8, 9, 10, 11, 12, 13))
+# @partial(jax.custom_jvp, nondiff_argnums=(0, 1, 2, 5, 6, 7, 8, 9, 10, 11, 12, 13))
+@eqx.filter_custom_jvp
 def implicit_func_fixed_point_canveg_main(
     iter_func: Callable,
     update_substates_func: Callable,
@@ -150,7 +150,7 @@ def implicit_func_fixed_point_canveg_main(
     return substates_solution
 
 
-@implicit_func_fixed_point_canveg_main.defjvp
+@implicit_func_fixed_point_canveg_main.def_jvp
 def implicit_func_fixed_point_canveg_main_jvp(
     # iter_func, update_substates_func, get_substate_func, primals, tangents
     iter_func,

@@ -231,38 +231,6 @@ class CanvegRsoilHybrid(Canveg):
 ########################################################################
 class CanvegIFT(CanvegBase):
 
-    # def __call__(
-    #     self,
-    #     initial_states: Tuple[Met,Prof,Ir,Qin,SunShadedCan,SunShadedCan,Soil,Veg,Can],
-    #     drivers: Tuple[LeafAng, ParNir, ParNir, Lai],
-    #     update_substates_func: Callable = update_all,
-    #     get_substates_func: Callable = get_all,
-    # ):
-    #     para, dij = self.para, self.dij
-    #     # Some configurations
-    #     stomata = self.stomata
-    #     n_can_layers = self.n_can_layers
-    #     soil_mtime = self.soil_mtime
-    #     niter = self.niter
-
-    #     # Get the drivers
-    #     leaf_ang, quantum = drivers[0], drivers[1]
-    #     nir, lai = drivers[2], drivers[3]
-
-    #     # Forward runs
-    #     args = [dij, leaf_ang, quantum, nir, lai, n_can_layers, stomata, soil_mtime]
-    #     states_final = implicit_func_fixed_point(
-    #         canveg_each_iteration,
-    #         update_substates_func,
-    #         get_substates_func,
-    #         initial_states,
-    #         para,
-    #         niter,
-    #         *args
-    #     )
-
-    #     return states_final
-
     # @eqx.filter_jit
     def __call__(
         self,
