@@ -340,8 +340,8 @@ class Para(eqx.Module):
         self.lleaf = jnp.array(lleaf)  # leaf length, m, alfalfa, across the trifoliate
 
         # Water content thresholds
-        self.theta_min = theta_min  # wilting point
-        self.theta_max = theta_max  # field capacity
+        self.theta_min = jnp.array(theta_min)  # wilting point
+        self.theta_max = jnp.array(theta_max)  # field capacity
 
         # Diffusivity values for 273 K and 1013 mb (STP) using values from Massman (1998) Atmos Environment  # noqa: E501
         # These values are for diffusion in air.  When used these values must be adjusted for  # noqa: E501

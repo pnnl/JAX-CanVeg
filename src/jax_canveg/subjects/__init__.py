@@ -54,3 +54,37 @@ from .dnn import (
 # from .states import update_profile  # noqa: F401
 # from .states import calculate_veg  # noqa: F401
 # from .states import initialize_model_states  # noqa: F401
+
+import logging
+import jax.tree_util as jtu
+import equinox as eqx
+
+
+def get_filter_para_spec(para: Para, tunable_para: list):
+    filter_para_spec = jtu.tree_map(lambda _: False, para)
+    if tunable_para is None or len(tunable_para) == 0:
+        logging.info(
+            """No parameters are given. So we tune the following parameters:
+               bprime, ep, lleaf, qalpha, kball, leaf_clumping factor"""
+        )
+        filter_para_spec = eqx.tree_at(
+            lambda t: (
+                t.bprime,
+                t.ep,
+                t.lleaf,
+                t.qalpha,
+                t.kball,
+                t.leaf_clumping_factor,
+            ),
+            filter_para_spec,
+            replace=(True, True, True, True),
+        )
+    else:
+        # Filter the parameters to be estimated
+        filter_para_spec = eqx.tree_at(
+            lambda t: tuple(getattr(t, para) for para in tunable_para),
+            filter_para_spec,
+            replace=tuple(True for _ in tunable_para),
+        )
+
+    return filter_para_spec

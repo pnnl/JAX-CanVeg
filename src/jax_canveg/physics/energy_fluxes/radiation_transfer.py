@@ -669,8 +669,17 @@ def rad_tran_canopy(
         sup,
     ]
     # states_final = fixed_point(func, states_initial, prm, niter, *args)
+    # states_final = implicit_func_fixed_point(
+    #     func, update_all, get_all, states_initial, prm, niter, *args
+    # )
     states_final = implicit_func_fixed_point(
-        func, update_all, get_all, states_initial, prm, niter, *args
+        states_initial,
+        prm,
+        args,
+        iter_func=func,
+        update_substates_func=update_all,
+        get_substates_func=get_all,
+        niter=niter,
     )
     up, dn = states_final[0], states_final[1]
 

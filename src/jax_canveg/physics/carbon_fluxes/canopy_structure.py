@@ -241,7 +241,7 @@ def Gfunc_dir(theta_rad: Float_1D, theta_leaf: Float_1D, pdf: Float_1D) -> Float
     # )
 
     F = A * pdf  # (ntime, nclass)
-    Gfunc = jax.vmap(jnp.trapz, in_axes=[0, None])(F, theta_leaf)
+    Gfunc = jax.vmap(jnp.trapezoid, in_axes=[0, None])(F, theta_leaf)  # pyright: ignore
     return Gfunc
 
 
@@ -298,7 +298,9 @@ def Gfunc_diff(thetaSky: Float_1D, thetaLeaf: Float_1D, pdf: Float_1D) -> Float_
     # )
 
     F = Adiff * pdf  # (ntime, nclass)
-    Gfunc_Sky = jax.vmap(jnp.trapz, in_axes=[0, None])(F, thetaLeaf)
+    Gfunc_Sky = jax.vmap(jnp.trapezoid, in_axes=[0, None])(  # pyright: ignore
+        F, thetaLeaf
+    )
     return Gfunc_Sky
 
     # def calculate_each_GfuncSky(theta_sky_each):

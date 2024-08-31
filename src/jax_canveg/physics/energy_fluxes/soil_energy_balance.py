@@ -471,7 +471,14 @@ def finite_difference_matrix(soil: Soil, prm: Para, soil_mtime: int) -> Soil:
     args = [soil, Fst, Gst]
     # carry = fixed_point(func, states_initial, prm, soil_mtime, *args)
     carry = implicit_func_fixed_point(
-        func, update_all, get_all, states_initial, prm, soil_mtime, *args
+        # func, update_all, get_all, states_initial, prm, soil_mtime, *args
+        states_initial,
+        prm,
+        args,
+        iter_func=func,
+        update_substates_func=update_all,
+        get_substates_func=get_all,
+        niter=soil_mtime,
     )
 
     # Update T_soil

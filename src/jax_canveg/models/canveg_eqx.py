@@ -276,15 +276,13 @@ class CanvegIFT(CanvegBase):
         # Forward runs
         args = [dij, leaf_ang, quantum, nir, lai, n_can_layers, stomata, soil_mtime]
         states_final = implicit_func_fixed_point(
-            # states_final = implicit_func_fixed_point_canveg_main(
-            canveg_each_iteration,
-            update_substates_func,
-            get_substates_func,
             states_guess,
             para,
-            # 2,
-            niter,
-            *args
+            args,
+            iter_func=canveg_each_iteration,
+            update_substates_func=update_substates_func,
+            get_substates_func=get_substates_func,
+            niter=niter,
         )
 
         return states_final, [quantum, nir, rnet, sun_ang, leaf_ang, lai]
@@ -344,14 +342,23 @@ class CanvegRsoilHybridIFT(CanvegIFT):
 
         # Forward runs
         args = [dij, leaf_ang, quantum, nir, lai, n_can_layers, stomata, soil_mtime]
+        # states_final = implicit_func_fixed_point(
+        #     canveg_rsoil_hybrid_each_iteration,
+        #     update_substates_func,
+        #     get_substates_func,
+        #     states_guess,
+        #     para,
+        #     niter,
+        #     *args
+        # )
         states_final = implicit_func_fixed_point(
-            canveg_rsoil_hybrid_each_iteration,
-            update_substates_func,
-            get_substates_func,
             states_guess,
             para,
-            niter,
-            *args
+            args,
+            iter_func=canveg_rsoil_hybrid_each_iteration,
+            update_substates_func=update_substates_func,
+            get_substates_func=get_substates_func,
+            niter=niter,
         )
 
         return states_final, [quantum, nir, rnet, sun_ang, leaf_ang, lai]
@@ -401,14 +408,23 @@ class CanvegLeafRHHybridIFT(CanvegIFT):
 
         # Forward runs
         args = [dij, leaf_ang, quantum, nir, lai, n_can_layers, stomata, soil_mtime]
+        # states_final = implicit_func_fixed_point(
+        #     canveg_leafrh_hybrid_each_iteration,
+        #     update_substates_func,
+        #     get_substates_func,
+        #     states_guess,
+        #     para,
+        #     niter,
+        #     *args
+        # )
         states_final = implicit_func_fixed_point(
-            canveg_leafrh_hybrid_each_iteration,
-            update_substates_func,
-            get_substates_func,
             states_guess,
             para,
-            niter,
-            *args
+            args,
+            iter_func=canveg_leafrh_hybrid_each_iteration,
+            update_substates_func=update_substates_func,
+            get_substates_func=get_substates_func,
+            niter=niter,
         )
 
         return states_final, [quantum, nir, rnet, sun_ang, leaf_ang, lai]
@@ -458,14 +474,23 @@ class CanvegGSHybridIFT(CanvegIFT):
 
         # Forward runs
         args = [dij, leaf_ang, quantum, nir, lai, n_can_layers, stomata, soil_mtime]
+        # states_final = implicit_func_fixed_point(
+        #     canveg_gs_hybrid_each_iteration,
+        #     update_substates_func,
+        #     get_substates_func,
+        #     states_guess,
+        #     para,
+        #     niter,
+        #     *args
+        # )
         states_final = implicit_func_fixed_point(
-            canveg_gs_hybrid_each_iteration,
-            update_substates_func,
-            get_substates_func,
             states_guess,
             para,
-            niter,
-            *args
+            args,
+            iter_func=canveg_gs_hybrid_each_iteration,
+            update_substates_func=update_substates_func,
+            get_substates_func=get_substates_func,
+            niter=niter,
         )
 
         return states_final, [quantum, nir, rnet, sun_ang, leaf_ang, lai]
