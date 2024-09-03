@@ -19,4 +19,5 @@ pip install pyproj
 pip install -U scikit-learn
 pip install hydroeval
 pip3 install torch torchvision torchaudio
+pip install tqdm
 # pip install equinox

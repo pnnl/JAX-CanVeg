@@ -270,6 +270,7 @@ def get_obs(f_obs: str) -> Obs:
     obs.interpolate(method="linear", limit_direction="both", inplace=True)
     ntime = obs.shape[0]
     nan = jnp.nan * jnp.ones(ntime)
+    # nan = jnp.ones(ntime)
 
     # Precipitation
     if "P_mm" in obs:

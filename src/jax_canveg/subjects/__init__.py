@@ -59,8 +59,10 @@ import logging
 import jax.tree_util as jtu
 import equinox as eqx
 
+from typing import Optional, List
 
-def get_filter_para_spec(para: Para, tunable_para: list):
+
+def get_filter_para_spec(para: Para, tunable_para: Optional[List] = None):
     filter_para_spec = jtu.tree_map(lambda _: False, para)
     if tunable_para is None or len(tunable_para) == 0:
         logging.info(
@@ -82,7 +84,9 @@ def get_filter_para_spec(para: Para, tunable_para: list):
     else:
         # Filter the parameters to be estimated
         filter_para_spec = eqx.tree_at(
-            lambda t: tuple(getattr(t, para) for para in tunable_para),
+            lambda t: tuple(
+                getattr(t, para) for para in tunable_para  # pyright: ignore
+            ),
             filter_para_spec,
             replace=tuple(True for _ in tunable_para),
         )

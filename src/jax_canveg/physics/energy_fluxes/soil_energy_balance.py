@@ -93,18 +93,26 @@ def soil_energy_balance(
     # print(u_soil.mean(), u_soil.min())
     # print(soil_T_air.mean(), soil_T_air.min())
     # print(soil.sfc_temperature.mean(), soil.sfc_temperature.min())
+    # c = eqx.error_if(stabdel, jnp.any(jnp.isnan(u_soil)),
+    # f"There is nan in u_soil in {jnp.where(jnp.isnan(u_soil))}")
 
     # To ensure numerical stability, stabdel can't be lower than -10000
     stabdel = jnp.clip(stabdel, a_min=-1e5)
-    # jax.debug.print("stabdel min: {a}", a=stabdel.min())
-
+    # @jnp.vectorize
+    # def calculate_facstab(stabdel_e):
+    #     return jax.lax.cond(
+    #         stabdel_e > 0,
+    #         lambda: jnp.power(1.0 + stabdel_e, -0.75),
+    #         lambda: jnp.power(1.0 + stabdel_e, -2.0),
+    #     )
+    # The following implementation is to avoid nan values generated in jnp.vectorize
+    # See the related jax issue here: https://github.com/google/jax/issues/23389
     @jnp.vectorize
-    def calculate_facstab(stabdel_e):
-        return jax.lax.cond(
-            stabdel_e > 0,
-            lambda: jnp.power(1 + stabdel_e, -0.75),
-            lambda: jnp.power(1.0 + stabdel_e, -2.0),
-        )
+    def exp_func(x_e):
+        return jax.lax.cond(x_e > 0, lambda: -0.75, lambda: -2.0)
+
+    def calculate_facstab(x):
+        return jnp.power(1.0 + x, exp_func(x))
 
     facstab = calculate_facstab(stabdel)
     facstab = jnp.clip(facstab, a_min=0.1, a_max=5.0)
