@@ -24,6 +24,7 @@ from ...shared_utilities.types import Float_0D, Float_2D
 
 # from ...shared_utilities.utils import dot
 from .dispersion import disp_mx
+import logging
 
 
 def disp_canveg(
@@ -33,6 +34,7 @@ def disp_canveg(
     ustar: Float_0D = 1.0,
     f_dij: str = "./Dij.txt",
 ) -> Float_2D:
+    logging.info("Generating dispersion matrix ...")
     hh = prm.veg_ht  #  canopy height (m)
     dd = prm.dht
 
@@ -79,15 +81,19 @@ def get_dispersion_matrix(
     setup: Setup, para: Para, f_dij: Optional[str] = None, timemax: Float_0D = 1000.0
 ) -> Float_2D:
     # Get dij from an existing csv file
-    if f_dij is not None:
-        if os.path.isfile(f_dij):
-            dij = np.loadtxt(f_dij, delimiter=",")
-            dij = jnp.array(dij)
-        else:
-            raise Exception(f"The following file does not exist: {f_dij}!")
+    # if f_dij is not None:
+    if os.path.isfile(f_dij):  # pyright: ignore
+        logging.info(f"Reading dispersion matrix from {f_dij}")
+        dij = np.loadtxt(f_dij, delimiter=",")  # pyright: ignore
+        dij = jnp.array(dij)
     # Otherwise, generate dij
     else:
+        if f_dij is None:
+            f_dij = "Dij.csv"
         dij = disp_canveg(setup, para, timemax=timemax)
+        # Save dij
+        logging.info(f"Saving dispersion matrix to {f_dij}")
+        np.savetxt(f_dij, np.array(dij), delimiter=",")
     return dij
 
 
