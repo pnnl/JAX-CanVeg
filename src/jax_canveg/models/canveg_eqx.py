@@ -276,10 +276,15 @@ class CanvegIFT(CanvegBase):
         met: Met,
         update_substates_func: Callable = update_all,
         get_substates_func: Callable = get_all,
+        scaler: Callable = lambda x: x,
     ):
         results = self(met, update_substates_func, get_substates_func)
         # Not including quantum, nir, rnet, sun_ang, leaf_ang, and lai
-        return results[0]
+        result = results[0]
+
+        # Scale the result if needed
+        scaled_result = scaler(result)
+        return scaled_result
 
 
 # class CanvegRsoilHybridIFT(CanvegIFT):

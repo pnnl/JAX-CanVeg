@@ -1,6 +1,7 @@
 from .optim import perform_optimization  # noqa: F401
 from .optim import perform_optimization_batch  # noqa: F401
 from .loss import mse  # noqa: F401
+from .loss import mspe  # noqa: F401
 from .loss import relative_mse  # noqa: F401
 from .loss import weighted_loss  # noqa: F401
 
@@ -20,10 +21,12 @@ def get_loss_function(loss_configs: Dict):
     weights = check_and_get_keyword(loss_configs, "weights", "loss func", True, None)
     if loss_type.lower() == "mse":
         loss_func = mse
+    elif loss_type.lower() == "mspe":
+        loss_func = mspe
     elif loss_type.lower() == "relative mse":
         loss_func = relative_mse
     else:
-        raise Exception(f"Unknown loss function: {loss_type}")
+        raise Exception(f"Unknown loss function type: {loss_type}")
     if weights is None:
         return loss_func
     else:

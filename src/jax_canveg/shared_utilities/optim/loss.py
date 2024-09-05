@@ -25,6 +25,12 @@ def relative_mse(y: Array, pred_y: Array):
     return jnp.mean(((y - pred_y) / y_std) ** 2)
 
 
+# Define the percentage error
+def mspe(y: Array, pred_y: Array):
+    """Function for calculating relative square error function"""
+    return jnp.mean(((y - pred_y) / y) ** 2)
+
+
 # Define a weighted loss function
 def weighted_loss(y: Array, pred_y: Array, loss: Callable, weights: Array):
     """Weighted loss function

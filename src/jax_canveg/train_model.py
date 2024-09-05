@@ -14,16 +14,18 @@ Date: 2024.8.30.
 
 import os
 import json
-import pickle
+
+# import pickle
 import logging
 
 from math import floor
 from pathlib import PosixPath
-from typing import Any, Optional, List
+from typing import Any, Optional, List, Callable
 
 import equinox as eqx
 import jax.numpy as jnp
 import jax.tree_util as jtu
+import pandas as pd
 
 from .physics.energy_fluxes import get_dispersion_matrix
 from .subjects import initialize_parameters
@@ -34,6 +36,9 @@ from .subjects import Met, Obs, BatchedObs, get_met_forcings, get_obs
 from .subjects import get_filter_para_spec
 from .shared_utilities.optim import get_loss_function, get_optimzer
 from .shared_utilities.optim import perform_optimization_batch
+from .shared_utilities.scaler import identity_scaler
+from .shared_utilities.scaler import standardizer_1d, standardizer_nd
+from .shared_utilities.scaler import minmax_1d, minmax_nd
 from .models import get_canveg_eqx_class, get_output_function
 from .models import CanvegBase, save_model
 
@@ -48,6 +53,18 @@ def train_model(f_configs: PosixPath | str):
     parent_directory = os.path.dirname(f_configs)
     f_configs = os.path.basename(f_configs)
     os.chdir(parent_directory)
+
+    # Start logging information
+    logging.basicConfig(
+        filename="train.log",
+        filemode="w",
+        datefmt="%H:%M:%S",
+        level=logging.INFO,
+        format="%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s",
+    )
+    logging.info(
+        f"Start training JAX-CanVeg with the configuration file {str(f_configs)} under {parent_directory}"  # noqa: E501
+    )
 
     # Parse the configuration file
     (
@@ -100,19 +117,24 @@ def train_model(f_configs: PosixPath | str):
         configs, "saving configurations", "saving", True, {}
     )
     f_loss = check_and_get_keyword(
-        save_configs, "new model", "saving", True, "./loss.pkl"
+        save_configs, "loss values", "saving", True, "./loss.csv"
     )
-    loss = {"train": loss_train_set, "test": loss_test_set}
-    pickle.dump(loss, open(f_loss, "wb"), pickle.HIGHEST_PROTOCOL)
+    loss_df = pd.DataFrame(
+        jnp.array([loss_train_set, loss_test_set]).T, columns=["training", "test"]
+    )
+    loss_df.to_csv(f_loss, index=False)
+    # loss = {"train": loss_train_set, "test": loss_test_set}
+    # pickle.dump(loss, open(f_loss, "wb"), pickle.HIGHEST_PROTOCOL)
 
     # Save the model
     logging.info("Saving the trained model ...")
     f_model = check_and_get_keyword(
-        save_configs, "loss values", "saving", True, "./new_model.eqx"
+        save_configs, "new model", "saving", True, "./new_model.eqx"
     )
     save_model(f_model, hyperparams, model_new)
 
 
+################### A few utility functions go here ###################
 def parse_config(f_configs: PosixPath | str):
     """Parse the configuration file and return the intialized model,
        training data, and the optimizer.
@@ -146,7 +168,8 @@ def parse_config(f_configs: PosixPath | str):
     (
         output_funcs,
         batched_met,
-        batched_y,
+        _,
+        batched_y_scaled,
         filter_model_spec,
         loss_func,
         optim,
@@ -166,7 +189,7 @@ def parse_config(f_configs: PosixPath | str):
         model,
         filter_model_spec,
         batched_met,
-        batched_y,
+        batched_y_scaled,
         hyperparams,
         para_min,
         para_max,
@@ -307,26 +330,38 @@ def get_learning_elements(
 ):
     """Get the essential training elements."""
     # Get the output function arguments
-    output_args = check_and_get_keyword(
+    output_func_args = check_and_get_keyword(
         learn_configs, "output function", "learning", True, "LE"
     )
-    update_func, get_func = get_output_function(output_args)
-    output_funcs = [update_func, get_func]
+    update_func, get_func = get_output_function(output_func_args)
+
+    # Get the output scaler
+    output_scaler_args = check_and_get_keyword(
+        learn_configs, "output scaler", "learning", True, None
+    )
+    output_scaler = get_output_scaler(output_scaler_args, output_func_args, obs_train)
+    output_funcs = [update_func, get_func, output_scaler]
 
     # Create the batched training data
     logging.info("Converting the obs and met to batched dataset ...")
     batch_size = check_and_get_keyword(learn_configs, "batch size", "learning")
-    batched_met_train, batched_y_train = get_batched_met_obs(
-        met_train, obs_train, batch_size, n_time_train, output_args
+    batched_met_train, batched_y_train, batched_y_train_scaled = get_batched_met_obs(
+        met_train, obs_train, batch_size, n_time_train, output_func_args, output_scaler
     )
     if obs_test is not None:
-        batched_met_test, batched_y_test = get_batched_met_obs(
-            met_test, obs_test, None, n_time_test, output_args  # pyright: ignore
+        batched_met_test, batched_y_test, batched_y_test_scaled = get_batched_met_obs(
+            met_test,  # pyright: ignore
+            obs_test,
+            None,  # pyright: ignore
+            n_time_test,  # pyright: ignore
+            output_func_args,
+            output_scaler,
         )
     else:
-        batched_met_test, batched_y_test = None, None
+        batched_met_test, batched_y_test, batched_y_test_scaled = None, None, None
     batched_met = [batched_met_train, batched_met_test]
     batched_y = [batched_y_train, batched_y_test]
+    batched_y_scaled = [batched_y_train_scaled, batched_y_test_scaled]
 
     # Filter the parameters to be estimated
     logging.info("Getting the filtered model spec for the tunable parameters ...")
@@ -354,6 +389,7 @@ def get_learning_elements(
         output_funcs,
         batched_met,
         batched_y,
+        batched_y_scaled,
         filter_model_spec,
         loss_func,
         optim,
@@ -362,7 +398,12 @@ def get_learning_elements(
 
 
 def get_batched_met_obs(
-    met: Met, obs: Obs, batch_size: int | None, n_time: int, output_args: str
+    met: Met,
+    obs: Obs,
+    batch_size: int | None,
+    n_time: int,
+    output_args: str,
+    output_scaler: Callable,
 ):
     """Get the batched observation data for training"""
     if batch_size is None:
@@ -371,7 +412,8 @@ def get_batched_met_obs(
     batched_met = convert_met_to_batched_met(met, n_batch, batch_size)
     batched_obs = convert_obs_to_batched_obs(obs, n_batch, batch_size)
     batched_y = downselect_obs(batched_obs, output_args)
-    return batched_met, batched_y
+    batched_y_scaled = output_scaler(batched_y)
+    return batched_met, batched_y, batched_y_scaled
 
 
 def downselect_obs(batched_obs: BatchedObs, output_args: str):
@@ -384,10 +426,49 @@ def downselect_obs(batched_obs: BatchedObs, output_args: str):
         return batched_obs.Fco2
     elif output_args.lower() == "canlenee" or output_args.lower() == "canopy le nee":
         le, nee = batched_obs.LE, batched_obs.Fco2
-        # TODO: The returned shape is [nbatch, batch_size, 2]
+        # The returned shape is [nbatch, batch_size, 2]
         return jnp.stack([le, nee], axis=-1)
     else:
         raise Exception("Unknown output arguments: %s", output_args)
+
+
+def get_output_scaler(output_scaler: str | None, output_args: str, obs: Obs):
+    """Get the output scaler function"""
+    # Get the observation data for scaling
+    if output_args.lower() == "canle" or output_args.lower() == "canopy le":
+        data, dim = obs.LE, 1
+    elif output_args.lower() == "cangpp" or output_args.lower() == "canopy gpp":
+        data, dim = obs.GPP, 1
+    elif output_args.lower() == "cannee" or output_args.lower() == "canopy nee":
+        data, dim = obs.Fco2, 1
+    elif output_args.lower() == "canlenee" or output_args.lower() == "canopy le nee":
+        le, nee = obs.LE, obs.Fco2
+        data = jnp.array([le, nee]).T  # shape (Nt, 2)
+        dim = 2
+    else:
+        raise Exception("Unknown output arguments: %s", output_args)
+
+    # Get the scaler
+    if output_scaler is None:
+        scaler = identity_scaler
+    elif output_scaler.lower() == "standard":
+        if dim == 1:
+            mu, std = data.mean(), data.std()
+            scaler = lambda x: standardizer_1d(x, mu, std)  # noqa: E731
+        else:
+            mu, std = data.mean(axis=0), data.std(axis=0)
+            scaler = lambda x: standardizer_nd(x, mu, std)  # noqa: E731
+    elif output_scaler.lower() == "minmax":
+        if dim == 1:
+            xmin, xmax = data.min(), data.max()
+            scaler = lambda x: minmax_1d(x, xmin, xmax)  # noqa: E731
+        else:
+            xmin, xmax = data.min(axis=0), data.max(axis=0)
+            scaler = lambda x: minmax_nd(x, xmin, xmax)  # noqa: E731
+    else:
+        raise Exception("Unknown output scaler: %s", output_scaler)
+
+    return scaler
 
 
 def get_filter_model_spec(model: CanvegBase, tunable_para: Optional[List] = None):

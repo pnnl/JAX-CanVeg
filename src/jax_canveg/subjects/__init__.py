@@ -2,7 +2,8 @@ from .parameters import Para, Setup  # noqa: F401
 from .meterology import Met  # noqa: F401
 from .states import ParNir, Ir, Rnet, SunShadedCan  # noqa: F401
 from .states import BoundLayerRes, Qin, Veg, Soil, Can  # noqa: F401
-from .states import SunAng, LeafAng, Prof, Ps, Lai, Obs  # noqa: F401
+from .states import SunAng, LeafAng, Prof, Ps, Lai  # noqa: F401
+from .states import Obs, ObsStats  # noqa: F401
 from .batched_meterology import BatchedMet  # noqa: F401
 from .batched_meterology import convert_batchedmet_to_met  # noqa: F401
 from .batched_meterology import convert_met_to_batched_met  # noqa: F401

@@ -15,6 +15,8 @@ import jax.numpy as jnp
 from typing import Tuple, List, Optional, Callable
 from jaxtyping import Array
 
+import logging
+
 from .loss import mse
 from ...models import CanvegBase
 from ...subjects import Met, BatchedMet, Para
@@ -47,12 +49,7 @@ def loss_func(model: CanvegBase, y: Array, met: Met, loss: Callable, *model_args
         _type_: _description_
     """
     pred_y = model(met, *model_args)
-    # L2-loss
-    # return jnp.mean((y - pred_y) ** 2)
-    # jax.debug.print("{a}", a=pred_y)
     return loss(y, pred_y)
-    # # Relative L2-loss
-    # return jnp.mean((y - pred_y) ** 2 / (y ** 2))
 
 
 # Define the loss function
@@ -136,7 +133,8 @@ def perform_optimization(
             model, filter_model_spec, y, opt_state, met, loss, *args
         )
         loss_set.append(loss_value)
-        print(f"The loss of step {i}: {loss_value}")
+        # print(f"The loss of step {i}: {loss_value}")
+        logging.info(f"The loss of step {i}: {loss_value}")
 
     return model, loss_set
 
@@ -196,9 +194,9 @@ def perform_optimization_batch(
         return model, opt_state, loss_value, grads
 
     # Function for calculating the loss of the test dataset
-    # @eqx.filter_jit
+    @eqx.filter_jit
     def calculate_test_loss(model, batched_y_test, batched_met_test, loss, *args):
-        print("Compiling calculate_test_loss ...")
+        # print("Compiling calculate_test_loss ...")
         # def loss_func_batch(c, batch):
         #     met, y = batch
         #     loss_value = loss_func(model, y, met, loss, *args)
@@ -206,8 +204,7 @@ def perform_optimization_batch(
         # _, results = jax.lax.scan(
         #    loss_func_batch, None, xs=[batched_met_test, batched_y_test])
         def loss_func_batch(met, y):
-            pred_y = model(met, *args)
-            loss_value = mse(y, pred_y)
+            loss_value = loss_func(model, y, met, loss, *args)
             return loss_value
 
         loss_value_test = jax.vmap(loss_func_batch, in_axes=[0, 0])(
@@ -226,9 +223,21 @@ def perform_optimization_batch(
         check_arg(opt_state, "opt_state")
         check_arg(batched_met, "batched_met")
         # Update the model parameters
-        model, opt_state, loss_value, grads = make_step(
+        model_updated, opt_state, loss_value, grads = make_step(
             model, filter_model_spec, batched_y, opt_state, batched_met, loss, *args
         )
+
+        # Check NaN
+        if not jnp.isnan(loss_value):
+            model = model_updated
+        else:
+            logging.info(f"Encountered NaN in step {i}. Stop training.")
+            if batched_met_test is not None and batched_y_test is not None:
+                loss_set_train = [l_value[0] for l_value in loss_set]
+                loss_set_test = [l_value[1] for l_value in loss_set]
+                return model, loss_set_train, loss_set_test
+            else:
+                return model, loss_set
 
         # Check model parameters upper and lower bounds
         para = model.__self__.para  # pyright: ignore
@@ -246,12 +255,16 @@ def perform_optimization_batch(
                 model, batched_y_test, batched_met_test, loss, *args
             )
             loss_set.append([loss_value, loss_value_test])
-            print(
+            # print(
+            #     f"The training loss of step {i}: {loss_value}; the test loss of step {i}: {loss_value_test}."  # noqa: E501
+            # )
+            logging.info(
                 f"The training loss of step {i}: {loss_value}; the test loss of step {i}: {loss_value_test}."  # noqa: E501
             )
         else:
             loss_set.append(loss_value)
-            print(f"The loss of step {i}: {loss_value}")
+            logging.info(f"The loss of step {i}: {loss_value}")
+            # print(f"The loss of step {i}: {loss_value}")
 
     if batched_met_test is not None and batched_y_test is not None:
         loss_set_train = [l_value[0] for l_value in loss_set]

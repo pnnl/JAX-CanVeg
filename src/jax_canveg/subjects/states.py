@@ -230,6 +230,18 @@ class Obs(eqx.Module):
     Rsoil: Float_1D
 
 
+class ObsStats(eqx.Module):
+    P: Float_0D
+    LE: Float_0D
+    H: Float_0D
+    GPP: Float_0D
+    rnet: Float_0D
+    albedo: Float_0D
+    Fco2: Float_0D
+    gsoil: Float_0D
+    Rsoil: Float_0D
+
+
 class Soil(eqx.Module):
     dt: Float_0D
     # n_soil: int

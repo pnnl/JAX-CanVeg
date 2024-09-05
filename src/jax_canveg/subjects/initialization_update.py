@@ -20,7 +20,8 @@ from math import floor
 
 from .meterology import Met
 from .parameters import Para, Setup, VarStats
-from .states import Obs, Prof, Qin, Veg, Lai, Soil
+from .states import Obs
+from .states import Prof, Qin, Veg, Lai, Soil
 from .states import ParNir, Ir, Rnet, SunShadedCan, Can
 from ..shared_utilities.utils import dot, minus
 from ..shared_utilities.types import Float_2D, Int_0D, Float_0D, Float_1D
@@ -450,6 +451,32 @@ def get_obs(f_obs: str) -> Obs:
     )
 
     return obs
+
+    # obs_mean = ObsStats(
+    #     P_obs.mean(),
+    #     LE_obs.mean(),
+    #     H_obs.mean(),
+    #     GPP_obs.mean(),
+    #     Rnet_obs.mean(),
+    #     albedo_obs.mean(),
+    #     Fco2_obs.mean(),
+    #     Gsoil_obs.mean(),
+    #     Rsoil_obs.mean(),
+    # )
+
+    # obs_std = ObsStats(
+    #     P_obs.std(),
+    #     LE_obs.std(),
+    #     H_obs.std(),
+    #     GPP_obs.std(),
+    #     Rnet_obs.std(),
+    #     albedo_obs.std(),
+    #     Fco2_obs.std(),
+    #     Gsoil_obs.std(),
+    #     Rsoil_obs.std(),
+    # )
+
+    # return obs, obs_mean, obs_std
 
 
 ############################################################################
