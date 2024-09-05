@@ -15,17 +15,28 @@ from typing import Tuple, Callable
 # from math import ceil
 
 from .canveg import canveg
-from .canveg_rsoil_hybrid import canveg_rsoil_hybrid
 
 from ..shared_utilities.solver import implicit_func_fixed_point
 
 # from ..shared_utilities.solver import implicit_func_fixed_point_canveg_main
+
 from .canveg import canveg_initialize_states, canveg_each_iteration
 from .canveg import get_all, update_all
-from .canveg_rsoil_hybrid import canveg_rsoil_hybrid_each_iteration
-from .canveg_leafrh_hybrid import canveg_leafrh_hybrid_each_iteration
-from .canveg_gs_hybrid import canveg_gs_hybrid_each_iteration
-from .canveg_gsswc_hybrid import canveg_gsswc_hybrid_each_iteration
+
+# from .canveg_rsoil_hybrid import canveg_rsoil_hybrid
+# from .canveg_rsoil_hybrid import canveg_rsoil_hybrid_each_iteration
+# from .canveg_leafrh_hybrid import canveg_leafrh_hybrid_each_iteration
+# from .canveg_gs_hybrid import canveg_gs_hybrid_each_iteration
+# from .canveg_gsswc_hybrid import canveg_gsswc_hybrid_each_iteration
+
+# Soil respiration function
+from ..physics.carbon_fluxes import soil_respiration_alfalfa
+from ..physics.carbon_fluxes import soil_respiration_q10_power
+from ..physics.carbon_fluxes import soil_respiration_dnn
+
+# Leaf relative humidity function
+from ..physics.carbon_fluxes import calculate_leaf_rh_physics
+from ..physics.carbon_fluxes import calculate_leaf_rh_nn
 
 from ..subjects import Para, Met, Prof, SunAng
 from ..subjects import LeafAng, SunShadedCan, Can
@@ -46,12 +57,17 @@ class CanvegBase(eqx.Module):
     time_zone: int
     leafangle: int
     stomata: int
+    leafrh: int
+    soilresp: int
     n_can_layers: int
     n_total_layers: int
     n_soil_layers: int
     dt_soil: Float_0D
     soil_mtime: int
     niter: int
+
+    leafrh_func: Callable
+    soilresp_func: Callable
 
     def __init__(self, para: Para, setup: Setup, dij: Float_2D):
         self.para = para
@@ -63,6 +79,8 @@ class CanvegBase(eqx.Module):
         # Static parameters
         self.leafangle = setup.leafangle
         self.stomata = setup.stomata
+        self.leafrh = setup.leafrh
+        self.soilresp = setup.soilresp
         self.n_can_layers = setup.n_can_layers
         self.n_total_layers = setup.n_total_layers
         self.n_soil_layers = setup.n_soil_layers
@@ -70,8 +88,32 @@ class CanvegBase(eqx.Module):
         self.soil_mtime = setup.soil_mtime
         self.niter = setup.niter
 
+        # Get leaf relative humidity calculation function
+        self.leafrh_func = self._get_leafrh_func()
+
+        # Get soil respiration calculation function
+        self.soilresp_func = self._get_soilresp_func()
+
     def __call__(self, met: Met, *args):
         raise NotImplementedError("This is the base model; not working!")
+
+    def _get_leafrh_func(self):
+        if self.leafrh == 0:
+            return calculate_leaf_rh_physics
+        elif self.leafrh == 1:
+            return calculate_leaf_rh_nn
+        else:
+            raise Exception(f"Unknown leaf relative humidity module type {self.leafrh}")
+
+    def _get_soilresp_func(self):
+        if self.soilresp == 0:
+            return soil_respiration_alfalfa
+        elif self.soilresp == 1:
+            return soil_respiration_q10_power
+        elif self.soilresp == 2:
+            return soil_respiration_dnn
+        else:
+            raise Exception(f"Unknown soil respiration module type {self.soilresp}")
 
 
 ########################################################################
@@ -112,6 +154,9 @@ class Canveg(CanvegBase):
         dt_soil = self.dt_soil
         soil_mtime = self.soil_mtime
         niter = self.niter
+        # Functions
+        leafrh_func = self.leafrh_func
+        soilresp_func = self.soilresp_func
 
         # Number of time steps from met
         ntime = met.zL.size
@@ -123,15 +168,17 @@ class Canveg(CanvegBase):
             lat_deg,
             long_deg,
             time_zone,
-            leafangle,
-            stomata,
-            n_can_layers,
-            n_total_layers,
-            n_soil_layers,
-            ntime,
-            dt_soil,
-            soil_mtime,
-            niter,
+            leafangle=leafangle,
+            stomata=stomata,
+            leafrh_func=leafrh_func,
+            soilresp_func=soilresp_func,
+            n_can_layers=n_can_layers,
+            n_total_layers=n_total_layers,
+            n_soil_layers=n_soil_layers,
+            time_batch_size=ntime,
+            dt_soil=dt_soil,
+            soil_mtime=soil_mtime,
+            niter=niter,
         )
         return results
 
@@ -147,83 +194,6 @@ class Canveg(CanvegBase):
         results = self(met)
         soil = results[-3]
         return soil.resp
-
-
-class CanvegRsoilHybrid(Canveg):
-    # RsoilDL: eqx.Module
-
-    # def __init__(
-    #     self,
-    #     para: Para,
-    #     setup: Setup,
-    #     dij: Float_2D,
-    #     RsoilDL: Optional[eqx.Module] = None,
-    # ):
-    #     super(CanvegRsoilHybrid, self).__init__(para, setup, dij)
-    #     if RsoilDL is None:
-    #         RsoilDL = MLP(
-    #             in_size=2, out_size=1, width_size=6, depth=2,key=jax.random.PRNGKey(0)
-    #         )
-    #     self.RsoilDL = RsoilDL
-
-    def __call__(
-        self, met: Met
-    ) -> Tuple[
-        Met,
-        Prof,
-        ParNir,
-        ParNir,
-        Ir,
-        Rnet,
-        Qin,
-        SunAng,
-        LeafAng,
-        Lai,
-        SunShadedCan,
-        SunShadedCan,
-        Soil,
-        Veg,
-        Can,
-    ]:
-        para, dij = self.para, self.dij
-        # Location parameters
-        lat_deg = self.lat_deg
-        long_deg = self.long_deg
-        time_zone = self.time_zone
-        # Static parameters
-        leafangle = self.leafangle
-        stomata = self.stomata
-        n_can_layers = self.n_can_layers
-        n_total_layers = self.n_total_layers
-        n_soil_layers = self.n_soil_layers
-        # ntime = self.ntime
-        dt_soil = self.dt_soil
-        soil_mtime = self.soil_mtime
-        niter = self.niter
-
-        # Number of time steps from met
-        # batch_size = self.batch_size
-        # n_batch = self.n_batch
-        ntime = met.zL.size
-
-        results = canveg_rsoil_hybrid(
-            para,
-            met,
-            dij,
-            lat_deg,
-            long_deg,
-            time_zone,
-            leafangle,
-            stomata,
-            n_can_layers,
-            n_total_layers,
-            n_soil_layers,
-            ntime,
-            dt_soil,
-            soil_mtime,
-            niter,
-        )
-        return results
 
 
 ########################################################################
@@ -252,6 +222,9 @@ class CanvegIFT(CanvegBase):
         dt_soil = self.dt_soil
         soil_mtime = self.soil_mtime
         niter = self.niter
+        # Functions
+        leafrh_func = self.leafrh_func
+        soilresp_func = self.soilresp_func
 
         # Number of time steps from met
         ntime = met.zL.size
@@ -274,7 +247,18 @@ class CanvegIFT(CanvegBase):
         states_guess = initials
 
         # Forward runs
-        args = [dij, leaf_ang, quantum, nir, lai, n_can_layers, stomata, soil_mtime]
+        args = [
+            dij,
+            leaf_ang,
+            quantum,
+            nir,
+            lai,
+            n_can_layers,
+            stomata,
+            soil_mtime,
+            leafrh_func,
+            soilresp_func,
+        ]
         states_final = implicit_func_fixed_point(
             states_guess,
             para,
@@ -298,256 +282,256 @@ class CanvegIFT(CanvegBase):
         return results[0]
 
 
-class CanvegRsoilHybridIFT(CanvegIFT):
-    def __call__(
-        self,
-        met: Met,
-        update_substates_func: Callable = update_all,
-        get_substates_func: Callable = get_all,
-    ):
-        para, dij = self.para, self.dij
-        # Location parameters
-        lat_deg = self.lat_deg
-        long_deg = self.long_deg
-        time_zone = self.time_zone
-        # Static parameters
-        leafangle = self.leafangle
-        stomata = self.stomata
-        n_can_layers = self.n_can_layers
-        n_total_layers = self.n_total_layers
-        n_soil_layers = self.n_soil_layers
-        dt_soil = self.dt_soil
-        soil_mtime = self.soil_mtime
-        niter = self.niter
+# class CanvegRsoilHybridIFT(CanvegIFT):
+#     def __call__(
+#         self,
+#         met: Met,
+#         update_substates_func: Callable = update_all,
+#         get_substates_func: Callable = get_all,
+#     ):
+#         para, dij = self.para, self.dij
+#         # Location parameters
+#         lat_deg = self.lat_deg
+#         long_deg = self.long_deg
+#         time_zone = self.time_zone
+#         # Static parameters
+#         leafangle = self.leafangle
+#         stomata = self.stomata
+#         n_can_layers = self.n_can_layers
+#         n_total_layers = self.n_total_layers
+#         n_soil_layers = self.n_soil_layers
+#         dt_soil = self.dt_soil
+#         soil_mtime = self.soil_mtime
+#         niter = self.niter
 
-        # Number of time steps from met
-        ntime = met.zL.size
+#         # Number of time steps from met
+#         ntime = met.zL.size
 
-        # Initialization
-        quantum, nir, rnet, lai, sun_ang, leaf_ang, initials = canveg_initialize_states(
-            para,
-            met,
-            lat_deg,
-            long_deg,
-            time_zone,
-            leafangle,
-            n_can_layers,
-            n_total_layers,
-            n_soil_layers,
-            ntime,
-            dt_soil,
-            soil_mtime,
-        )
-        states_guess = initials
+#         # Initialization
+#         quantum,nir,rnet,lai, sun_ang, leaf_ang, initials = canveg_initialize_states(
+#             para,
+#             met,
+#             lat_deg,
+#             long_deg,
+#             time_zone,
+#             leafangle,
+#             n_can_layers,
+#             n_total_layers,
+#             n_soil_layers,
+#             ntime,
+#             dt_soil,
+#             soil_mtime,
+#         )
+#         states_guess = initials
 
-        # Forward runs
-        args = [dij, leaf_ang, quantum, nir, lai, n_can_layers, stomata, soil_mtime]
-        # states_final = implicit_func_fixed_point(
-        #     canveg_rsoil_hybrid_each_iteration,
-        #     update_substates_func,
-        #     get_substates_func,
-        #     states_guess,
-        #     para,
-        #     niter,
-        #     *args
-        # )
-        states_final = implicit_func_fixed_point(
-            states_guess,
-            para,
-            args,
-            iter_func=canveg_rsoil_hybrid_each_iteration,
-            update_substates_func=update_substates_func,
-            get_substates_func=get_substates_func,
-            niter=niter,
-        )
+#         # Forward runs
+#         args = [dij, leaf_ang, quantum, nir, lai, n_can_layers, stomata, soil_mtime]
+#         # states_final = implicit_func_fixed_point(
+#         #     canveg_rsoil_hybrid_each_iteration,
+#         #     update_substates_func,
+#         #     get_substates_func,
+#         #     states_guess,
+#         #     para,
+#         #     niter,
+#         #     *args
+#         # )
+#         states_final = implicit_func_fixed_point(
+#             states_guess,
+#             para,
+#             args,
+#             iter_func=canveg_rsoil_hybrid_each_iteration,
+#             update_substates_func=update_substates_func,
+#             get_substates_func=get_substates_func,
+#             niter=niter,
+#         )
 
-        return states_final, [quantum, nir, rnet, sun_ang, leaf_ang, lai]
-
-
-class CanvegLeafRHHybridIFT(CanvegIFT):
-    def __call__(
-        self,
-        met: Met,
-        update_substates_func: Callable = update_all,
-        get_substates_func: Callable = get_all,
-    ):
-        para, dij = self.para, self.dij
-        # Location parameters
-        lat_deg = self.lat_deg
-        long_deg = self.long_deg
-        time_zone = self.time_zone
-        # Static parameters
-        leafangle = self.leafangle
-        stomata = self.stomata
-        n_can_layers = self.n_can_layers
-        n_total_layers = self.n_total_layers
-        n_soil_layers = self.n_soil_layers
-        dt_soil = self.dt_soil
-        soil_mtime = self.soil_mtime
-        niter = self.niter
-
-        # Number of time steps from met
-        ntime = met.zL.size
-
-        # Initialization
-        quantum, nir, rnet, lai, sun_ang, leaf_ang, initials = canveg_initialize_states(
-            para,
-            met,
-            lat_deg,
-            long_deg,
-            time_zone,
-            leafangle,
-            n_can_layers,
-            n_total_layers,
-            n_soil_layers,
-            ntime,
-            dt_soil,
-            soil_mtime,
-        )
-        states_guess = initials
-
-        # Forward runs
-        args = [dij, leaf_ang, quantum, nir, lai, n_can_layers, stomata, soil_mtime]
-        # states_final = implicit_func_fixed_point(
-        #     canveg_leafrh_hybrid_each_iteration,
-        #     update_substates_func,
-        #     get_substates_func,
-        #     states_guess,
-        #     para,
-        #     niter,
-        #     *args
-        # )
-        states_final = implicit_func_fixed_point(
-            states_guess,
-            para,
-            args,
-            iter_func=canveg_leafrh_hybrid_each_iteration,
-            update_substates_func=update_substates_func,
-            get_substates_func=get_substates_func,
-            niter=niter,
-        )
-
-        return states_final, [quantum, nir, rnet, sun_ang, leaf_ang, lai]
+#         return states_final, [quantum, nir, rnet, sun_ang, leaf_ang, lai]
 
 
-class CanvegGSHybridIFT(CanvegIFT):
-    def __call__(
-        self,
-        met: Met,
-        update_substates_func: Callable = update_all,
-        get_substates_func: Callable = get_all,
-    ):
-        para, dij = self.para, self.dij
-        # Location parameters
-        lat_deg = self.lat_deg
-        long_deg = self.long_deg
-        time_zone = self.time_zone
-        # Static parameters
-        leafangle = self.leafangle
-        stomata = self.stomata
-        n_can_layers = self.n_can_layers
-        n_total_layers = self.n_total_layers
-        n_soil_layers = self.n_soil_layers
-        dt_soil = self.dt_soil
-        soil_mtime = self.soil_mtime
-        niter = self.niter
+# class CanvegLeafRHHybridIFT(CanvegIFT):
+#     def __call__(
+#         self,
+#         met: Met,
+#         update_substates_func: Callable = update_all,
+#         get_substates_func: Callable = get_all,
+#     ):
+#         para, dij = self.para, self.dij
+#         # Location parameters
+#         lat_deg = self.lat_deg
+#         long_deg = self.long_deg
+#         time_zone = self.time_zone
+#         # Static parameters
+#         leafangle = self.leafangle
+#         stomata = self.stomata
+#         n_can_layers = self.n_can_layers
+#         n_total_layers = self.n_total_layers
+#         n_soil_layers = self.n_soil_layers
+#         dt_soil = self.dt_soil
+#         soil_mtime = self.soil_mtime
+#         niter = self.niter
 
-        # Number of time steps from met
-        ntime = met.zL.size
+#         # Number of time steps from met
+#         ntime = met.zL.size
 
-        # Initialization
-        quantum, nir, rnet, lai, sun_ang, leaf_ang, initials = canveg_initialize_states(
-            para,
-            met,
-            lat_deg,
-            long_deg,
-            time_zone,
-            leafangle,
-            n_can_layers,
-            n_total_layers,
-            n_soil_layers,
-            ntime,
-            dt_soil,
-            soil_mtime,
-        )
-        states_guess = initials
+#         # Initialization
+#         quantum,nir,rnet,lai, sun_ang, leaf_ang, initials = canveg_initialize_states(
+#             para,
+#             met,
+#             lat_deg,
+#             long_deg,
+#             time_zone,
+#             leafangle,
+#             n_can_layers,
+#             n_total_layers,
+#             n_soil_layers,
+#             ntime,
+#             dt_soil,
+#             soil_mtime,
+#         )
+#         states_guess = initials
 
-        # Forward runs
-        args = [dij, leaf_ang, quantum, nir, lai, n_can_layers, stomata, soil_mtime]
-        # states_final = implicit_func_fixed_point(
-        #     canveg_gs_hybrid_each_iteration,
-        #     update_substates_func,
-        #     get_substates_func,
-        #     states_guess,
-        #     para,
-        #     niter,
-        #     *args
-        # )
-        states_final = implicit_func_fixed_point(
-            states_guess,
-            para,
-            args,
-            iter_func=canveg_gs_hybrid_each_iteration,
-            update_substates_func=update_substates_func,
-            get_substates_func=get_substates_func,
-            niter=niter,
-        )
+#         # Forward runs
+#         args = [dij, leaf_ang, quantum, nir, lai, n_can_layers, stomata, soil_mtime]
+#         # states_final = implicit_func_fixed_point(
+#         #     canveg_leafrh_hybrid_each_iteration,
+#         #     update_substates_func,
+#         #     get_substates_func,
+#         #     states_guess,
+#         #     para,
+#         #     niter,
+#         #     *args
+#         # )
+#         states_final = implicit_func_fixed_point(
+#             states_guess,
+#             para,
+#             args,
+#             iter_func=canveg_leafrh_hybrid_each_iteration,
+#             update_substates_func=update_substates_func,
+#             get_substates_func=get_substates_func,
+#             niter=niter,
+#         )
 
-        return states_final, [quantum, nir, rnet, sun_ang, leaf_ang, lai]
+#         return states_final, [quantum, nir, rnet, sun_ang, leaf_ang, lai]
 
 
-class CanvegGSSWCHybridIFT(CanvegIFT):
-    def __call__(
-        self,
-        met: Met,
-        update_substates_func: Callable = update_all,
-        get_substates_func: Callable = get_all,
-    ):
-        para, dij = self.para, self.dij
-        # Location parameters
-        lat_deg = self.lat_deg
-        long_deg = self.long_deg
-        time_zone = self.time_zone
-        # Static parameters
-        leafangle = self.leafangle
-        stomata = self.stomata
-        n_can_layers = self.n_can_layers
-        n_total_layers = self.n_total_layers
-        n_soil_layers = self.n_soil_layers
-        dt_soil = self.dt_soil
-        soil_mtime = self.soil_mtime
-        niter = self.niter
+# class CanvegGSHybridIFT(CanvegIFT):
+#     def __call__(
+#         self,
+#         met: Met,
+#         update_substates_func: Callable = update_all,
+#         get_substates_func: Callable = get_all,
+#     ):
+#         para, dij = self.para, self.dij
+#         # Location parameters
+#         lat_deg = self.lat_deg
+#         long_deg = self.long_deg
+#         time_zone = self.time_zone
+#         # Static parameters
+#         leafangle = self.leafangle
+#         stomata = self.stomata
+#         n_can_layers = self.n_can_layers
+#         n_total_layers = self.n_total_layers
+#         n_soil_layers = self.n_soil_layers
+#         dt_soil = self.dt_soil
+#         soil_mtime = self.soil_mtime
+#         niter = self.niter
 
-        # Number of time steps from met
-        ntime = met.zL.size
+#         # Number of time steps from met
+#         ntime = met.zL.size
 
-        # Initialization
-        quantum, nir, rnet, lai, sun_ang, leaf_ang, initials = canveg_initialize_states(
-            para,
-            met,
-            lat_deg,
-            long_deg,
-            time_zone,
-            leafangle,
-            n_can_layers,
-            n_total_layers,
-            n_soil_layers,
-            ntime,
-            dt_soil,
-            soil_mtime,
-        )
-        states_guess = initials
+#         # Initialization
+#         quantum,nir,rnet,lai, sun_ang, leaf_ang, initials = canveg_initialize_states(
+#             para,
+#             met,
+#             lat_deg,
+#             long_deg,
+#             time_zone,
+#             leafangle,
+#             n_can_layers,
+#             n_total_layers,
+#             n_soil_layers,
+#             ntime,
+#             dt_soil,
+#             soil_mtime,
+#         )
+#         states_guess = initials
 
-        # Forward runs
-        args = [dij, leaf_ang, quantum, nir, lai, n_can_layers, stomata, soil_mtime]
-        states_final = implicit_func_fixed_point(
-            canveg_gsswc_hybrid_each_iteration,
-            update_substates_func,
-            get_substates_func,
-            states_guess,
-            para,
-            niter,
-            *args
-        )
+#         # Forward runs
+#         args = [dij, leaf_ang, quantum, nir, lai, n_can_layers, stomata, soil_mtime]
+#         # states_final = implicit_func_fixed_point(
+#         #     canveg_gs_hybrid_each_iteration,
+#         #     update_substates_func,
+#         #     get_substates_func,
+#         #     states_guess,
+#         #     para,
+#         #     niter,
+#         #     *args
+#         # )
+#         states_final = implicit_func_fixed_point(
+#             states_guess,
+#             para,
+#             args,
+#             iter_func=canveg_gs_hybrid_each_iteration,
+#             update_substates_func=update_substates_func,
+#             get_substates_func=get_substates_func,
+#             niter=niter,
+#         )
 
-        return states_final, [quantum, nir, rnet, sun_ang, leaf_ang, lai]
+#         return states_final, [quantum, nir, rnet, sun_ang, leaf_ang, lai]
+
+
+# class CanvegGSSWCHybridIFT(CanvegIFT):
+#     def __call__(
+#         self,
+#         met: Met,
+#         update_substates_func: Callable = update_all,
+#         get_substates_func: Callable = get_all,
+#     ):
+#         para, dij = self.para, self.dij
+#         # Location parameters
+#         lat_deg = self.lat_deg
+#         long_deg = self.long_deg
+#         time_zone = self.time_zone
+#         # Static parameters
+#         leafangle = self.leafangle
+#         stomata = self.stomata
+#         n_can_layers = self.n_can_layers
+#         n_total_layers = self.n_total_layers
+#         n_soil_layers = self.n_soil_layers
+#         dt_soil = self.dt_soil
+#         soil_mtime = self.soil_mtime
+#         niter = self.niter
+
+#         # Number of time steps from met
+#         ntime = met.zL.size
+
+#         # Initialization
+#         quantum,nir,rnet,lai, sun_ang, leaf_ang, initials = canveg_initialize_states(
+#             para,
+#             met,
+#             lat_deg,
+#             long_deg,
+#             time_zone,
+#             leafangle,
+#             n_can_layers,
+#             n_total_layers,
+#             n_soil_layers,
+#             ntime,
+#             dt_soil,
+#             soil_mtime,
+#         )
+#         states_guess = initials
+
+#         # Forward runs
+#         args = [dij, leaf_ang, quantum, nir, lai, n_can_layers, stomata, soil_mtime]
+#         states_final = implicit_func_fixed_point(
+#             canveg_gsswc_hybrid_each_iteration,
+#             update_substates_func,
+#             get_substates_func,
+#             states_guess,
+#             para,
+#             niter,
+#             *args
+#         )
+
+#         return states_final, [quantum, nir, rnet, sun_ang, leaf_ang, lai]

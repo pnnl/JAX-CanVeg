@@ -64,8 +64,8 @@ def implicit_func_fixed_point(
     return substates_solution
 
 
-@implicit_func_fixed_point.def_jvp
-# @implicit_func_fixed_point.defjvp
+# @implicit_func_fixed_point.def_jvp
+@implicit_func_fixed_point.defjvp
 def implicit_func_fixed_point_jvp(
     # iter_func, update_substates_func, get_substate_func, niter, primals, tangents
     primals,

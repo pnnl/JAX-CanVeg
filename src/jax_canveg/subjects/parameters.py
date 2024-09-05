@@ -34,13 +34,22 @@ class Setup(eqx.Module):
     time_zone: int
     lat_deg: Float_0D
     long_deg: Float_0D
-    # Leaf
+    # Leaf stomatal
     stomata: int  # amphistomatous = 1; hypostomatous = 0
     # hypo_amphi: int  # hypostomatous, 1, amphistomatous, 2
     # Leaf angle distributions
-    # options include spherical - 1, planophile - 2, erectophile - 3, uniform - 4,
-    # plagiophile - 5, extremophile - 6
+    # planophile - 0, spherical - 1, erectophile - 3,
+    # plagiophile - 4, extremophile - 5, uniform - 6
     leafangle: int
+    # Leaf relative humidity module
+    # 0 - calculate_leaf_rh_physics()
+    # 1 - calculate_leaf_rh_nn()
+    leafrh: int
+    # Soil respiration module
+    # 0 - soil_respiration_alfalfa()
+    # 1 - soil_respiration_q10_power)
+    # 2 - soil_respiration_dnn()
+    soilresp: int
     # Timesteps
     n_hr_per_day: int
     ntime: int
@@ -182,6 +191,10 @@ class Para(eqx.Module):
     Mair: Float_0D
     dLdT: Float_0D
     extinct: Float_0D
+    # Q10 power parameters
+    q10a: Float_0D
+    q10b: Float_0D
+    q10c: Float_0D
     # Deep learning models
     RsoilDL: eqx.Module  # soil respiration
     LeafRHDL: eqx.Module  # leaf relative humidity
@@ -241,6 +254,10 @@ class Para(eqx.Module):
         # Water content thresholds
         theta_min: Float_0D = 0.03,  # wilting point
         theta_max: Float_0D = 0.2,  # field capacity
+        # Q10 power parameters for soil respiration
+        q10a: Float_0D = 5.0,
+        q10b: Float_0D = 1.7,
+        q10c: Float_0D = 0.8,
         # Meterological stats
         var_mean: Optional[VarStats] = None,
         var_std: Optional[VarStats] = None,
@@ -342,6 +359,11 @@ class Para(eqx.Module):
         # Water content thresholds
         self.theta_min = jnp.array(theta_min)  # wilting point
         self.theta_max = jnp.array(theta_max)  # field capacity
+
+        # Q10 power parameters for soil respiration
+        self.q10a = jnp.array(q10a)
+        self.q10b = jnp.array(q10b)
+        self.q10c = jnp.array(q10c)
 
         # Diffusivity values for 273 K and 1013 mb (STP) using values from Massman (1998) Atmos Environment  # noqa: E501
         # These values are for diffusion in air.  When used these values must be adjusted for  # noqa: E501

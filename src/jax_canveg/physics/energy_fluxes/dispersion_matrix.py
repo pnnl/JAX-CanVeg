@@ -2,7 +2,7 @@
 Function for computing the dispersion matrix.
 
 - disp_canveg()
-- conc()
+- get_dispersion_matrix()
 
 Author: Peishi Jiang
 Date: 2023.7.25.

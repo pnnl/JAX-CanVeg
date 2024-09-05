@@ -15,25 +15,26 @@ import jax.numpy as jnp
 from typing import Tuple, List, Optional, Callable
 from jaxtyping import Array
 
+from .loss import mse
 from ...models import CanvegBase
 from ...subjects import Met, BatchedMet, Para
 
 
-# Define a mean square error function
-def mse(y: Array, pred_y: Array):
-    """Function for calculating mean square error function
+# # Define a mean square error function
+# def mse(y: Array, pred_y: Array):
+#     """Function for calculating mean square error function
 
-    Args:
-        y (Array): _description_
-        pred_y (Array): _description_
+#     Args:
+#         y (Array): _description_
+#         pred_y (Array): _description_
 
-    Returns:
-        _type_: _description_
-    """
-    return jnp.mean((y - pred_y) ** 2)
+#     Returns:
+#         _type_: _description_
+#     """
+#     return jnp.mean((y - pred_y) ** 2)
 
 
-def loss_func(model: CanvegBase, y: Array, met: Met, loss: Callable, *args):
+def loss_func(model: CanvegBase, y: Array, met: Met, loss: Callable, *model_args):
     """Calculate the loss value for a given Canveg model.
 
     Args:
@@ -45,7 +46,7 @@ def loss_func(model: CanvegBase, y: Array, met: Met, loss: Callable, *args):
     Returns:
         _type_: _description_
     """
-    pred_y = model(met, *args)
+    pred_y = model(met, *model_args)
     # L2-loss
     # return jnp.mean((y - pred_y) ** 2)
     # jax.debug.print("{a}", a=pred_y)
@@ -62,7 +63,7 @@ def loss_func_optim(
     y: Array,
     met: Met,
     loss: Callable,
-    *args,
+    *model_args,
 ):
     """Calculating the gradient with respect to diff_model.
        Note that diff_model and static_model has the same type and
@@ -79,7 +80,7 @@ def loss_func_optim(
         _type_: _description_
     """
     model = eqx.combine(diff_model, static_model)
-    return loss_func(model, y, met, loss, *args)
+    return loss_func(model, y, met, loss, *model_args)
     # jax.debug.print("args: {x}", x=args)
     # pred_y = model(met, *args)
     # jax.debug.print("pred_y: {x}", x=pred_y)

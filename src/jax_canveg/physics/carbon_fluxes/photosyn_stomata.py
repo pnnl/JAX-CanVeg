@@ -1,10 +1,12 @@
 """
-Photosynthesis/stomatal conductance/respiratin, including:
+Photosynthesis/stomatal conductance, including:
+- calculate_leaf_rh()
+- calculate_leaf_rh_physics()
+- calculate_leaf_rh_nn()
 - leaf_ps()
 - temp_func()
 - specificity()
 - tboltz()
-- soil_respiration()
 
 Author: Peishi Jiang
 Date: 2023.08.01.
@@ -13,16 +15,94 @@ Date: 2023.08.01.
 import jax
 import jax.numpy as jnp
 
-import equinox as eqx
-
-from typing import Tuple
+from typing import Callable
 from ...shared_utilities.types import Float_2D, Float_1D, Float_0D
 from ...subjects import Para, Ps
 from ...subjects.utils import es
 
-from ...shared_utilities.utils import dot, add
+from ...shared_utilities.utils import dot
 
 PI2 = 3.1415926 * 2
+
+
+def calculate_leaf_rh(
+    prm: Para,
+    Tlk: Float_2D,
+    eair_Pa: Float_2D,
+    theta_soil: Float_1D,
+    leafrh_type: int = 0,
+) -> Float_2D:
+    """Calculate the leaf relative humidity"""
+    args = [prm, Tlk, eair_Pa, theta_soil]
+    return jax.lax.switch(
+        leafrh_type, [calculate_leaf_rh_physics, calculate_leaf_rh_nn], *args
+    )
+
+
+def calculate_leaf_rh_physics(
+    prm: Para,
+    Tlk: Float_2D,
+    eair_Pa: Float_2D,
+    theta_soil: Float_1D,
+) -> Float_2D:
+    """Calculate the leaf relative humidity"""
+    return eair_Pa / es(Tlk)
+
+
+def calculate_leaf_rh_nn(
+    prm: Para,
+    Tlk: Float_2D,
+    eair_Pa: Float_2D,
+    theta_soil: Float_1D,
+) -> Float_2D:
+    """Calculate the leaf relative humidity using neural network"""
+    LeafRHDL = prm.LeafRHDL
+
+    # Calculate the vapor pressure deficit
+    # vpd = (es(Tlk) - eair_Pa) / 1000.  # kPa
+    # eair = eair_Pa / 1000.  # kPa
+    rh_raw = es(Tlk) / eair_Pa
+
+    # Normalize the inputs
+    # Tl_norm = (Tlk - 273.15 - prm.var_min.T_air) / (  # pyright: ignore
+    #     prm.var_max.T_air - prm.var_min.T_air  # pyright: ignore
+    # )  # pyright: ignore
+    # vpd_norm = (vpd - prm.var_min.vpd) / (  # pyright: ignore
+    #     prm.var_max.vpd - prm.var_min.vpd  # pyright: ignore
+    # )  # pyright: ignore
+    # eair_norm = (eair - prm.var_min.eair) / (  # pyright: ignore
+    #     prm.var_max.eair - prm.var_min.eair  # pyright: ignore
+    # )  # pyright: ignore
+    # swc_norm = (theta_soil - prm.var_min.soilmoisture) / (  # pyright: ignore
+    #     prm.var_max.soilmoisture - prm.var_min.soilmoisture  # pyright: ignore
+    # )  # pyright: ignore
+    swc_norm = (
+        theta_soil - prm.var_mean.soilmoisture  # pyright: ignore
+    ) / prm.var_std.soilmoisture  # pyright: ignore
+
+    # Expand the shape of swc from (Nt) to (Nt, Nlevel)
+    Nt, Nlevel = Tlk.shape
+    swc_norm = jnp.tile(swc_norm, (Nlevel, 1)).T
+
+    # Get the inputs
+    # x = jnp.array([Tl_norm, swc_norm, vpd_norm, eair_norm]).T
+    # x = jnp.dstack([Tl_norm, swc_norm, vpd_norm, eair_norm]) # shape: (Nt, Nlevel, 4)
+    # x = jnp.dstack([swc_norm, vpd_norm, eair_norm]) # shape: (Nt, Nlevel, 3)
+    x = jnp.dstack([swc_norm, rh_raw])  # shape: (Nt, Nlevel, 2)
+    x = x.reshape([Nt * Nlevel, 2])
+
+    # Perform the Rsoil calculation
+    rh_leaf = jax.vmap(LeafRHDL)(x)  # pyright: ignore
+    rh_leaf = rh_leaf.reshape([Nt, Nlevel])
+    # jax.debug.print("swc: {a}", a=theta_soil)
+    # jax.debug.print("swc_norm: {a}", a=swc_norm[:,0])
+    # jax.debug.print("swc_norm: {a}", a=swc_norm[:,1])
+    # jax.debug.print("rh_leaf: {a}", a=rh_leaf)
+    # jax.debug.print("Tl_norm: {a}", a=Tl_norm)
+    # jax.debug.print("vpd_norm: {a}", a=vpd_norm)
+    # jax.debug.print("eair_norm: {a}", a=eair_norm)
+
+    return rh_leaf
 
 
 def leaf_ps(
@@ -35,6 +115,7 @@ def leaf_ps(
     theta_soil: Float_1D,
     prm: Para,
     stomata: int,
+    leafrh_func: Callable,
 ) -> Ps:
     """This program solves a cubic equation to calculate
           leaf photosynthesis.  This cubic expression is derived from solving
@@ -234,6 +315,11 @@ def leaf_ps(
     # # fw = (theta_soil - prm.theta_min) / (prm.theta_max-prm.theta_min)
     # fw = jnp.clip(fw, a_max=1.0, a_min=0.0)
 
+    # Calculate the relative humidity from a deep learning model
+    # rh_leaf = calculate_leaf_rh(prm, Tlk, eair_Pa, theta_soil)
+    # rh_leaf = eair_Pa / es(Tlk)  # need to transpose matrix
+    rh_leaf = leafrh_func(prm, Tlk, eair_Pa, theta_soil)
+
     # APHOTO = PG - rd, net photosynthesis is the difference
     # between gross photosynthesis and dark respiration. Note
     # photorespiration is already factored into PG.
@@ -242,7 +328,6 @@ def leaf_ps(
     # Gs = k A rh/cs + b'
     # rh is relative humidity, which comes from a coupled
     # leaf energy balance model
-    rh_leaf = eair_Pa / es(Tlk)  # need to transpose matrix
     # rh_leaf = dot(fw, rh_leaf)  # include the impact of soil moisture
     k_rh = rh_leaf * prm.kball  # combine product of rh and K ball-berry
     # jax.debug.print('eair_Pa: {a}', a=eair_Pa[11254:11257,:3])
@@ -371,7 +456,6 @@ def leaf_ps(
     root = root.sort(axis=0)
     minroot, midroot, maxroot = root[0], root[1], root[2]
     # find out where roots plop down relative to the x-y axis
-    # TODO:
     @jnp.vectorize
     def get_aphoto(minr, midr, maxr):
         conds = jnp.array(
@@ -699,104 +783,118 @@ def tboltz(
     return numm / denom
 
 
-def soil_respiration(
-    Ts: Float_1D, base_respiration: Float_0D = 8.0
-) -> Tuple[Float_1D, Float_1D]:
-    """Compute soil respiration
+# def soil_respiration(
+#     Ts: Float_1D, base_respiration: Float_0D = 8.0
+# ) -> Tuple[Float_1D, Float_1D]:
+#     """Compute soil respiration
 
-    Args:
-        Ts (Float_0D): _description_
-        base_respiration (Float_0D, optional): _description_. Defaults to 8..
-    """
-    # After Hanson et al. 1993. Tree Physiol. 13, 1-15
-    # reference soil respiration at 20 C, with value of about 5 umol m-2 s-1
-    # from field studies
+#     Args:
+#         Ts (Float_0D): _description_
+#         base_respiration (Float_0D, optional): _description_. Defaults to 8..
+#     """
+#     # After Hanson et al. 1993. Tree Physiol. 13, 1-15
+#     # reference soil respiration at 20 C, with value of about 5 umol m-2 s-1
+#     # from field studies
 
-    # assume Q10 of 1.4 based on Mahecha et al Science 2010, Ea = 25169
-    respiration_mole = base_respiration * jnp.exp(
-        (25169.0 / 8.314) * ((1.0 / 295.0) - 1.0 / (Ts + 273.16))
-    )
+#     # assume Q10 of 1.4 based on Mahecha et al Science 2010, Ea = 25169
+#     respiration_mole = base_respiration * jnp.exp(
+#         (25169.0 / 8.314) * ((1.0 / 295.0) - 1.0 / (Ts + 273.16))
+#     )
 
-    # soil wetness factor from the Hanson model, assuming constant and wet soils
-    respiration_mole *= 0.86
+#     # soil wetness factor from the Hanson model, assuming constant and wet soils
+#     respiration_mole *= 0.86
 
-    # convert soilresp to mg m-2 s-1 from umol m-2 s-1
-    respiration_mg = respiration_mole * 0.044
+#     # convert soilresp to mg m-2 s-1 from umol m-2 s-1
+#     respiration_mg = respiration_mole * 0.044
 
-    return respiration_mole, respiration_mg
-
-
-def soil_respiration_alfalfa(
-    Ac: Float_1D,
-    Tsoil: Float_1D,
-    soilmoisture: Float_1D,
-    veght: Float_1D,
-    Rd: Float_1D,
-    prm: Para,
-) -> Float_1D:
-    # Use statistical model derived from ACE analysis on alfalfa
-    x = jnp.array([Ac + Rd, Tsoil, soilmoisture, veght])  # (4, ntime)
-
-    b1 = jnp.array(
-        [-1.51316616076344, 0.673139978230031, -59.2947930385706, -3.33294857624960]
-    )
-    b2 = jnp.array(
-        [1.38034307225825, 3.73823712105636, 59.9066980644239, 1.36701108005293]
-    )
-    b3 = jnp.array(
-        [2.14475255616910, 19.9136298988773, 0.000987230986585085, 0.0569682453563841]
-    )
-
-    temp = x / add(b3, x)
-    temp = dot(b2, temp)
-    phi = add(b1, temp)  # (4, ntime)
-    phisum = phi.sum(axis=0)  # (ntime,)
-
-    b0_0 = 4.846927939437475
-    b0_1 = 2.22166756601498
-    b0_2 = -0.0281417120818586
-
-    # Reco-Rd = Rsoil
-    resp = b0_0 + b0_1 * phisum + b0_2 * phisum * phisum - Rd
-
-    return resp
+#     return respiration_mole, respiration_mg
 
 
-def soil_respiration_dnn(
-    Tsoil_K: Float_2D,
-    swc: Float_1D,
-    prm: Para,
-    RsoilDL: eqx.Module,
-) -> Float_1D:
-    # Normalize the inputs
-    Tsoil = Tsoil_K - 273.15
-    # Tsfc_norm = (Tsfc - prm.var_mean.Tsoil) / prm.var_std.Tsoil
-    # swc_norm = (swc - prm.var_mean.soilmoisture) / prm.var_std.soilmoisture
-    Tsoil_norm = (Tsoil - prm.var_min.T_air) / (  # pyright: ignore
-        prm.var_max.T_air - prm.var_min.T_air  # pyright: ignore
-    )  # pyright: ignore
-    swc_norm = (swc - prm.var_min.soilmoisture) / (  # pyright: ignore
-        prm.var_max.soilmoisture - prm.var_min.soilmoisture  # pyright: ignore
-    )  # pyright: ignore
+# def soil_respiration_q10_power(
+#     Tsoil: Float_1D,
+#     soilmoisture: Float_1D,
+#     prm: Para,
+# ) -> Float_1D:
+#     # Use the Q10 power equation: SR = a x b^{(Ts-10)/10} x SWC^c
+#     a, b, c = prm.q10a, prm.q10b, prm.q10c
 
-    # Get the inputs
-    # x = Tsoil_norm
-    # jax.debug.print("Tsoil shape: {a}", a=x.shape)
-    x = jnp.array([Tsoil_norm[:, 0], swc_norm]).T
-    # x = jnp.expand_dims(Tsfc_norm, axis=-1)
+#     temp1 = a * jnp.pow(b, (Tsoil - 10.) / 10.)
+#     temp2 = jnp.pow(soilmoisture, c)
 
-    # Perform the Rsoil calculation
-    rsoil_norm = jax.vmap(RsoilDL)(x)  # pyright: ignore
-    rsoil_norm = rsoil_norm.flatten()
+#     return dot(temp1, temp2)
 
-    # jax.debug.print("rsoil_norm: {x}", x=rsoil_norm)
-    # jax.debug.print("rsoil_norm: {x}", x=RsoilDL.layers[0].weight)
 
-    # Transform it back
-    # rsoil = rsoil_norm * prm.var_std.rsoil + prm.var_mean.rsoil
-    rsoil = (
-        rsoil_norm * (prm.var_max.rsoil - prm.var_min.rsoil)  # pyright: ignore
-        + prm.var_min.rsoil  # pyright: ignore
-    )
+# def soil_respiration_alfalfa(
+#     Ac: Float_1D,
+#     Tsoil: Float_1D,
+#     soilmoisture: Float_1D,
+#     veght: Float_1D,
+#     Rd: Float_1D,
+#     prm: Para,
+# ) -> Float_1D:
+#     # Use statistical model derived from ACE analysis on alfalfa
+#     x = jnp.array([Ac + Rd, Tsoil, soilmoisture, veght])  # (4, ntime)
 
-    return rsoil
+#     b1 = jnp.array(
+#         [-1.51316616076344, 0.673139978230031, -59.2947930385706, -3.33294857624960]
+#     )
+#     b2 = jnp.array(
+#         [1.38034307225825, 3.73823712105636, 59.9066980644239, 1.36701108005293]
+#     )
+#     b3 = jnp.array(
+#         [2.14475255616910, 19.9136298988773, 0.000987230986585085, 0.0569682453563841]
+#     )
+
+#     temp = x / add(b3, x)
+#     temp = dot(b2, temp)
+#     phi = add(b1, temp)  # (4, ntime)
+#     phisum = phi.sum(axis=0)  # (ntime,)
+
+#     b0_0 = 4.846927939437475
+#     b0_1 = 2.22166756601498
+#     b0_2 = -0.0281417120818586
+
+#     # Reco-Rd = Rsoil
+#     resp = b0_0 + b0_1 * phisum + b0_2 * phisum * phisum - Rd
+
+#     return resp
+
+
+# def soil_respiration_dnn(
+#     Tsoil_K: Float_2D,
+#     swc: Float_1D,
+#     prm: Para,
+#     RsoilDL: eqx.Module,
+# ) -> Float_1D:
+#     # Normalize the inputs
+#     Tsoil = Tsoil_K - 273.15
+#     # Tsfc_norm = (Tsfc - prm.var_mean.Tsoil) / prm.var_std.Tsoil
+#     # swc_norm = (swc - prm.var_mean.soilmoisture) / prm.var_std.soilmoisture
+#     Tsoil_norm = (Tsoil - prm.var_min.T_air) / (  # pyright: ignore
+#         prm.var_max.T_air - prm.var_min.T_air  # pyright: ignore
+#     )  # pyright: ignore
+#     swc_norm = (swc - prm.var_min.soilmoisture) / (  # pyright: ignore
+#         prm.var_max.soilmoisture - prm.var_min.soilmoisture  # pyright: ignore
+#     )  # pyright: ignore
+
+#     # Get the inputs
+#     # x = Tsoil_norm
+#     # jax.debug.print("Tsoil shape: {a}", a=x.shape)
+#     x = jnp.array([Tsoil_norm[:, 0], swc_norm]).T
+#     # x = jnp.expand_dims(Tsfc_norm, axis=-1)
+
+#     # Perform the Rsoil calculation
+#     rsoil_norm = jax.vmap(RsoilDL)(x)  # pyright: ignore
+#     rsoil_norm = rsoil_norm.flatten()
+
+#     # jax.debug.print("rsoil_norm: {x}", x=rsoil_norm)
+#     # jax.debug.print("rsoil_norm: {x}", x=RsoilDL.layers[0].weight)
+
+#     # Transform it back
+#     # rsoil = rsoil_norm * prm.var_std.rsoil + prm.var_mean.rsoil
+#     rsoil = (
+#         rsoil_norm * (prm.var_max.rsoil - prm.var_min.rsoil)  # pyright: ignore
+#         + prm.var_min.rsoil  # pyright: ignore
+#     )
+
+#     return rsoil

@@ -14,7 +14,7 @@ import equinox as eqx
 
 # from functools import partial
 
-from typing import Tuple
+from typing import Tuple, Callable
 
 from ..subjects import ParNir, Met, Prof, Para, SunShadedCan, Qin
 from .energy_fluxes import boundary_resistance, leaf_energy
@@ -35,6 +35,7 @@ def energy_carbon_fluxes(
     prof: Prof,
     prm: Para,
     stomata: int,
+    leafrh_func: Callable,
 ) -> Tuple[SunShadedCan, SunShadedCan]:
     """The ENERGY_AND_CARBON_FLUXES routine to computes coupled fluxes
        of energy, water and CO2 exchange, as well as leaf temperature.  Computataions
@@ -85,6 +86,7 @@ def energy_carbon_fluxes(
         met.soilmoisture,
         prm,
         stomata,
+        leafrh_func,
     )
     # sun.Ps, sun.gs, sun.Resp = ps.aphoto, ps.gs_m_s, ps.rd
     sun = eqx.tree_at(
@@ -112,6 +114,7 @@ def energy_carbon_fluxes(
         met.soilmoisture,
         prm,
         stomata,
+        leafrh_func,
     )
     # shade.Ps, shade.gs, shade.Resp = ps.aphoto, ps.gs_m_s, ps.rd
     shade = eqx.tree_at(

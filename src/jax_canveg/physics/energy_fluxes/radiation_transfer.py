@@ -927,6 +927,15 @@ def ir_rad_tran_canopy(
     args = [forward_scat, backward_scat, sdn, sup, soil.sfc_temperature]
     states_final = fixed_point(func, states_initial, prm, 50, *args)
     # states_final = implicit_func_fixed_point(
+    #     states_initial,
+    #     prm,
+    #     args,
+    #     iter_func=func,
+    #     update_substates_func=update_all,
+    #     get_substates_func=get_all,
+    #     niter=50,
+    # )
+    # states_final = implicit_func_fixed_point(
     #     func, update_all, get_all, states_initial, prm, 50, *args)
     ir_dn, ir_up = states_final[0], states_final[1]
 

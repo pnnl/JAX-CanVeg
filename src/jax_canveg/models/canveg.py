@@ -13,7 +13,7 @@ import equinox as eqx
 
 # from functools import partial
 
-from typing import Tuple
+from typing import Tuple, Callable
 
 from ..shared_utilities.types import Float_0D, Float_2D
 from ..shared_utilities.solver import fixed_point
@@ -32,7 +32,8 @@ from ..physics.energy_fluxes import compute_qin, ir_rad_tran_canopy
 from ..physics.energy_fluxes import uz, soil_energy_balance
 from ..physics.energy_fluxes import diffuse_direct_radiation
 from ..physics.carbon_fluxes import angle, leaf_angle
-from ..physics.carbon_fluxes import soil_respiration_alfalfa
+
+# from ..physics.carbon_fluxes import soil_respiration
 
 
 @eqx.filter_jit
@@ -160,8 +161,10 @@ def canveg_each_iteration(
     nir: ParNir,
     lai: Lai,
     jtot: int,
-    stomata: int,
+    stomata_type: int,
     soil_mtime: int,
+    leafrh_func: Callable,
+    soilresp_func: Callable,
 ):
     met, prof, ir, qin, sun, shade, soil, veg, can = states
     # jax.debug.print("T soil: {a}", a=soil.T_soil[10,:])
@@ -188,14 +191,17 @@ def canveg_each_iteration(
     # Different coefficients will be assigned if amphistomatous or hypostomatous
     # sun, shade = energy_carbon_fluxes(
     sun, shade = energy_carbon_fluxes(
-        sun, shade, qin, quantum, met, prof, para, stomata
+        sun, shade, qin, quantum, met, prof, para, stomata_type, leafrh_func
     )
 
     # Compute soil fluxes
     soil = soil_energy_balance(quantum, nir, ir, met, prof, para, soil, soil_mtime)  # type: ignore  # noqa: E501
 
     # Compute soil respiration
-    soil_resp = soil_respiration_alfalfa(
+    # soil_resp = soil_respiration_alfalfa(
+    #     veg.Ps, soil.T_soil[:, 9], met.soilmoisture, met.zcanopy, veg.Rd, para
+    # )
+    soil_resp = soilresp_func(
         veg.Ps, soil.T_soil[:, 9], met.soilmoisture, met.zcanopy, veg.Rd, para
     )
     soil = eqx.tree_at(lambda t: t.resp, soil, soil_resp)
@@ -248,6 +254,9 @@ def canveg(
     dt_soil: Float_0D,
     soil_mtime: int,
     niter: int,
+    # Functions
+    leafrh_func: Callable,
+    soilresp_func: Callable,
 ) -> Tuple[
     Met,
     Prof,
@@ -291,7 +300,18 @@ def canveg(
     #     initials, para, niter, dij, leaf_ang, quantum, nir, lai,
     #     n_can_layers, stomata, soil_mtime
     # )
-    args = [dij, leaf_ang, quantum, nir, lai, n_can_layers, stomata, soil_mtime]
+    args = [
+        dij,
+        leaf_ang,
+        quantum,
+        nir,
+        lai,
+        n_can_layers,
+        stomata,
+        soil_mtime,
+        leafrh_func,
+        soilresp_func,
+    ]
     finals = fixed_point(canveg_each_iteration, initials, para, niter, *args)
 
     met, prof, ir, qin, sun, shade, soil, veg, can = finals
@@ -348,6 +368,20 @@ def get_cannee(states):
 def update_cannee(states, can_nee):
     can = states[-1]
     can_new = eqx.tree_at(lambda t: t.NEE, can, can_nee)
+    states[-1] = can_new
+    return states
+
+
+def get_canlenee(states):
+    # return states[-1].LE, states[-1].NEE
+    le, nee = states[-1].LE, states[-1].NEE
+    return jnp.array([le, nee]).T  # shape (Nt, 2)
+
+
+def update_canlenee(states, newstates):
+    can_le, can_nee = newstates[:, 0], newstates[:, 1]
+    can = states[-1]
+    can_new = eqx.tree_at(lambda t: (t.NEE, t.LE), can, (can_nee, can_le))
     states[-1] = can_new
     return states
 

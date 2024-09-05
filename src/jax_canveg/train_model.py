@@ -5,6 +5,13 @@ Author: Peishi Jiang
 Date: 2024.8.30.
 """
 
+# TODO: Need a documentation for the configuration file
+# stomata_type
+# leaf angle type
+# leaf relative humidity module
+# soil respiration module
+# See the comments of jax_canveg.subjects.parameters.Para
+
 import os
 import json
 import pickle
@@ -15,11 +22,14 @@ from pathlib import PosixPath
 from typing import Any, Optional, List
 
 import equinox as eqx
+import jax.numpy as jnp
 import jax.tree_util as jtu
 
 from .physics.energy_fluxes import get_dispersion_matrix
 from .subjects import initialize_parameters
 from .subjects import convert_obs_to_batched_obs, convert_met_to_batched_met
+
+# from .subjects import convert_batchedmet_to_met
 from .subjects import Met, Obs, BatchedObs, get_met_forcings, get_obs
 from .subjects import get_filter_para_spec
 from .shared_utilities.optim import get_loss_function, get_optimzer
@@ -57,6 +67,10 @@ def train_model(f_configs: PosixPath | str):
 
     batched_y_train, batched_y_test = batched_y[0], batched_y[1]
     batched_met_train, batched_met_test = batched_met[0], batched_met[1]
+
+    # met = convert_batchedmet_to_met(batched_met)[0]
+    # model(met=met)
+    # exit()
 
     # Train the model
     (
@@ -215,6 +229,12 @@ def get_model(model_configs: dict, met: Met, obs: Obs, n_time: int):
     leafangle = check_and_get_keyword(
         model_configs, "leaf angle type", "model", True, 1
     )
+    leafrh = check_and_get_keyword(
+        model_configs, "leaf relative humidity module", "model", True, 0
+    )
+    soilresp = check_and_get_keyword(
+        model_configs, "soil respiration module", "model", True, 0
+    )
 
     # Get the model setup and parameters
     logging.info("Loading the model setup and parameters ...")
@@ -223,6 +243,8 @@ def get_model(model_configs: dict, met: Met, obs: Obs, n_time: int):
         latitude=latitude,
         longitude=longitude,
         stomata=stomata,
+        leafrh=leafrh,
+        soilresp=soilresp,
         veg_ht=veg_ht,
         leafangle=leafangle,
         n_can_layers=n_can_layers,
@@ -360,6 +382,10 @@ def downselect_obs(batched_obs: BatchedObs, output_args: str):
         return batched_obs.GPP
     elif output_args.lower() == "cannee" or output_args.lower() == "canopy nee":
         return batched_obs.Fco2
+    elif output_args.lower() == "canlenee" or output_args.lower() == "canopy le nee":
+        le, nee = batched_obs.LE, batched_obs.Fco2
+        # TODO: The returned shape is [nbatch, batch_size, 2]
+        return jnp.stack([le, nee], axis=-1)
     else:
         raise Exception("Unknown output arguments: %s", output_args)
 

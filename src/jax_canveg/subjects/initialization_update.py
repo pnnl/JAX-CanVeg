@@ -39,6 +39,8 @@ def initialize_parameters(
     longitude: Float_0D = -121.49933,
     stomata: int = 1,
     leafangle: int = 1,
+    leafrh: int = 0,
+    soilresp: int = 0,
     leaf_clumping_factor: Float_0D = 0.95,
     veg_ht: Float_0D = 0.8,
     meas_ht: Float_0D = 5.0,
@@ -56,6 +58,9 @@ def initialize_parameters(
     nir_reflect: Float_0D = 0.60,
     nir_trans: Float_0D = 0.20,
     nir_soil_refl: Float_0D = 0.10,
+    q10a: Float_0D = 5.0,
+    q10b: Float_0D = 1.7,
+    q10c: Float_0D = 0.8,
     theta_min: Float_0D = 0.05,  # wilting point
     theta_max: Float_0D = 0.2,  # field capacity
     npart: int = 1000000,
@@ -97,6 +102,8 @@ def initialize_parameters(
         long_deg=longitude,
         stomata=stomata,
         leafangle=leafangle,
+        leafrh=leafrh,
+        soilresp=soilresp,
         n_hr_per_day=n_hr_per_day,
         ntime=n_time,
         # time_batch_size=time_batch_size,
@@ -122,6 +129,9 @@ def initialize_parameters(
         nir_reflect=nir_reflect,
         nir_trans=nir_trans,
         nir_soil_refl=nir_soil_refl,
+        q10a=q10a,
+        q10b=q10b,
+        q10c=q10c,
         theta_min=theta_min,
         theta_max=theta_max,
         var_mean=var_mean,
@@ -151,9 +161,19 @@ def initialize_parameters(
                 t.lleaf,
                 t.theta_min,
                 t.theta_max,
+                t.ep,
+                t.epsoil,
+                t.q10a,
+                t.q10b,
+                t.q10c,
             ],
             para_min,
             replace=[
+                near_zero,
+                near_zero,
+                near_zero,
+                near_zero,
+                near_zero,
                 near_zero,
                 near_zero,
                 near_zero,
@@ -180,9 +200,11 @@ def initialize_parameters(
                 t.theta_min,
                 t.theta_max,
                 t.lleaf,
+                t.ep,
+                t.epsoil,
             ],
             para_max,
-            replace=[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.1],
+            replace=[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.1, 1.0, 1.0],
         )
         return setup, para, para_min, para_max
 
@@ -243,7 +265,9 @@ def initialize_met(data: Float_2D, ntime: Int_0D, zL0: Float_1D) -> Met:
     return met
 
 
-def get_met_forcings(f_forcing: str, lai: Optional[Float_0D] = None) -> Tuple[Met, int]:
+def get_met_forcings_txt(
+    f_forcing: str, lai: Optional[Float_0D] = None
+) -> Tuple[Met, int]:
     # Load the modeling forcing text file
     # This should be a matrix of forcing data with each column representing
     # a time series of observations
@@ -259,6 +283,61 @@ def get_met_forcings(f_forcing: str, lai: Optional[Float_0D] = None) -> Tuple[Me
             [forcing_data[:, :13], jnp.ones([n_time, 1]) * lai],
             axis=1,
         )
+    # Initialize the met instance
+    met = initialize_met(forcing_data, n_time, zl0)
+    return met, n_time
+
+
+def get_met_forcings(f_forcing: str, lai: Optional[Float_0D] = None) -> Tuple[Met, int]:
+    # Load the modeling forcing text file
+    df_forcing = pd.read_csv(f_forcing)
+    n_time = df_forcing.shape[0]
+
+    varns = [
+        "year",
+        "doy",
+        "hour",
+        "ta",
+        ["rg", "sw_in"],
+        "eair",
+        "ws",
+        "co2",
+        "pa",
+        "ustar",
+        "ts",
+        "swc",
+        "veg_ht",
+        "lai",
+    ]
+    data = []
+
+    df_keys = list(df_forcing.keys())
+    for varn in varns:
+        found = False
+        if isinstance(varn, list):
+            for key in df_keys:
+                for v in varn:
+                    if key.lower().startswith(v):
+                        data.append(df_forcing[key].values)
+                        found = True
+                        break
+                if found:
+                    break
+        else:
+            for key in df_keys:
+                if key.lower().startswith(varn):
+                    data.append(df_forcing[key].values)
+                    found = True
+                    break
+        if not found:
+            raise Exception(f"Variable {varn} not found in the forcing data.")
+
+    # Convert the data to jnp array
+    forcing_data = jnp.array(data).T
+
+    # Initialize the zl length with zeros
+    zl0 = jnp.zeros(n_time)
+
     # Initialize the met instance
     met = initialize_met(forcing_data, n_time, zl0)
     return met, n_time

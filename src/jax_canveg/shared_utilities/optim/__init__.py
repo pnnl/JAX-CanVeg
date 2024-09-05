@@ -1,22 +1,36 @@
 from .optim import perform_optimization  # noqa: F401
 from .optim import perform_optimization_batch  # noqa: F401
-from .optim import mse  # noqa: F401
+from .loss import mse  # noqa: F401
+from .loss import relative_mse  # noqa: F401
+from .loss import weighted_loss  # noqa: F401
 
 import logging
 import optax
+import jax.numpy as jnp
 from typing import Optional, Dict, Any
 
 
-def get_loss_function(loss_func_arg: str):
+def get_loss_function(loss_configs: Dict):
     """Get the loss function.
 
     Args:
-        loss_func_arg (str): The loss function
+        loss_configs (Dict): The loss function configuration
     """
-    if loss_func_arg.lower() == "mse":
-        return mse
+    loss_type = check_and_get_keyword(loss_configs, "type", "loss func", True, "mse")
+    weights = check_and_get_keyword(loss_configs, "weights", "loss func", True, None)
+    if loss_type.lower() == "mse":
+        loss_func = mse
+    elif loss_type.lower() == "relative mse":
+        loss_func = relative_mse
     else:
-        raise Exception(f"Unknown loss function: {loss_func_arg}")
+        raise Exception(f"Unknown loss function: {loss_type}")
+    if weights is None:
+        return loss_func
+    else:
+        # Weighted loss function
+        # TODO: double check that # of weights corresponds to # of model outputs
+        weights = jnp.array(weights)
+        return lambda y, predy: weighted_loss(y, predy, loss_func, weights)
 
 
 def get_optimzer(optim_configs: Optional[Dict] = None):
