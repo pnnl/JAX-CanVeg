@@ -219,7 +219,7 @@ def perform_optimization_batch(
         loss_value_test = jax.vmap(loss_func_batch, in_axes=[0, 0])(
             batched_met_test, batched_y_test
         )
-        jax.debug.print("loss_value_test: {x}", x=loss_value_test)
+        # jax.debug.print("loss_value_test: {x}", x=loss_value_test)
         loss_value_test = loss_value_test.mean()
         return loss_value_test
 

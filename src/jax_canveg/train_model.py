@@ -352,7 +352,7 @@ def get_learning_elements(
         batched_met_test, batched_y_test, batched_y_test_scaled = get_batched_met_obs(
             met_test,  # pyright: ignore
             obs_test,
-            None,  # pyright: ignore
+            1,  # pyright: ignore
             n_time_test,  # pyright: ignore
             output_func_args,
             output_scaler,
