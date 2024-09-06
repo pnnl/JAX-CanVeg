@@ -21,7 +21,7 @@ from ...subjects import SunAng, LeafAng, ParNir, Para, Ir, SunShadedCan, Soil, M
 from ...subjects import Lai
 from ...shared_utilities.types import Float_0D, Float_1D
 from ...shared_utilities.utils import dot, add
-from ...shared_utilities.solver import fixed_point, implicit_func_fixed_point
+from ...shared_utilities.solver import fixed_point
 
 
 def get_all(states):
@@ -668,19 +668,16 @@ def rad_tran_canopy(
         sdn,
         sup,
     ]
-    # states_final = fixed_point(func, states_initial, prm, niter, *args)
+    states_final = fixed_point(func, states_initial, prm, niter, *args)
     # states_final = implicit_func_fixed_point(
-    #     func, update_all, get_all, states_initial, prm, niter, *args
+    #     states_initial,
+    #     prm,
+    #     args,
+    #     iter_func=func,
+    #     update_substates_func=update_all,
+    #     get_substates_func=get_all,
+    #     niter=niter,
     # )
-    states_final = implicit_func_fixed_point(
-        states_initial,
-        prm,
-        args,
-        iter_func=func,
-        update_substates_func=update_all,
-        get_substates_func=get_all,
-        niter=niter,
-    )
     up, dn = states_final[0], states_final[1]
 
     # upward diffuse radiation flux density, on the horizontal
@@ -935,8 +932,6 @@ def ir_rad_tran_canopy(
     #     get_substates_func=get_all,
     #     niter=50,
     # )
-    # states_final = implicit_func_fixed_point(
-    #     func, update_all, get_all, states_initial, prm, 50, *args)
     ir_dn, ir_up = states_final[0], states_final[1]
 
     # IR shade on top + bottom of leaves

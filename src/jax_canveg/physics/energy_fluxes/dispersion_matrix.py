@@ -81,7 +81,6 @@ def get_dispersion_matrix(
     setup: Setup, para: Para, f_dij: Optional[str] = None, timemax: Float_0D = 1000.0
 ) -> Float_2D:
     # Get dij from an existing csv file
-    # if f_dij is not None:
     if os.path.isfile(f_dij):  # pyright: ignore
         logging.info(f"Reading dispersion matrix from {f_dij}")
         dij = np.loadtxt(f_dij, delimiter=",")  # pyright: ignore
@@ -90,8 +89,10 @@ def get_dispersion_matrix(
     else:
         if f_dij is None:
             f_dij = "Dij.csv"
+        # dij = disp_canveg(setup, para, timemax=timemax, f_dij=f_dij)
         dij = disp_canveg(setup, para, timemax=timemax)
         # Save dij
+        # print(f_dij)
         logging.info(f"Saving dispersion matrix to {f_dij}")
         np.savetxt(f_dij, np.array(dij), delimiter=",")
     return dij
