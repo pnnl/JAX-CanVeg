@@ -184,10 +184,19 @@ def perform_optimization_batch(
             return c, [loss_value, grads]
 
         _, results = jax.lax.scan(loss_func_batch, None, xs=[batched_met, batched_y])
-        # jax.debug.print("{x}", x=results[0])
         loss_value = results[0].mean()
+        # # Print out the gradients of each parameter for check
+        # jax.debug.print("bprime: {x}", x=results[1].__self__.para.bprime)
+        # jax.debug.print("par_soil_refl: {x}",x=results[1].__self__.para.par_soil_refl)
+        # jax.debug.print("nir_trans: {x}", x=results[1].__self__.para.par_soil_refl)
+        # jax.debug.print("q10b: {x}", x=results[1].__self__.para.par_soil_refl)
+        # jax.debug.print(
+        #   "leaf_clumping_factor: {x}", x=results[1].__self__.para.leaf_clumping_factor
+        # )
+        # TODO: Need a better way to check nan occurring in the gradients
+        grads = jtu.tree_map(lambda x: jnp.nanmean(x), results[1])
         # grads = results[1].mean()
-        grads = jtu.tree_map(lambda x: x.mean(), results[1])
+        # grads = jtu.tree_map(lambda x: x.mean(), results[1])
 
         updates, opt_state = optim.update(grads, opt_state)
         model = eqx.apply_updates(model, updates)
@@ -210,6 +219,7 @@ def perform_optimization_batch(
         loss_value_test = jax.vmap(loss_func_batch, in_axes=[0, 0])(
             batched_met_test, batched_y_test
         )
+        jax.debug.print("loss_value_test: {x}", x=loss_value_test)
         loss_value_test = loss_value_test.mean()
         return loss_value_test
 
@@ -226,6 +236,20 @@ def perform_optimization_batch(
         model_updated, opt_state, loss_value, grads = make_step(
             model, filter_model_spec, batched_y, opt_state, batched_met, loss, *args
         )
+
+        # para_list = [
+        #     "bprime", "ep", "lleaf", "qalpha", "LeafRHDL", "kball",
+        #     "leaf_clumping_factor",
+        #     "vcopt", "jmopt", "rd25", "toptvc", "toptjm", "epsoil",
+        #     "par_reflect", "par_trans", "par_soil_refl",
+        #     "nir_reflect", "nir_trans", "nir_soil_refl",
+        #     "q10a", "q10b", "q10c"
+        # ]
+        # for para in para_list:
+        #     print(para)
+        #     print(getattr(model.__self__.para, para))
+        #     print(getattr(model_updated.__self__.para, para))
+        #     print("")
 
         # Check NaN
         if not jnp.isnan(loss_value):
