@@ -230,7 +230,7 @@ class CanvegIFT(CanvegBase):
         ntime = met.zL.size
 
         # Initialization
-        quantum, nir, rnet, lai, sun_ang, leaf_ang, initials = canveg_initialize_states(
+        rnet, lai, sun_ang, leaf_ang, initials = canveg_initialize_states(
             para,
             met,
             lat_deg,
@@ -249,9 +249,8 @@ class CanvegIFT(CanvegBase):
         # Forward runs
         args = [
             dij,
+            sun_ang,
             leaf_ang,
-            quantum,
-            nir,
             lai,
             n_can_layers,
             stomata,
@@ -269,7 +268,8 @@ class CanvegIFT(CanvegBase):
             niter=niter,
         )
 
-        return states_final, [quantum, nir, rnet, sun_ang, leaf_ang, lai]
+        return states_final, [rnet, sun_ang, leaf_ang, lai]
+        # return states_final, [quantum, nir, rnet, sun_ang, leaf_ang, lai]
 
     def get_fixed_point_states(
         self,
@@ -279,7 +279,7 @@ class CanvegIFT(CanvegBase):
         scaler: Callable = lambda x: x,
     ):
         results = self(met, update_substates_func, get_substates_func)
-        # Not including quantum, nir, rnet, sun_ang, leaf_ang, and lai
+        # Not including rnet, sun_ang, leaf_ang, and lai
         result = results[0]
 
         # Scale the result if needed
