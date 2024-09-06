@@ -13,7 +13,7 @@ tune_jax_naninfs_for_debug(False)
 ################################################################
 # process-based model
 ################################################################
-f_config = Path("./process-based/configs.json")
+f_config = Path("./test-model/configs.json")
 train_model(f_config)
 
 
