@@ -85,6 +85,11 @@ def get_dispersion_matrix(
         logging.info(f"Reading dispersion matrix from {f_dij}")
         dij = np.loadtxt(f_dij, delimiter=",")  # pyright: ignore
         dij = jnp.array(dij)
+        # Check whether there are two dimensions,
+        # If the dimension is one, expand it to two dimensions.
+        if len(dij.shape) == 1:
+            dij = jnp.expand_dims(dij, axis=1)
+
     # Otherwise, generate dij
     else:
         if f_dij is None:

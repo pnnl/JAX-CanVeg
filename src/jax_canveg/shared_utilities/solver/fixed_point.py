@@ -104,7 +104,10 @@ def implicit_func_fixed_point_jvp(
     J = lx.PyTreeLinearOperator(J, jax.eval_shape(lambda: u))
     I = lx.IdentityLinearOperator(J.in_structure())  # noqa: E741
     A = I - J
-    tangent_out = lx.linear_solve(A, u).value
+    tangent_out = lx.linear_solve(
+        A, u, solver=lx.AutoLinearSolver(well_posed=False)
+    ).value
+    # tangent_out = lx.linear_solve(A, u, solver=lx.SVD()).value
     return substates_final, tangent_out
 
 

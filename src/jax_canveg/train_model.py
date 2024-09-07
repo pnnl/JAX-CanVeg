@@ -54,14 +54,6 @@ def train_model(f_configs: PosixPath | str):
     f_configs = os.path.basename(f_configs)
     os.chdir(parent_directory)
 
-    # Start logging information
-    logging.basicConfig(
-        filename="train.log",
-        filemode="w",
-        datefmt="%H:%M:%S",
-        level=logging.INFO,
-        format="%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s",
-    )
     logging.info(
         f"Start training JAX-CanVeg with the configuration file {str(f_configs)} under {parent_directory}"  # noqa: E501
     )
@@ -87,7 +79,7 @@ def train_model(f_configs: PosixPath | str):
 
     # met = convert_batchedmet_to_met(batched_met)[0]
     # model(met=met)
-    # exit()
+    # return
 
     # Train the model
     (

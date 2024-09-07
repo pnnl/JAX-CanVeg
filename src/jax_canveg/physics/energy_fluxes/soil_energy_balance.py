@@ -193,22 +193,56 @@ def soil_energy_balance(
     )
     product = bcoef * bcoef - 4 * acoef * ccoef
     # le1= (-bcoef + jnp.power(product,.5)) / (2*acoef)
+    # jax.debug.print('')
+    # jax.debug.print('mean: {x}', x=product.mean())
+    # jax.debug.print('nanmean: {x}', x=jnp.nanmean(product))
+    # jax.debug.print('max: {x}', x=product.max())
+    # jax.debug.print('min: {x}', x=product.min())
+    # jax.debug.print('number of negative: {x}', x=jnp.sum(product<0))
+    # jax.debug.print('total number: {x}', x=product.shape)
+    # product = jnp.clip(product, a_min = 10.0)
+    # product = jnp.nan_to_num(product, nan=10.0)
+    # jax.debug.print('mean: {x}', x=product.mean())
+    # jax.debug.print('acoef: {x}', x=jnp.nanmean(acoef))
+    # jax.debug.print('bcoef: {x}', x=jnp.nanmean(bcoef))
+    # jax.debug.print('ccoef: {x}', x=jnp.nanmean(ccoef))
+    # TODO: The clip is a bad idea. Need to think about a better solution
+    product = jnp.clip(product, a_min=10.0)
     le2 = (-bcoef - jnp.power(product, 0.5)) / (2 * acoef)
     evap = jnp.real(le2)
-    # soil.evap = jnp.real(le2)
 
-    # # solve for Ts using quadratic solution
-    # att = 6 * prm.epsoil * prm.sigma * tk2 + d2est * lecoef / 2
-    # btt = 4 * prm.epsoil * prm.sigma * tk3 + kcsoil + lecoef * dest
-    # ctt = -soil_Qin + soil.llout+soil.gsoil + lecoef * vpdsoil
-    # product = btt * btt - 4. * att * ctt
+    # solve for Ts using quadratic solution
+    att = 6 * prm.epsoil * prm.sigma * tk2 + d2est * lecoef / 2
+    btt = 4 * prm.epsoil * prm.sigma * tk3 + kcsoil + lecoef * dest
+    ctt = -soil_Qin + soil.llout + soil.gsoil + lecoef * vpdsoil
+    product = btt * btt - 4.0 * att * ctt
+    # jax.debug.print('number of negative: {x}', x=jnp.sum(product<0))
+    # product = remove_negative_product(product)
     # @jnp.vectorize
-    # def calculate_sfc_temp(product_e, T_air_K_e, att_e):
+    # def calculate_sfc_temp(product_e, T_air_K_e, btt_e, att_e):
     #     return jax.lax.cond(
     #         product_e > 0,
-    #         lambda: T_air_K_e + (-btt + jnp.sqrt(product_e)) / (2. * att_e),
+    #         lambda: T_air_K_e + (-btt_e + jnp.sqrt(product_e)) / (2. * att_e),
     #         lambda: T_air_K_e
     #     )
+    # sfc_temperature = calculate_sfc_temp(product, met.T_air_K, btt, att)
+    # jax.debug.print('number of nans: {x}', x=jnp.sum(jnp.isnan(sfc_temperature)))
+    # product = jnp.clip(product, a_min=0.)
+    @jnp.vectorize
+    def calculate_del_Tk(product_e, btt_e, att_e):
+        return (
+            -btt_e
+            + jnp.sqrt(jnp.where(product_e > 0.0, product_e, 0.0))  # pyright: ignore
+        ) / (2.0 * att_e)
+
+    @jnp.vectorize
+    def check_negative_product(product_e, del_Tk_e):
+        return jnp.where(product_e > 0.0, del_Tk_e, 0.0)
+
+    del_Tk = calculate_del_Tk(product, btt, att)
+    del_Tk = check_negative_product(product, del_Tk)
+    sfc_temperature = soil_T_air + del_Tk
+
     # soil.sfc_temperature = calculate_sfc_temp(product, met.T_air_K, att)
     # soil.T_Kelvin=soil.sfc_temperature
     # soil.T_soil_up_boundary=soil.sfc_temperature
@@ -217,16 +251,8 @@ def soil_energy_balance(
 
     # First order expansion of Ts - Ta gives:
     # dT = (Q -LE - Gsoil -  ep sigma Ta^4)/( rho Cp gh + 4 ep sigma Ta^3)
-    # del_Tk = (soil_Qin - soil.evap - soil.gsoil - soil.llout) / repeat
-    del_Tk = (soil_Qin - evap - gsoil - soil.llout) / repeat
-    # jax.debug.print("soil Qin: {a}", a=soil_Qin[10])
-    # jax.debug.print("soil evap: {a}", a=soil.evap[10])
-    # jax.debug.print("soil gsoil: {a}", a=soil.gsoil[10])
-    # jax.debug.print("soil llout: {a}", a=soil.llout[10])
-    # jax.debug.print("repeat: {a}", a=repeat[10])
-    # jax.debug.print("soil T: {a}", a=soil.T_soil[10,:])
-    sfc_temperature = soil_T_air + del_Tk
-    # soil.T_Kelvin=soil.sfc_temperature
+    # del_Tk = (soil_Qin - evap - gsoil - soil.llout) / repeat
+    # sfc_temperature = soil_T_air + del_Tk
     T_soil_up_boundary = sfc_temperature
     lout_sfc = prm.epsoil * prm.sigma * jnp.power(sfc_temperature, 4)
 
