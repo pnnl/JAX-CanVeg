@@ -18,6 +18,9 @@ import json
 # import pickle
 import logging
 
+import time
+from datetime import datetime
+
 from math import floor
 from pathlib import PosixPath
 from typing import Any, Optional, List, Callable
@@ -43,7 +46,7 @@ from .models import get_canveg_eqx_class, get_output_function
 from .models import CanvegBase, save_model
 
 
-def train_model(f_configs: PosixPath | str):
+def train_model(f_configs: PosixPath | str, save_log_local: bool = False):
     """Parse the configuration file and train the model
 
     Args:
@@ -54,6 +57,17 @@ def train_model(f_configs: PosixPath | str):
     f_configs = os.path.basename(f_configs)
     os.chdir(parent_directory)
 
+    if save_log_local:
+        ts = time.time()
+        time_label = datetime.fromtimestamp(ts).strftime("%Y-%m-%d-%H:%M:%S")
+        logging.basicConfig(
+            filename=f"train{time_label}.log",
+            # filename="train.log",
+            filemode="w",
+            datefmt="%H:%M:%S",
+            level=logging.INFO,
+            format="%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s",
+        )
     logging.info(
         f"Start training JAX-CanVeg with the configuration file {str(f_configs)} under {parent_directory}"  # noqa: E501
     )

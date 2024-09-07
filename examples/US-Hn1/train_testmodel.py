@@ -14,7 +14,7 @@ tune_jax_naninfs_for_debug(False)
 # process-based model
 ################################################################
 f_config = Path("./test-model/configs.json")
-train_model(f_config)
+train_model(f_config, save_log_local=True)  # pyright: ignore
 
 
 ################################################################
