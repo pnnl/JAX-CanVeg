@@ -9,6 +9,7 @@ Date: 2023.06.28.
 
 import jax
 import jax.numpy as jnp
+from jax.scipy.integrate import trapezoid
 
 from ...subjects import Para, SunAng, LeafAng, Lai
 from ...shared_utilities.types import Float_0D, Float_1D
@@ -241,7 +242,7 @@ def Gfunc_dir(theta_rad: Float_1D, theta_leaf: Float_1D, pdf: Float_1D) -> Float
     # )
 
     F = A * pdf  # (ntime, nclass)
-    Gfunc = jax.vmap(jnp.trapezoid, in_axes=[0, None])(F, theta_leaf)  # pyright: ignore
+    Gfunc = jax.vmap(trapezoid, in_axes=[0, None])(F, theta_leaf)  # pyright: ignore
     return Gfunc
 
 
@@ -298,9 +299,7 @@ def Gfunc_diff(thetaSky: Float_1D, thetaLeaf: Float_1D, pdf: Float_1D) -> Float_
     # )
 
     F = Adiff * pdf  # (ntime, nclass)
-    Gfunc_Sky = jax.vmap(jnp.trapezoid, in_axes=[0, None])(  # pyright: ignore
-        F, thetaLeaf
-    )
+    Gfunc_Sky = jax.vmap(trapezoid, in_axes=[0, None])(F, thetaLeaf)  # pyright: ignore
     return Gfunc_Sky
 
     # def calculate_each_GfuncSky(theta_sky_each):
