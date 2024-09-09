@@ -223,6 +223,15 @@ def perform_optimization_batch(
         loss_value_test = loss_value_test.mean()
         return loss_value_test
 
+    # Function for returning the training result
+    def get_trained_result(model, loss_set):
+        if batched_met_test is not None and batched_y_test is not None:
+            loss_set_train = [l_value[0] for l_value in loss_set]
+            loss_set_test = [l_value[1] for l_value in loss_set]
+            return model, loss_set_train, loss_set_test
+        else:
+            return model, loss_set
+
     loss_set = []
     # opt_state = optim.init(model)
     opt_state = optim.init(eqx.filter(model, eqx.is_array))
@@ -233,9 +242,21 @@ def perform_optimization_batch(
         check_arg(opt_state, "opt_state")
         check_arg(batched_met, "batched_met")
         # Update the model parameters
-        model_updated, opt_state, loss_value, grads = make_step(
-            model, filter_model_spec, batched_y, opt_state, batched_met, loss, *args
-        )
+        try:
+            model_updated, opt_state, loss_value, grads = make_step(
+                model, filter_model_spec, batched_y, opt_state, batched_met, loss, *args
+            )
+        except Exception as e:
+            # If there is error in the update, return the current model
+            # and report the error
+            logging.error('Fail to update the model with the following error \m: ' + str(e))
+            return get_trained_result(model, loss_set)
+            # if batched_met_test is not None and batched_y_test is not None:
+            #     loss_set_train = [l_value[0] for l_value in loss_set]
+            #     loss_set_test = [l_value[1] for l_value in loss_set]
+            #     return model, loss_set_train, loss_set_test
+            # else:
+            #     return model, loss_set
 
         # para_list = [
         #     "bprime", "ep", "lleaf", "qalpha", "LeafRHDL", "kball",
@@ -251,17 +272,37 @@ def perform_optimization_batch(
         #     print(getattr(model_updated.__self__.para, para))
         #     print("")
 
-        # Check NaN
-        if not jnp.isnan(loss_value):
-            model = model_updated
+        # Check NaN in loss_value
+        if jnp.isnan(loss_value):
+            logging.error(f"Encountered NaN in step {i}. Stop training.")
+            return get_trained_result(model, loss_set)
+            # if batched_met_test is not None and batched_y_test is not None:
+            #     loss_set_train = [l_value[0] for l_value in loss_set]
+            #     loss_set_test = [l_value[1] for l_value in loss_set]
+            #     return model, loss_set_train, loss_set_test
+            # else:
+            #     return model, loss_set
+
+        # Check the magnitude of loss value
+        # If the loss is way much larger than the previous loss, something wrong happens.
+        # Stop training and return the current model.
+        if batched_met_test is not None and batched_y_test is not None:
+            current_loss_set_train = [l_value[0] for l_value in loss_set]
         else:
-            logging.info(f"Encountered NaN in step {i}. Stop training.")
-            if batched_met_test is not None and batched_y_test is not None:
-                loss_set_train = [l_value[0] for l_value in loss_set]
-                loss_set_test = [l_value[1] for l_value in loss_set]
-                return model, loss_set_train, loss_set_test
-            else:
-                return model, loss_set
+            current_loss_set_train = loss_set
+        current_loss_set_train = jnp.array(current_loss_set_train)
+        if (loss_value / current_loss_set_train[-10:].mean()) > 1e3:
+            logging.warning(f"The current loss value {loss_value} is way larger than the previous ones. Stop training.")  # noqa: E501
+            return get_trained_result(model, loss_set)
+            # if batched_met_test is not None and batched_y_test is not None:
+            #     loss_set_train = [l_value[0] for l_value in loss_set]
+            #     loss_set_test = [l_value[1] for l_value in loss_set]
+            #     return model, loss_set_train, loss_set_test
+            # else:
+            #     return model, loss_set
+
+        # If the previous check go through, update the model.
+        model = model_updated
 
         # Check model parameters upper and lower bounds
         para = model.__self__.para  # pyright: ignore
@@ -279,23 +320,20 @@ def perform_optimization_batch(
                 model, batched_y_test, batched_met_test, loss, *args
             )
             loss_set.append([loss_value, loss_value_test])
-            # print(
-            #     f"The training loss of step {i}: {loss_value}; the test loss of step {i}: {loss_value_test}."  # noqa: E501
-            # )
             logging.info(
                 f"The training loss of step {i}: {loss_value}; the test loss of step {i}: {loss_value_test}."  # noqa: E501
             )
         else:
             loss_set.append(loss_value)
             logging.info(f"The loss of step {i}: {loss_value}")
-            # print(f"The loss of step {i}: {loss_value}")
 
-    if batched_met_test is not None and batched_y_test is not None:
-        loss_set_train = [l_value[0] for l_value in loss_set]
-        loss_set_test = [l_value[1] for l_value in loss_set]
-        return model, loss_set_train, loss_set_test
-    else:
-        return model, loss_set
+    return get_trained_result(model, loss_set)
+    # if batched_met_test is not None and batched_y_test is not None:
+    #     loss_set_train = [l_value[0] for l_value in loss_set]
+    #     loss_set_test = [l_value[1] for l_value in loss_set]
+    #     return model, loss_set_train, loss_set_test
+    # else:
+    #     return model, loss_set
 
 
 @eqx.filter_jit

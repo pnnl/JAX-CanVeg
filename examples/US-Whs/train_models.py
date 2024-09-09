@@ -20,7 +20,7 @@ tune_jax_naninfs_for_debug(False)
 ts = time.time()
 time_label = datetime.fromtimestamp(ts).strftime("%Y-%m-%d-%H:%M:%S")
 logging.basicConfig(
-    filename=f"train{time_label}.log",
+    filename=f"train-Whs-{time_label}.log",
     filemode="w",
     datefmt="%H:%M:%S",
     level=logging.INFO,
@@ -33,7 +33,7 @@ dir_mother = Path(os.path.dirname(os.path.realpath(__file__)))
 ################################################################
 # General configuration
 ################################################################
-f_configs_template = Path("./test-model/configs.json")
+f_configs_template = dir_mother / "./test-model/configs.json"
 model_configs = {
     "time zone": -7,
     "latitude": 31.7438,
@@ -42,6 +42,7 @@ model_configs = {
     "leaf angle type": 4,
     "canopy height": 1.0,
     "measurement height": 6.5,
+    "soil respiration module": 1,
 }
 learning_config = {
     "batch size": 1024,
@@ -65,7 +66,7 @@ data_config = {
 canopy_layers = ["1L", "ML"]
 model_types = ["PB", "Hybrid"]
 # multi_optim_le_weight = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
-multi_optim_le_weight = [0.0, 0.1, 1.0]
+multi_optim_le_weight = [0.0, 0.5, 1.0]
 canopy_layers_config = {
     "1L": {
         "number of canopy layers": 1,

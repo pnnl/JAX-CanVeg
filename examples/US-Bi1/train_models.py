@@ -26,7 +26,7 @@ tune_jax_naninfs_for_debug(False)
 ts = time.time()
 time_label = datetime.fromtimestamp(ts).strftime("%Y-%m-%d-%H:%M:%S")
 logging.basicConfig(
-    filename=f"train{time_label}.log",
+    filename=f"train-Bi1-{time_label}.log",
     filemode="w",
     datefmt="%H:%M:%S",
     level=logging.INFO,
@@ -39,7 +39,7 @@ dir_mother = Path(os.path.dirname(os.path.realpath(__file__)))
 ################################################################
 # General configuration
 ################################################################
-f_configs_template = Path("./test-model/configs.json")
+f_configs_template = dir_mother / "./test-model/configs.json"
 model_configs = {
     "time zone": -8,
     "latitude": 38.0991538,
@@ -48,6 +48,7 @@ model_configs = {
     "leaf angle type": 0,
     "canopy height": 0.8,
     "measurement height": 5.0,
+    "soil respiration module": 1,
 }
 learning_config = {
     "batch size": 1024,
@@ -71,7 +72,7 @@ data_config = {
 canopy_layers = ["1L", "ML"]
 model_types = ["PB", "Hybrid"]
 # multi_optim_le_weight = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
-multi_optim_le_weight = [0.0, 0.1, 1.0]
+multi_optim_le_weight = [0.0, 0.5, 1.0]
 canopy_layers_config = {
     "1L": {
         "number of canopy layers": 1,
@@ -110,6 +111,9 @@ for cl in canopy_layers:
 
             # Step 1: Case folder name
             dir_name = dir_mother / f"{mt}-{cl}-{mow}"
+            # TODO: remove the following conditioning check
+            if f"{mt}-{cl}-{mow}" == 'PB-1L-0.8':
+                continue
             f_configs = dir_name / "configs.json"
             logging.info("")
             logging.info(f"The model: {f_configs}.")

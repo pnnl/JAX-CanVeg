@@ -1,6 +1,6 @@
 """Train the models."""
 
-# import os
+import os
 import jax
 from pathlib import Path
 from jax_canveg import train_model
@@ -11,27 +11,8 @@ jax.config.update("jax_traceback_filtering", "off")
 tune_jax_naninfs_for_debug(False)
 
 ################################################################
-# process-based model
+# Run the model
 ################################################################
-f_config = Path("./test-model/configs.json")
-train_model(f_config)
-
-
-################################################################
-# Hybrid model 1
-################################################################
-
-
-################################################################
-# Hybrid model 2
-################################################################
-
-
-################################################################
-# Hybrid model 3
-################################################################
-
-
-################################################################
-# Pure deep learning model
-################################################################
+dir_mother = Path(os.path.dirname(os.path.realpath(__file__)))
+f_config = dir_mother / "./test-model/configs.json"
+train_model(f_config, save_log_local=True)  # pyright: ignore

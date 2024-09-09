@@ -8,7 +8,7 @@
         "stomata type": 1,
         "leaf angle type": 1,
         "leaf relative humidity module": 1,
-        "soil respiration module": 0,
+        "soil respiration module": 1,
         "canopy height": 0.8,
         "measurement height": 5.0,
         "soil depth": 0.15,
