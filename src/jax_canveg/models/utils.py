@@ -18,8 +18,6 @@ def save_model(filename: str, hyperparams: Dict, model: CanvegBase) -> None:
 
 
 # Function for loading a model
-# def load_model(filename: str, modelclass: CanvegBase) -> CanvegBase:
-# def load_model(filename: str, modelclass: CanvegBase.__class__) -> CanvegBase:
 def load_model(filename: str, modelclass) -> CanvegBase:
     def initialize_empty_met_obs():
         met_zeros = [jnp.zeros(5)] * 15

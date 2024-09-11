@@ -46,8 +46,8 @@ model_configs = {
 }
 learning_config = {
     "batch size": 1024,
-    # "number of epochs": 300,
-    "number of epochs": 2,
+    "number of epochs": 300,
+    # "number of epochs": 2,
     "output scaler": "standard",
 }
 data_config = {
@@ -65,8 +65,8 @@ data_config = {
 ################################################################
 canopy_layers = ["1L", "ML"]
 model_types = ["PB", "Hybrid"]
-# multi_optim_le_weight = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
-multi_optim_le_weight = [0.0, 0.5, 1.0]
+multi_optim_le_weight = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+# multi_optim_le_weight = [0.0, 0.5, 1.0]
 canopy_layers_config = {
     "1L": {
         "number of canopy layers": 1,

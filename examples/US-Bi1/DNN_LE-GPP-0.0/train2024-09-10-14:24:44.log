@@ -1,0 +1,10 @@
+14:24:44,712 root INFO Start training a DNN model ...
+14:24:50,529 root INFO The training loss of step 0: 0.20532216131687164; the test loss of step 0: 0.24506746232509613.
+14:24:53,237 root INFO The training loss of step 1: 0.20335742831230164; the test loss of step 1: 0.24300897121429443.
+14:24:55,889 root INFO The training loss of step 2: 0.20134510099887848; the test loss of step 2: 0.24132922291755676.
+14:24:58,630 root INFO The training loss of step 3: 0.19932471215724945; the test loss of step 3: 0.240137979388237.
+14:25:01,371 root INFO The training loss of step 4: 0.19731898605823517; the test loss of step 4: 0.23922641575336456.
+14:25:03,940 root INFO The training loss of step 5: 0.1953066736459732; the test loss of step 5: 0.23841723799705505.
+14:25:06,30 root INFO The training loss of step 6: 0.19336768984794617; the test loss of step 6: 0.2364128679037094.
+14:25:08,745 root INFO The training loss of step 7: 0.19138996303081512; the test loss of step 7: 0.2360701560974121.
+14:25:11,481 root INFO The training loss of step 8: 0.1895161271095276; the test loss of step 8: 0.23426437377929688.

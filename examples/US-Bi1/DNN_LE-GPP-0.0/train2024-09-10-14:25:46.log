@@ -1,0 +1,42 @@
+14:25:46,276 root INFO Start training a DNN model ...
+14:25:52,2 root INFO The training loss of step 0: 0.23735864460468292; the test loss of step 0: 0.2580648362636566.
+14:25:54,613 root INFO The training loss of step 1: 0.2333010733127594; the test loss of step 1: 0.25532975792884827.
+14:25:57,110 root INFO The training loss of step 2: 0.22950273752212524; the test loss of step 2: 0.25331002473831177.
+14:25:59,792 root INFO The training loss of step 3: 0.22574195265769958; the test loss of step 3: 0.25060367584228516.
+14:26:02,526 root INFO The training loss of step 4: 0.22218655049800873; the test loss of step 4: 0.24926456809043884.
+14:26:05,266 root INFO The training loss of step 5: 0.21867480874061584; the test loss of step 5: 0.2461671084165573.
+14:26:08,6 root INFO The training loss of step 6: 0.2153773307800293; the test loss of step 6: 0.24316877126693726.
+14:26:10,747 root INFO The training loss of step 7: 0.2121574729681015; the test loss of step 7: 0.2416277676820755.
+14:26:13,489 root INFO The training loss of step 8: 0.20913858711719513; the test loss of step 8: 0.23860879242420197.
+14:26:16,227 root INFO The training loss of step 9: 0.206246480345726; the test loss of step 9: 0.23723235726356506.
+14:26:17,18 root INFO Saving the loss values ...
+14:26:17,273 root INFO Saving the predictions ...
+14:26:17,408 root INFO Saving the trained model ...
+14:26:17,413 root INFO Start training a DNN model ...
+14:26:21,73 root INFO The training loss of step 0: 0.20036673545837402; the test loss of step 0: 0.22263163328170776.
+14:26:23,242 root INFO The training loss of step 1: 0.19753757119178772; the test loss of step 1: 0.22460715472698212.
+14:26:24,647 root INFO The training loss of step 2: 0.19483691453933716; the test loss of step 2: 0.22316384315490723.
+14:26:26,541 root INFO The training loss of step 3: 0.19233539700508118; the test loss of step 3: 0.22044101357460022.
+14:26:29,253 root INFO The training loss of step 4: 0.18988379836082458; the test loss of step 4: 0.2218337208032608.
+14:26:31,987 root INFO The training loss of step 5: 0.18754205107688904; the test loss of step 5: 0.2190161794424057.
+14:26:34,710 root INFO The training loss of step 6: 0.18537436425685883; the test loss of step 6: 0.21745313704013824.
+14:26:37,448 root INFO The training loss of step 7: 0.18325728178024292; the test loss of step 7: 0.21780596673488617.
+14:26:40,188 root INFO The training loss of step 8: 0.18119597434997559; the test loss of step 8: 0.21648994088172913.
+14:26:42,925 root INFO The training loss of step 9: 0.1792069673538208; the test loss of step 9: 0.21388094127178192.
+14:26:42,945 root INFO Saving the loss values ...
+14:26:42,953 root INFO Saving the predictions ...
+14:26:43,82 root INFO Saving the trained model ...
+14:26:43,86 root INFO Start training a DNN model ...
+14:26:46,710 root INFO The training loss of step 0: 0.13547678291797638; the test loss of step 0: 0.16192588210105896.
+14:26:49,457 root INFO The training loss of step 1: 0.13389286398887634; the test loss of step 1: 0.16121017932891846.
+14:26:52,199 root INFO The training loss of step 2: 0.13250839710235596; the test loss of step 2: 0.15947726368904114.
+14:26:54,945 root INFO The training loss of step 3: 0.13100744783878326; the test loss of step 3: 0.15886308252811432.
+14:26:57,689 root INFO The training loss of step 4: 0.12974131107330322; the test loss of step 4: 0.15806184709072113.
+14:27:00,372 root INFO The training loss of step 5: 0.12843620777130127; the test loss of step 5: 0.15828154981136322.
+14:27:03,97 root INFO The training loss of step 6: 0.12723460793495178; the test loss of step 6: 0.15708205103874207.
+14:27:05,804 root INFO The training loss of step 7: 0.12605534493923187; the test loss of step 7: 0.15497824549674988.
+14:27:08,515 root INFO The training loss of step 8: 0.12477177381515503; the test loss of step 8: 0.15441469848155975.
+14:27:11,204 root INFO The training loss of step 9: 0.123491071164608; the test loss of step 9: 0.15356497466564178.
+14:27:11,227 root INFO Saving the loss values ...
+14:27:11,236 root INFO Saving the predictions ...
+14:27:11,363 root INFO Saving the trained model ...

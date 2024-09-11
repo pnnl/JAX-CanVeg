@@ -21,7 +21,7 @@ Jiang, P. et al., (2024). JAX-CanVeg: A Differentiable Land Surface Model. Water
 - `environment.yml`: the YAML file for creating the conda virtual environment (see Step 1 in the Installation section).
 - `README.md`: the readme file.
 
-## Installation
+## (TODO) Installation
 1. Create the conda virtual environment:
 ```
 conda env create -f environment.yml
@@ -68,6 +68,10 @@ c++ -O3 -Wall -shared -std=c++11 -ftemplate-depth=2048 -undefined dynamic_lookup
 6. Add the path of the source code [src](./src) into the environment variable `PYTHONPATH`.
 
 
+## (TODO) Running JAX-CanVeg using a configuration file
+Need a separate post for documenting the JSON format configuration file.
+
+
 ## Examples
 We provides the codes/notebooks for reproducing the two examples shown in the Jiang et al. (2024) under the folder `examples`. We applied the differentiable JAX-CanVeg at US-Hn1 and US-Bi1 flux tower sites to evaluate the performance of a hybrid version of the Ball-Berry equation. The model were trained against the observed latent heat fluxes. Below we illustrate the application example on [US-Hn1](./examples/US-Hn1) (which is applicable to [US-Bi1](./examples/US-Bi1)).
 
@@ -88,17 +92,9 @@ unzip US-Hn1.csv.zip
 - Step 5: Train the pure DNN model (using [dnn_US-Hn1.ipynb](./examples/US-Hn1/dnn_US-Hn1.ipynb))
 - Step 6: Postprocess the modeling results (using [postprocess.ipynb](./examples/US-Hn1/postprocess.ipynb))
 
-We performed computation time benchmark by running both JAX-CanVeg and [CanVeg-matlabl] --(https://github.com/baldocchi/CanVeg)
-- Run [examples/US-Hn1/calculate_execution_time.ipynb](./examples/US-Hn1/calculate_execution_time.ipynb) to calculate the computation time of the US-Hn1 example
-- Run [examples/US-Bi1/calculate_execution_time.ipynb](./examples/US-Bi1/calculate_execution_time.ipynb) to calculate the computation time of the US-Bi1 example
-- Run [CanVeg-matlab](https://github.com/baldocchi/CanVeg) as follows:
-    - Download [CanVeg-matlab](https://github.com/baldocchi/CanVeg)
-    - Copy the matlab file [Canveg_pj.m](./examples/Canveg_pj.m) to [CanVeg-matlab](https://github.com/baldocchi/CanVeg)
-    - Copy the Dij files [Dij_US-Bi1.csv](./data/dij/Dij_US-Bi1.csv) and [Dij_US-Hn1.csv](./data/dij/Dij_US-Hn1.csv) to [CanVeg-matlab](https://github.com/baldocchi/CanVeg)
-    - Copy the forcing files [US-Bi1-forcings.csv](./data/fluxtower/US-Bi1/US-Bi1-forcings.csv) and [US-Hn1-forcings-v2.csv](./data/fluxtower/US-Hn1/US-Hn1-forcings-v2.csv) to [CanVeg-matlab](https://github.com/baldocchi/CanVeg)
-    - Run [Canveg_pj.m](./examples/Canveg_pj.m) and the computation time will be printed to the screen
-    - Rerun [Canveg_pj.m](./examples/Canveg_pj.m) on another site by changing the variable `Site` to `US-Hn1` or `US-Bi1` in the file (Line 95)
-- Plot the executation time using [examples/plot_time_difference.ipynb](./examples/plot_time_difference.ipynb)
+
+## Benchmark the computational time of JAX-CanVeg against the legacy CanVeg
+See this [post](./COMPUTE_TIME_BENCHMARK.md) for details.
 
 ## License
 See LICENSE for more information.

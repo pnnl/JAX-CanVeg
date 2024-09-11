@@ -7,16 +7,16 @@
         "longitude": -121.49933,
         "stomata type": 1,
         "leaf angle type": 1,
-        "leaf relative humidity module": 1,
+        "leaf relative humidity module": 0,
         "soil respiration module": 1,
         "canopy height": 0.8,
         "measurement height": 5.0,
         "soil depth": 0.15,
-        "number of canopy layers": 50,
+        "number of canopy layers": 1,
         "number of atmospheric layers": 50,
         "number of observed steps per day": 48,
         "number of solver iterations": 15,
-        "dispersion matrix": "../../../data/dij/Dij_US-Bi1.csv",
+        "dispersion matrix": "../../../data/dij/Dij_US-Bi1_1L.csv",
         "model parameters": null,
         "model type": null
     },
@@ -30,12 +30,12 @@
 
     "learning configurations": {
         "batch size": 1000,
-        "number of epochs": 5,
+        "number of epochs": 300,
         "output function": "canopy LE NEE",
         "output scaler": "standard",
         "loss function": {
             "type": "MSE",
-            "weights": [1.0, 0.0]
+            "weights": [0.5, 0.5]
         },
         "tunable parameters": [
             "bprime", "ep", "lleaf", "qalpha", "LeafRHDL", "kball", "leaf_clumping_factor", 
