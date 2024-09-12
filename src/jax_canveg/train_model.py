@@ -44,7 +44,7 @@ from .shared_utilities.scaler import standardizer_1d, standardizer_nd
 from .shared_utilities.scaler import minmax_1d, minmax_nd
 from .models import get_canveg_eqx_class, get_output_function
 from .models import CanvegBase, CanvegIFT
-from .models import load_model_check as load_eqx_model  # pyright: ignore
+from .models import load_model_check as load_eqx_model
 from .models import save_model as save_eqx_model
 
 

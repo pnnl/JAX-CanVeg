@@ -50,8 +50,8 @@ def soil_respiration_q10_power(
     Tsoil_C = Tsoil - 273.15
     temp1 = a * jnp.power(b, (Tsoil_C - 10.0) / 10.0)
     temp2 = jnp.power(soilmoisture, c)
-
-    return temp1 * temp2
+    resp = temp1 * temp2
+    return resp
 
 
 def soil_respiration_alfalfa(

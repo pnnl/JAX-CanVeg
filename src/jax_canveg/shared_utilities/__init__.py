@@ -4,6 +4,7 @@ from .utils import (
     compute_metrics,  # noqa: F401
     tune_jax_naninfs_for_debug,  # noqa: F401
 )
+from .plot import get_time  # noqa: F401
 
 # from .plot import (
 #     plot_rad,  # noqa: F401
