@@ -43,7 +43,9 @@ from .shared_utilities.scaler import identity_scaler
 from .shared_utilities.scaler import standardizer_1d, standardizer_nd
 from .shared_utilities.scaler import minmax_1d, minmax_nd
 from .models import get_canveg_eqx_class, get_output_function
-from .models import CanvegBase, save_model
+from .models import CanvegBase, CanvegIFT
+from .models import load_model_check as load_eqx_model  # pyright: ignore
+from .models import save_model as save_eqx_model
 
 
 def train_model(f_configs: PosixPath | str, save_log_local: bool = False):
@@ -137,7 +139,46 @@ def train_model(f_configs: PosixPath | str, save_log_local: bool = False):
     f_model = check_and_get_keyword(
         save_configs, "new model", "saving", True, "./new_model.eqx"
     )
-    save_model(f_model, hyperparams, model_new)
+    save_eqx_model(f_model, hyperparams, model_new)
+
+
+def load_model(f_configs: PosixPath):
+    """Load the trained model, forcings, and observations.
+
+    Args:
+        f_configs (PosixPath | str): the configuration file in JSON format
+    """
+    # Go to the folder where the configuration resides
+    parent_directory = os.path.dirname(f_configs)
+    f_configs = os.path.basename(f_configs)  # pyright: ignore
+    os.chdir(parent_directory)
+
+    # Read the configuration file
+    with open(f_configs, "r") as f:
+        configs = json.load(f)
+
+    # Load the model
+    save_configs = check_and_get_keyword(
+        configs, "saving configurations", "saving", True, {}
+    )
+    model_configs = configs["model configurations"]
+    f_model = check_and_get_keyword(
+        save_configs, "new model", "saving", True, "./new_model.eqx"
+    )
+    model = load_eqx_model(f_model, CanvegIFT, model_configs)
+
+    # Load the forcings and the observations
+    data_configs = configs["data"]
+    (
+        met_train,
+        obs_train,
+        _,
+        met_test,
+        obs_test,
+        _,
+    ) = get_forcing_flux(data_configs)
+
+    return model, met_train, met_test, obs_train, obs_test
 
 
 ################### A few utility functions go here ###################
@@ -293,6 +334,8 @@ def get_model(model_configs: dict, met: Met, obs: Obs, n_time: int):
         latitude=latitude,
         longitude=longitude,
         stomata=stomata,
+        leafrh=leafrh,
+        soilresp=soilresp,
         veg_ht=veg_ht,
         leafangle=leafangle,
         n_can_layers=n_can_layers,

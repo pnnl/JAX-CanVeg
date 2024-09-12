@@ -1,4 +1,5 @@
 from .train_model import train_model  # noqa: F401
+from .train_model import load_model  # noqa: F401
 
 # import logging
 # logging.basicConfig(level=logging.INFO,
