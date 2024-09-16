@@ -12,11 +12,11 @@
         "canopy height": 0.8,
         "measurement height": 5.0,
         "soil depth": 0.15,
-        "number of canopy layers": 1,
+        "number of canopy layers": 50,
         "number of atmospheric layers": 50,
         "number of observed steps per day": 48,
         "number of solver iterations": 15,
-        "dispersion matrix": "../../../data/dij/Dij_US-Bi1_1L.csv",
+        "dispersion matrix": "../../../data/dij/Dij_US-Bi1_50L.csv",
         "model parameters": null,
         "model type": null
     },
@@ -30,7 +30,7 @@
 
     "learning configurations": {
         "batch size": 1000,
-        "number of epochs": 300,
+        "number of epochs": 3,
         "output function": "canopy LE NEE",
         "output scaler": "standard",
         "loss function": {

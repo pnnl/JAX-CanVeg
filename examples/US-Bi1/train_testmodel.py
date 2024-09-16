@@ -14,6 +14,6 @@ tune_jax_naninfs_for_debug(False)
 # Run the model
 ################################################################
 dir_mother = Path(os.path.dirname(os.path.realpath(__file__)))
-# f_config = dir_mother / "./test-model/configs.json"
-f_config = dir_mother / "./PB-1L-0.8/configs.json"
+f_config = dir_mother / "./test-model/configs.json"
+# f_config = dir_mother / "./PB-1L-0.8/configs.json"
 train_model(f_config, save_log_local=True)  # pyright: ignore
