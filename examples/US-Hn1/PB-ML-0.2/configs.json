@@ -1,0 +1,84 @@
+{
+    "site name": "US-Hn1",
+    "model configurations": {
+        "time zone": -8,
+        "latitude": 46.4089,
+        "longitude": -119.275,
+        "stomata type": 0,
+        "leaf angle type": 4,
+        "leaf relative humidity module": 0,
+        "soil respiration module": 1,
+        "canopy height": 1.2,
+        "measurement height": 5.0,
+        "soil depth": 0.15,
+        "number of canopy layers": 50,
+        "number of atmospheric layers": 50,
+        "number of observed steps per day": 48,
+        "number of solver iterations": 15,
+        "dispersion matrix": "../../../data/dij/Dij_US-Hn1_50L.csv",
+        "model parameters": null,
+        "model type": null
+    },
+    "data": {
+        "training forcings": "../../../data/fluxtower/US-Hn1/US-Hn1-forcings.csv",
+        "training fluxes": "../../../data/fluxtower/US-Hn1/US-Hn1-fluxes-nonegle.csv",
+        "test forcings": "../../../data/fluxtower/US-Hn1/US-Hn1-forcings-test.csv",
+        "test fluxes": "../../../data/fluxtower/US-Hn1/US-Hn1-fluxes-nonegle-test.csv"
+    },
+    "learning configurations": {
+        "batch size": 1024,
+        "number of epochs": 300,
+        "output function": "canopy LE NEE",
+        "output scaler": "standard",
+        "loss function": {
+            "type": "MSE",
+            "weights": [
+                0.2,
+                0.8
+            ]
+        },
+        "tunable parameters": [
+            "bprime",
+            "ep",
+            "lleaf",
+            "qalpha",
+            "LeafRHDL",
+            "kball",
+            "leaf_clumping_factor",
+            "vcopt",
+            "jmopt",
+            "rd25",
+            "toptvc",
+            "toptjm",
+            "epsoil",
+            "par_reflect",
+            "par_trans",
+            "par_soil_refl",
+            "nir_reflect",
+            "nir_trans",
+            "nir_soil_refl",
+            "q10a",
+            "q10b",
+            "q10c"
+        ],
+        "optimizer": {
+            "type": "Adam",
+            "learning_scheduler": {
+                "type": "piecewise constant",
+                "args": {
+                    "init_value": 0.01,
+                    "boundaries_and_scales": {
+                        "50": 0.5,
+                        "100": 0.5,
+                        "200": 0.5
+                    }
+                }
+            },
+            "args": {}
+        }
+    },
+    "saving configurations": {
+        "new model": "./US-Hn1_model.eqx",
+        "loss values": "./US-Hn1_loss.csv"
+    }
+}

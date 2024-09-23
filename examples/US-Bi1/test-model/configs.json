@@ -30,7 +30,7 @@
 
     "learning configurations": {
         "batch size": 1000,
-        "number of epochs": 3,
+        "number of epochs": 0,
         "output function": "canopy LE NEE",
         "output scaler": "standard",
         "loss function": {
