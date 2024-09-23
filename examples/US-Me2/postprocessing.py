@@ -7,10 +7,15 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+import jax
+import jax.numpy as jnp
+import jax.tree_util as jtu
 from jax_canveg import load_model
 from jax_canveg.shared_utilities import compute_metrics, get_time
 
 from tqdm import tqdm  # pyright: ignore
+
+jax.config.update("jax_enable_x64", True)
 
 # Current directory
 dir_mother = Path(os.path.dirname(os.path.realpath(__file__)))
@@ -48,6 +53,21 @@ for cl, mt, mow in tqdm(combinations):
     can_train, can_test = states_train[-1], states_test[-1]
     veg_train, veg_test = states_train[-2], states_test[-2]
     soil_train, soil_test = states_train[-3], states_test[-3]
+
+    # Step 3-a: Remove some large numbers due to the numerical instability
+    @jnp.vectorize
+    def convert_instability_to_nan(d_e):
+        return jax.lax.cond(
+            jnp.abs(d_e) > 10000,
+            lambda: jnp.nan,
+            lambda: d_e,
+        )
+    can_train = jtu.tree_map(convert_instability_to_nan, can_train)
+    can_test = jtu.tree_map(convert_instability_to_nan, can_test)
+    veg_train = jtu.tree_map(convert_instability_to_nan, veg_train)
+    veg_test = jtu.tree_map(convert_instability_to_nan, veg_test)
+    soil_train = jtu.tree_map(convert_instability_to_nan, soil_train)
+    soil_test = jtu.tree_map(convert_instability_to_nan, soil_test)
 
     # Step 4: Assemble key simulations
     sim_train = np.array(
@@ -121,7 +141,7 @@ for cl, mt, mow in tqdm(combinations):
     metric_values = []
     for pred, true in value_pairs:
         # print(pred.mean(), true.mean())
-        metrics = compute_metrics(pred, true, mask_nan=True)
+        metrics = compute_metrics(pred, true, mask_naninf=True)
         metric_values.append(list(metrics.values()))
         metric_keys = list(metrics.keys())
     metric_values = np.array(metric_values)
@@ -172,7 +192,7 @@ for w in tqdm(w_set):
     ]
     metric_values = []
     for pred, true in value_pairs:
-        metrics = compute_metrics(pred, true, mask_nan=True)
+        metrics = compute_metrics(pred, true, mask_naninf=True)
         metric_values.append(list(metrics.values()))
         metric_keys = list(metrics.keys())
     metric_values = np.array(metric_values)

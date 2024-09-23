@@ -37,9 +37,9 @@ class Setup(eqx.Module):
     stomata: int  # amphistomatous = 1; hypostomatous = 0
     # hypo_amphi: int  # hypostomatous, 1, amphistomatous, 2
     # Leaf angle distributions
-    # planophile - 0, spherical - 1, erectophile - 3,
-    # plagiophile - 4, extremophile - 5, uniform - 6
     leafangle: int
+    # planophile - 0, spherical - 1, erectophile - 2,
+    # plagiophile - 3, extremophile - 4, uniform - 5
     # Leaf relative humidity module
     # 0 - calculate_leaf_rh_physics()
     # 1 - calculate_leaf_rh_nn()

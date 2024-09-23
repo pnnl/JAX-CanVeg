@@ -95,7 +95,7 @@ def filter_array(
 def compute_metrics(
     pred: Array,
     true: Array,
-    mask_nan: bool = False,
+    mask_naninf: bool = False,
 ):
     """
     Computing a bunch of evaluation metrics
@@ -103,10 +103,10 @@ def compute_metrics(
     pred, true = np.array(pred), np.array(true)  # pyright: ignore
     assert pred.shape == true.shape
 
-    if mask_nan:
-        mask = np.isnan(pred)
-        pred = pred[~mask]
-        true = true[~mask]
+    if mask_naninf:
+        mask = np.isfinite(pred)
+        pred = pred[mask]
+        true = true[mask]
 
     # Relative square error
     def func_rse(pred, true):
@@ -125,6 +125,11 @@ def compute_metrics(
     alpha = mkge_all[3]
     nse = he.evaluator(he.nse, pred, true)[0]
     r2 = r2_score(pred, true)
+    # try:
+    # except:
+    #     print(pred.mean(), pred.max(), pred.min(), np.isnan(true).sum())
+    #     print(true.mean(), true.max(), true.min(), np.isnan(true).sum())
+    #     raise Exception("Wrong.")
     return {
         "rse": rse,
         "mare": mare,

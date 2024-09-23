@@ -7,10 +7,15 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+import jax
+import jax.numpy as jnp
+import jax.tree_util as jtu
 from jax_canveg import load_model
 from jax_canveg.shared_utilities import compute_metrics, get_time
 
 from tqdm import tqdm  # pyright: ignore
+
+jax.config.update("jax_enable_x64", True)
 
 # Current directory
 dir_mother = Path(os.path.dirname(os.path.realpath(__file__)))
@@ -37,6 +42,9 @@ for cl, mt, mow in tqdm(combinations):
         continue
     else:
         print(f"Processing the case: {dir_case} ...")
+    
+    # if f"{mt}-{cl}-{mow}" != 'PB-1L-0.3':
+    #     continue
 
     # Step 2: Load the model, forcings, and observations
     model, met_train, met_test, obs_train, obs_test = load_model(f_configs)
@@ -49,14 +57,42 @@ for cl, mt, mow in tqdm(combinations):
     veg_train, veg_test = states_train[-2], states_test[-2]
     soil_train, soil_test = states_train[-3], states_test[-3]
 
+    # Step 3-a: Remove some large numbers due to the numerical instability
+    # def convert_instability_to_nan(d):
+    #     d.at[d>10000.].set(jnp.nan)
+    #     d.at[d<-10000.].set(jnp.nan)
+    #     return d
+    @jnp.vectorize
+    def convert_instability_to_nan(d_e):
+        return jax.lax.cond(
+            jnp.abs(d_e) > 10000,
+            lambda: jnp.nan,
+            lambda: d_e,
+        )
+        # d.at[d>10000.].set(jnp.nan)
+        # d.at[d<-10000.].set(jnp.nan)
+        # return d
+    can_train = jtu.tree_map(convert_instability_to_nan, can_train)
+    can_test = jtu.tree_map(convert_instability_to_nan, can_test)
+    veg_train = jtu.tree_map(convert_instability_to_nan, veg_train)
+    veg_test = jtu.tree_map(convert_instability_to_nan, veg_test)
+    soil_train = jtu.tree_map(convert_instability_to_nan, soil_train)
+    soil_test = jtu.tree_map(convert_instability_to_nan, soil_test)
+
     # Step 4: Assemble key simulations
     sim_train = np.array(
         [
             met_train.soilmoisture,
             obs_train.LE,
             obs_train.Fco2,
+            obs_train.H,
+            obs_train.rnet,
+            obs_train.gsoil,
             can_train.LE,
             can_train.NEE,
+            can_train.H,
+            can_train.rnet,
+            can_train.gsoil,
             veg_train.gs,
             veg_train.Tsfc,
             veg_train.Ps,
@@ -69,8 +105,14 @@ for cl, mt, mow in tqdm(combinations):
             met_test.soilmoisture,
             obs_test.LE,
             obs_test.Fco2,
+            obs_test.H,
+            obs_test.rnet,
+            obs_test.gsoil,
             can_test.LE,
             can_test.NEE,
+            can_test.H,
+            can_test.rnet,
+            can_test.gsoil,
             veg_test.gs,
             veg_test.Tsfc,
             veg_test.Ps,
@@ -85,8 +127,14 @@ for cl, mt, mow in tqdm(combinations):
             "SWC-obs",
             "LE-obs",
             "NEE-obs",
+            "H-obs",
+            "Rn-obs",
+            "G-obs",
             "LE",
             "NEE",
+            "H",
+            "Rn",
+            "G",
             "gs",
             "Tsfc",
             "Ps",
@@ -101,8 +149,14 @@ for cl, mt, mow in tqdm(combinations):
             "SWC-obs",
             "LE-obs",
             "NEE-obs",
+            "H-obs",
+            "Rn-obs",
+            "G-obs",
             "LE",
             "NEE",
+            "H",
+            "Rn",
+            "G",
             "gs",
             "Tsfc",
             "Ps",
@@ -117,16 +171,25 @@ for cl, mt, mow in tqdm(combinations):
         [can_test.LE, obs_test.LE],
         [can_train.NEE, obs_train.Fco2],
         [can_test.NEE, obs_test.Fco2],
+        [can_train.H, obs_train.H],
+        [can_test.H, obs_test.H],
+        [can_train.rnet, obs_train.rnet],
+        [can_test.rnet, obs_test.rnet],
+        [can_train.gsoil, obs_train.gsoil],
+        [can_test.gsoil, obs_test.gsoil],
     ]
     metric_values = []
     for pred, true in value_pairs:
         # print(pred.mean(), true.mean())
-        metrics = compute_metrics(pred, true, mask_nan=True)
+        metrics = compute_metrics(pred, true, mask_naninf=True)
         metric_values.append(list(metrics.values()))
         metric_keys = list(metrics.keys())
     metric_values = np.array(metric_values)
     metric_df = pd.DataFrame(metric_values, columns=metric_keys)  # pyright: ignore
-    metric_df.index = ["LE-train", "LE-test", "NEE-train", "NEE-test"]
+    metric_df.index = [
+        "LE-train", "LE-test", "NEE-train", "NEE-test", "H-train", "H-test",
+        "Rn-train", "Rn-test", "G-train", "G-test"
+    ]
 
     # Step 6: Save the metrics and simulations
     f_metrics = dir_case / "metrics.csv"
@@ -172,7 +235,7 @@ for w in tqdm(w_set):
     ]
     metric_values = []
     for pred, true in value_pairs:
-        metrics = compute_metrics(pred, true, mask_nan=True)
+        metrics = compute_metrics(pred, true, mask_naninf=True)
         metric_values.append(list(metrics.values()))
         metric_keys = list(metrics.keys())
     metric_values = np.array(metric_values)

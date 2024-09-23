@@ -12,13 +12,13 @@ import jax.numpy as jnp
 from jaxtyping import Array
 
 
-# Define a mean square error function
+# Define a mean squared error function
 def mse(y: Array, pred_y: Array):
     """Function for calculating mean square error function"""
     return jnp.mean((y - pred_y) ** 2)
 
 
-# Define a relative mean square error function
+# Define a relative mean squared error function
 def relative_mse(y: Array, pred_y: Array):
     """Function for calculating relative square error function"""
     y_std = y.std()
