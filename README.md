@@ -68,9 +68,8 @@ c++ -O3 -Wall -shared -std=c++11 -ftemplate-depth=2048 -undefined dynamic_lookup
 6. Add the path of the source code [src](./src) into the environment variable `PYTHONPATH`.
 
 
-## (TODO) Running JAX-CanVeg using a configuration file
-Need a separate post for documenting the JSON format configuration file.
-
+## (TODO) Running JAX-CanVeg using a JSON-based configuration file
+We suggest running JAX-CanVeg by providing a JSON-based configuration file. See this [post](./MODEL_CONFIGURE.md) for details.
 
 ## Examples
 We provides the codes/notebooks for reproducing the two examples shown in the Jiang et al. (2024) under the folder `examples`. We applied the differentiable JAX-CanVeg at US-Hn1 and US-Bi1 flux tower sites to evaluate the performance of a hybrid version of the Ball-Berry equation. The model were trained against the observed latent heat fluxes. Below we illustrate the application example on [US-Hn1](./examples/US-Hn1) (which is applicable to [US-Bi1](./examples/US-Bi1)).
