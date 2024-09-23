@@ -16,8 +16,8 @@ module load cudatoolkit
 conda activate jax-watershed
 export PYTHONPATH=${PYTHONPATH}:/global/cfs/cdirs/m1800/peishi/JAX-CanVeg/src
 
-srun -n 1 -c 1 python ./US-Bi1/train_models.py &
-srun -n 1 -c 1 python ./US-Hn1/train_models.py &
+# srun -n 1 -c 1 python ./US-Bi1/train_models.py &
+# srun -n 1 -c 1 python ./US-Hn1/train_models.py &
 srun -n 1 -c 1 python ./US-Me2/train_models.py &
 srun -n 1 -c 1 python ./US-Whs/train_models.py &
 wait

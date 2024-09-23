@@ -18,9 +18,11 @@ from jax_canveg.shared_utilities.plot import get_time
 
 import jax
 
+jax.config.update("jax_enable_x64", True)
 jax.config.update("jax_debug_nans", False)
 jax.config.update("jax_traceback_filtering", "off")
 
+jax.config.update("jax_platform_name", 'cpu')
 
 # Current directory
 dir_mother = Path(os.path.dirname(os.path.realpath(__file__)))
@@ -29,9 +31,10 @@ dir_mother = Path(os.path.dirname(os.path.realpath(__file__)))
 # Some parameters/configurations
 ################################################################
 # sites = ['US-Bi1', 'US-Hn1', 'US-Me2', 'US-Whs']
-# cases = ['test-model', 'PB-1L-0.5']
-sites = ["US-Bi1"]
-cases = ["test-model"]
+sites = ['US-Hn1', 'US-Me2', 'US-Whs']
+cases = ['test-model', 'PB-ML-0.5', 'Hybrid-ML-0.5']
+# sites = ["US-Bi1"]
+# cases = ["test-model"]
 # n_time = None
 batch_size = 1
 
