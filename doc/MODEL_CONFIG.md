@@ -2,7 +2,7 @@
 Running JAX-CanVeg can be a complicated process as it involves a lot of model configurations and data preparations. To ease this process, we document the two key procedures to execute the model given a flux tower site.
 
 ## Step 1: Prepare the atmospheric forcings and ecosystem fluxes in CSV format
-**Observation source:** Most atmospheric forcings and fluxes can be available from publicly available flux tower websites (e.g., [AmeriFlux](https://ameriflux.lbl.gov/)). The at-site leaf area index (LAI) data can be downloaded from [MODIS Fixed Sites Subsets Tool](https://modis.ornl.gov/sites/).
+**Observation source:** Most atmospheric forcings and fluxes can be downloaded from publicly available flux tower websites (e.g., [AmeriFlux](https://ameriflux.lbl.gov/)). The at-site leaf area index (LAI) data can be downloaded from [MODIS Fixed Sites Subsets Tool](https://modis.ornl.gov/sites/).
 
 **Forcing csv file:** The forcing file is used to drive the model and should be in CSV format with the following column names: *year* (the year of observation), *doy* (the day of year), *hour* (the fractional hour), *ta* (air temperature [C]), *sw_in* (solar radiation [W m-2]), *eair* (ambient vapor pressure [kPa]), *ws* (wind speed [m s-1]), *co2* (ambient CO2 concentration [µmolCO2 mol-1]), *pa* (air pressure [hPa]), *ustar* (friction velocity [m s-1]), *ts* (soil temperature [C]), *swc* (volumetric soil water content [m3 m-3]), *veg_ht* (vegetation height [m]), *lai* (leaf area index [m2 m-2]). A sample of forcing data can be found [here](./data/fluxtower/US-Bi1/US-Bi1-forcings.csv).
 
@@ -32,10 +32,10 @@ We suggest training JAX-CanVeg by providing a JSON-based configuration file, whi
     - ```dispersion matrix```: the file path where the dispersion matrix locates (if exists) or will be saved (if not exists) [string]
 
 - ```data```: The observed forcings and fluxes [dictionary]
-    - ```training forcings```:
-    - ```training fluxes```:
-    - ```test forcings```:
-    - ```test fluxes```:
+    - ```training forcings```: The file path of the model forcing data (in CSV format) for training
+    - ```training fluxes```: The file path of the ecosystem fluxes data (in CSV format) for training
+    - ```test forcings```: The file path of the model forcing data (in CSV format) for test
+    - ```test fluxes```: The file path of the ecosystem fluxes data (in CSV format) for test
 
 - ```learning configurations```: The model training configurations [dictionary]
     - ```batch size```: The batch size during training [int]
@@ -56,7 +56,7 @@ We suggest training JAX-CanVeg by providing a JSON-based configuration file, whi
     - ```new model```: The file path where the trained model is saved [string]
     - ```loss values```: The file path where the loss values are saved [string]
 
-Given the configuration file, one can train the model by calling the [train_model](./src/jax_canveg/train_model.py#L51) function. The corresponding example of training US-Bi1 test model can be found in this [file](./examples/US-Bi1/train_testmodel.py).
+Given the configuration file, one can train the model by calling the [train_model](./src/jax_canveg/train_model.py#L51) function. The example of training US-Bi1 test model can be found in this [file](./examples/US-Bi1/train_testmodel.py).
 
 ## Step 3: Run the trained model
 Once the model is trained. one can run the model by executing the following code sample (see a more complicated version [here](./examples/US-Bi1/postprocessing.py)).

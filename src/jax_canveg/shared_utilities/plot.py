@@ -864,7 +864,7 @@ def visualize_tree_diff(tree1, tree2, parent_key="", indent=0):
             print()
 
 
-def plot_flux_modis_obs(obs, met, site):
+def plot_flux_modis_obs(obs, met, site, axes=None):
     # Plot flux tower/MODIS data
     # varnames =
     dataframe = pd.DataFrame(
@@ -897,8 +897,8 @@ def plot_flux_modis_obs(obs, met, site):
         "$CO_2$",
         "$P_a$",
         "$u_*$",
-        "$T_s$",
-        "$θ_s$",
+        "$T_{sl}$",
+        "$θ_{sl}$",
         "$LAI$",
         "$LE$",
         "$H$",
@@ -907,21 +907,46 @@ def plot_flux_modis_obs(obs, met, site):
         "$NEE$",
     ]
 
-    fig, axes = plt.subplots(dataframe.shape[1], sharex=False, figsize=(8, 20))
+    var_units = [
+        "$^\circ$C",
+        "W m$^{-2}$",
+        "kPa",
+        "m s$^{-1}$",
+        "ppm",
+        "kPa",
+        "m s$^{-1}$", 
+        "$^\circ$C",
+        "m$^{3}$ m$^{-3}$",
+        "m$^{2}$ m$^{-2}$",
+        "W m$^{-2}$",
+        "W m$^{-2}$",
+        "W m$^{-2}$",
+        "W m$^{-2}$",
+        "$\mu$mol m$^{-2}$ s$^{-1}$"
+    ]
+
+    if axes is None:
+        fig, axes = plt.subplots(dataframe.shape[1], sharex=False, figsize=(8, 20))
 
     for i, ax in enumerate(axes):
         if i != len(axes) - 1:
             _make_nice_axes(ax, where=["left"])
         else:
             _make_nice_axes(ax, where=["left", "bottom"])
-        ax.set_ylabel(r"%s" % (var_names[i]))
+        # ax.set_ylabel(r"%s" % (var_names[i]))
+        ax.set_ylabel("%s \n [%s]" % (var_names[i], var_units[i]), 
+                      rotation=0, labelpad=30, va='center', ha='center')
         # ax.set_ylabel(var_names[i])
+    
+    # if axes is None:
     fig.align_ylabels(axes)
     axes[0].set_title(site)
 
     # Responses
-    _add_timeseries(dataframe, (fig, axes))
+    _add_timeseries(dataframe, axes)
     axes[-1].set_xticklabels(axes[-1].get_xticklabels(), rotation=15, ha="right")
+
+    return axes
 
 
 # Some utility functions
@@ -1021,7 +1046,7 @@ def _make_nice_axes(ax, where=None, skip=1, color=None):
 
 def _add_timeseries(
     dataframe,
-    fig_axes,
+    axes,
     grey_masked_samples=False,
     data_linewidth=1.0,
     color="black",
@@ -1033,7 +1058,6 @@ def _add_timeseries(
     source:
     https://github.com/jakobrunge/tigramite/blob/8e7c7f1a81b29f0ab7adec2885654b7592f0d394/tigramite/plotting.py#L135
     """
-    fig, axes = fig_axes
 
     # Read in all attributes from dataframe
     data = dataframe.values
