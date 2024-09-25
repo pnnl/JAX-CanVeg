@@ -1,5 +1,5 @@
-# Running JAX-CanVeg
-Running JAX-CanVeg can be a complicated process as it involves a lot of model configurations and data preparations. To ease this process, we document the two key procedures to execute the model given a flux tower site.
+# Training and running JAX-CanVeg
+Training and running JAX-CanVeg can be a complicated process as it involves a lot of model configurations and data preparations. To ease this process, we document the two key procedures to execute the model given a flux tower site.
 
 ## Step 1: Prepare the atmospheric forcings and ecosystem fluxes in CSV format
 **Observation source:** Most atmospheric forcings and fluxes can be downloaded from publicly available flux tower websites (e.g., [AmeriFlux](https://ameriflux.lbl.gov/)). The at-site leaf area index (LAI) data can be downloaded from [MODIS Fixed Sites Subsets Tool](https://modis.ornl.gov/sites/).

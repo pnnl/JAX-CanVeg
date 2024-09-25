@@ -41,7 +41,7 @@ Please follow the procedures of this [post](./doc/INSTALLATION.md) to install JA
 
 
 ## Getting Started
-We suggest training and running JAX-CanVeg by providing a JSON-based configuration file. See this [post](./doc/MODEL_CONFIGURE.md) for details.
+We suggest training and running JAX-CanVeg by providing a JSON-based configuration file. See this [post](./doc/MODEL_CONFIG.md) for details.
 
 
 ## Computational Time Benchmark
