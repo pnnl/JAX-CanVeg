@@ -90,7 +90,7 @@ python calculate_sensitivity.py
 
 Some simulations of the trained JAX-CanVeg --
 <p align="center">
-<img src="./doc/Simulation-US-Whs-ML-0.5.png" alt="fishy" class="center" width="600px">
+<img src="./doc/Simulation-US-Whs-ML-0.5.png" alt="fishy" class="center" width="800px">
 </p>
 
 
