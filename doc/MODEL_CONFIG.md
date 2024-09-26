@@ -59,7 +59,7 @@ We suggest training JAX-CanVeg by providing a JSON-based configuration file, whi
 Given the configuration file, one can train the model by calling the [train_model](./src/jax_canveg/train_model.py#L51) function. The example of training US-Bi1 test model can be found in this [file](./examples/US-Bi1/train_testmodel.py).
 
 ## Step 3: Run the trained model
-Once the model is trained. one can run the model by executing the following code sample (see a more complicated version [here](./examples/US-Bi1/postprocessing.py)).
+Once the model is trained, one can run the model by executing the following code sample (see a more complicated version [here](./examples/US-Bi1/postprocessing.py)).
 ```python
 from jax_canveg import load_model
 

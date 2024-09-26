@@ -101,7 +101,7 @@ Distributed under Simplified BSD License. [LICENSE](./LICENSE) for more informat
 This work was funded by the Laboratory Directed Research and Development Program at Pacific Northwest National Laboratory and the ExaSheds project supported by the United States Department of Energy, Office of Science, Office of Biological and Environmental Research, Earth and Environmental Systems Sciences Division, Data Management Program.
 
 ## Citation
-Jiang, P. et al., (2024). JAX-CanVeg: A Differentiable Land Surface Model. Water Resources Research, *in review*.
+Jiang et al., (2024). JAX-CanVeg: A Differentiable Land Surface Model. Water Resources Research, *in review*.
 
 ## Contacts
 Peishi Jiang (peishi.jiang@pnnl.gov)

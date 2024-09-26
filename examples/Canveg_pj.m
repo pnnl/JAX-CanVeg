@@ -92,7 +92,9 @@ close all;
 
 %VegType='Alfalfa';
 %Site = 'US-Bi1';
-Site = 'US-Hn1';
+%Site = 'US-Hn1';
+%Site = 'US-Me2';
+Site = 'US-Whs';
 
 
     tic;
@@ -142,9 +144,13 @@ Site = 'US-Hn1';
 
    switch Site
        case 'US-Bi1'
-           prm.Dij = 'Dij_US-Bi1.csv'
+           prm.Dij = 'Dij_US-Bi1_50L.csv'
        case 'US-Hn1'
-           prm.Dij = 'Dij_US-Hn1.csv'
+           prm.Dij = 'Dij_US-Hn1_50L.csv'
+       case 'US-Me2'
+           prm.Dij = 'Dij_US-Me2_50L.csv'
+       case 'US-Whs'
+           prm.Dij = 'Dij_US-Whs_50L.csv'
        otherwise
    end
 
@@ -173,9 +179,14 @@ Site = 'US-Hn1';
 
   switch Site
       case 'US-Bi1'
-          prm.filename = 'US-Bi1-forcings.csv';
+          prm.filename = 'US-Bi1-forcings.txt';
       case 'US-Hn1'
-          prm.filename = 'US-Hn1-forcings-v2.csv';
+          % prm.filename = 'US-Hn1-forcings-v2.csv';
+          prm.filename = 'US-Hn1-forcings.txt';
+      case 'US-Me2'
+          prm.filename = 'US-Me2-forcings.txt';
+      case 'US-Whs'
+          prm.filename = 'US-Whs-forcings.txt';
       otherwise
   end
 
