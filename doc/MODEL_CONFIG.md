@@ -4,13 +4,13 @@ Training and running JAX-CanVeg can be a complicated process as it involves a lo
 ## Step 1: Prepare the atmospheric forcings and ecosystem fluxes in CSV format
 **Observation source:** Most atmospheric forcings and fluxes can be downloaded from publicly available flux tower websites (e.g., [AmeriFlux](https://ameriflux.lbl.gov/)). The at-site leaf area index (LAI) data can be downloaded from [MODIS Fixed Sites Subsets Tool](https://modis.ornl.gov/sites/).
 
-**Forcing csv file:** The forcing file is used to drive the model and should be in CSV format with the following column names: *year* (the year of observation), *doy* (the day of year), *hour* (the fractional hour), *ta* (air temperature [C]), *sw_in* (solar radiation [W m-2]), *eair* (ambient vapor pressure [kPa]), *ws* (wind speed [m s-1]), *co2* (ambient CO2 concentration [µmolCO2 mol-1]), *pa* (air pressure [hPa]), *ustar* (friction velocity [m s-1]), *ts* (soil temperature [C]), *swc* (volumetric soil water content [m3 m-3]), *veg_ht* (vegetation height [m]), *lai* (leaf area index [m2 m-2]). A sample of forcing data can be found [here](./data/fluxtower/US-Bi1/US-Bi1-forcings.csv).
+**Forcing csv file:** The forcing file is used to drive the model and should be in CSV format with the following column names: *year* (the year of observation), *doy* (the day of year), *hour* (the fractional hour), *ta* (air temperature [C]), *sw_in* (solar radiation [W m-2]), *eair* (ambient vapor pressure [kPa]), *ws* (wind speed [m s-1]), *co2* (ambient CO2 concentration [µmolCO2 mol-1]), *pa* (air pressure [hPa]), *ustar* (friction velocity [m s-1]), *ts* (soil temperature [C]), *swc* (volumetric soil water content [m3 m-3]), *veg_ht* (vegetation height [m]), *lai* (leaf area index [m2 m-2]). A sample of forcing data can be found [here](../data/fluxtower/US-Bi1/US-Bi1-forcings.csv).
 
-**Flux csv file:** The flux file is used to validate/train/compare against the model and is thus **optional**. This CSV file contains the following column names: *P_mm* (precipitation [mm]), *LE* (latent heaf flux, or *LE_F_MDS*, [W M-2]), *H* (sensible heat flu, or *H_F_MDS*, [W M-2]), *G* (ground heat flux, or *G_F_MDS*, [W M-2]), *NETRAD* (net radiation, [W M-2]), *GPP* (gross primary production [µmolCO2 m-2 s-1]), *ALBEDO* (albedo [-]), *FCO2* (net ecosystem exchange, or *NEE_CUT_REF*, [µmolCO2 m-2 s-1]), *Rsoil* (soil respiratio [µmolCO2 m-2 s-1]). A sample of flux data can be found [here](./data/fluxtower/US-Bi1/US-Bi1-fluxes.csv).
+**Flux csv file:** The flux file is used to validate/train/compare against the model and is thus **optional**. This CSV file contains the following column names: *P_mm* (precipitation [mm]), *LE* (latent heaf flux, or *LE_F_MDS*, [W M-2]), *H* (sensible heat flu, or *H_F_MDS*, [W M-2]), *G* (ground heat flux, or *G_F_MDS*, [W M-2]), *NETRAD* (net radiation, [W M-2]), *GPP* (gross primary production [µmolCO2 m-2 s-1]), *ALBEDO* (albedo [-]), *FCO2* (net ecosystem exchange, or *NEE_CUT_REF*, [µmolCO2 m-2 s-1]), *Rsoil* (soil respiratio [µmolCO2 m-2 s-1]). A sample of flux data can be found [here](../data/fluxtower/US-Bi1/US-Bi1-fluxes.csv).
 
 
 ## Step 2: Training JAX-CanVeg using a JSON-based configuration file
-We suggest training JAX-CanVeg by providing a JSON-based configuration file, which include the following configurations (please see an example of US-Bi1 [here](./examples/US-Bi1/test-model/configs.json)):
+We suggest training JAX-CanVeg by providing a JSON-based configuration file, which include the following configurations (please see an example of US-Bi1 [here](../examples/US-Bi1/test-model/configs.json)):
 
 - ```site name```: The name of the study site [string]
 
@@ -56,10 +56,10 @@ We suggest training JAX-CanVeg by providing a JSON-based configuration file, whi
     - ```new model```: The file path where the trained model is saved [string]
     - ```loss values```: The file path where the loss values are saved [string]
 
-Given the configuration file, one can train the model by calling the [train_model](./src/jax_canveg/train_model.py#L51) function. The example of training US-Bi1 test model can be found in this [file](./examples/US-Bi1/train_testmodel.py).
+Given the configuration file, one can train the model by calling the [train_model](../src/jax_canveg/train_model.py#L51) function. The example of training US-Bi1 test model can be found in this [file](../examples/US-Bi1/train_testmodel.py).
 
 ## Step 3: Run the trained model
-Once the model is trained, one can run the model by executing the following code sample (see a more complicated version [here](./examples/US-Bi1/postprocessing.py)).
+Once the model is trained, one can run the model by executing the following code sample (see a more complicated version [here](../examples/US-Bi1/postprocessing.py)).
 ```python
 from jax_canveg import load_model
 
