@@ -10,7 +10,7 @@
 - [Installation](#installation)
 - [Getting Started](#getting-started)
 - [Computational Time Benchmark](#computational-time-benchmark)
-- [Example: A Hybrid Ball Berry Model](#example-a-hybrid-ball-berry-equation)
+- [Example: A Hybrid Ball Berry Model](#example-a-hybrid-ball-berry-model)
 - [License](#license)
 - [Acknowledgments](#acknowledgements)
 - [Citation](#citation)
