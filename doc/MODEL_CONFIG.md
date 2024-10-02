@@ -64,7 +64,7 @@ Once the model is trained, one can run the model by executing the following code
 from jax_canveg import load_model
 
 # Configuration file location
-f_config = "./examples/US-Bi1/test-model/configs.json"
+f_configs = "./examples/US-Bi1/test-model/configs.json"
 
  # Load the model, forcings, and observations
 model, met_train, met_test, obs_train, obs_test = load_model(f_configs)
