@@ -1,7 +1,7 @@
 # JAX-CanVeg: A Differentiable Land Surface Model
 
 <p align="center">
-<img src="./doc/JAX-CanVeg.png" alt="fishy" class="center" width="600px">
+<img src="./doc/JAX-CanVeg-v2.png" alt="fishy" class="center" width="600px">
 </p>
 
 ## Table of Contents
@@ -54,7 +54,7 @@ We compared the computational time of JAX-CanVeg with the legacy Matlab-based [C
 
 ## Example: A Hybrid Ball-Berry Model
 <p align="center">
-<img src="./doc/HybridBB.png" alt="fishy" class="center" width="600px">
+<img src="./doc/HybridBB-v2.png" alt="fishy" class="center" width="600px">
 </p>
 
 We demonstrated JAX-CanVeg's hybrid modeling capability by applying the model to simulate the water and carbon fluxes at four flux tower sites in the western United States with varying aridity. To this end, we developed a hybrid version of the Ball-Berry equation that emulates the impact of water stress on stomatal closure (Jiang et al., 2024). The scripts for reproducing the results of the paper are available in the folder `examples`. We applied the differentiable JAX-CanVeg at four flux tower sites to evaluate the performance of a hybrid version of the Ball-Berry equation. The model were trained against both observed latent heat fluxes and net ecosystem exchange. Below we illustrate the application example on [US-Whs](./examples/US-Whs) (which is applicable to the other three flux tower sites, i.e., [US-Me2](./examples/US-Me2), [US-Bi1](./examples/US-Bi1), and [US-Hn1](./examples/US-Hn1)).
@@ -101,7 +101,7 @@ Distributed under Simplified BSD License. [LICENSE](./LICENSE) for more informat
 This work was funded by the Laboratory Directed Research and Development Program at Pacific Northwest National Laboratory and the ExaSheds project supported by the United States Department of Energy, Office of Science, Office of Biological and Environmental Research, Earth and Environmental Systems Sciences Division, Data Management Program.
 
 ## Citation
-Jiang et al., (2024). JAX-CanVeg: A Differentiable Land Surface Model. Water Resources Research, *in review*.
+Jiang, P., Kidger, P., Bandai, T., Baldocchi D., Liu, H., Xiao, Y., Zhang, Q., Wang, C.T., Steefel, C., & Chen, X., (2025). JAX-CanVeg: A Differentiable Land Surface Model. Water Resources Research, doi:10.1029/2024WR038116.
 
 ## Contacts
 Peishi Jiang (peishi.jiang@pnnl.gov)
