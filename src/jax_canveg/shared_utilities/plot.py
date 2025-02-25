@@ -949,6 +949,68 @@ def plot_flux_modis_obs(obs, met, site, axes=None):
     return axes
 
 
+def plot_flux_modis_obs_consice(obs, met, site, axes=None):
+    # Plot flux tower/MODIS data
+    # varnames =
+    dataframe = pd.DataFrame(
+        np.array(
+            [
+                obs.LE,
+                met.eair,
+                met.soilmoisture,
+                obs.Fco2,
+                met.CO2,
+                met.lai,
+            ]
+        ).T
+    )
+    dataframe.index = get_time(met)
+    var_names = [
+        "Latent heat \n fluxes",
+        "Vapor \n pressure",
+        # "$θ_{sl}$",
+        "Soil \n moisture",
+        "Net ecosystem \n ecochange",
+        "Ambient \n CO$_2$",
+        "Leaf area \n index",
+    ]
+
+    # var_units = [
+    #     "W m$^{-2}$",
+    #     "kPa",
+    #     "m$^{3}$ m$^{-3}$",
+    #     "$\mu$mol m$^{-2}$ s$^{-1}$",
+    #     "ppm",
+    #     "m$^{2}$ m$^{-2}$",
+    # ]
+
+    if axes is None:
+        fig, axes = plt.subplots(dataframe.shape[1], sharex=False, figsize=(6, 10))
+
+    for i, ax in enumerate(axes):
+        if i != len(axes) - 1:
+            _make_nice_axes(ax, where=["left"])
+        else:
+            _make_nice_axes(ax, where=["left", "bottom"])
+        # ax.set_ylabel(r"%s" % (var_names[i]))
+        ax.set_ylabel("%s" % (var_names[i]), 
+                      rotation=90, labelpad=30, va='center', ha='center')
+        # ax.set_ylabel(var_names[i])
+    
+    # if axes is None:
+    fig.align_ylabels(axes)
+    axes[0].set_title(site)
+
+    # Responses
+    _add_timeseries(dataframe, axes)
+    for ax in axes:
+        ax.set_yticks([])
+        ax.tick_params(axis='y', which='both', left=False)
+    axes[-1].set_xticklabels(axes[-1].get_xticklabels(), rotation=15, ha="right")
+
+    return axes
+
+
 # Some utility functions
 def compute_daily_average(values, hhours):
     d = pd.DataFrame([hhours, values]).T.astype(float)
