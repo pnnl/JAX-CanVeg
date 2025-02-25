@@ -1,7 +1,7 @@
 # JAX-CanVeg: A Differentiable Land Surface Model
 
 <p align="center">
-<img src="./doc/JAX-CanVeg-v2.png" alt="fishy" class="center" width="600px">
+<img src="./doc/JAX-CanVeg-v2.png" alt="fishy" class="center" width="400px">
 </p>
 
 ## Table of Contents
